@@ -1,8 +1,3 @@
-import datetime
-import pathlib
-import time
-
-import event_stream
 import neuromorphic_drivers as nd
 import numpy as np
 import vispy.app
@@ -11,17 +6,9 @@ import vispy.util.transforms
 
 vispy.app.use_app(backend_name="glfw")
 
-biases = nd.prophesee_evk4.Biases(
-    diff_on=120,
-    diff_off=120,
-)
-
 FRAME_DURATION: float = 1.0 / 60.0
 ON_COLORMAP: list[str] = ["#F4C20D", "#191919"]
 OFF_COLORMAP: list[str] = ["#1E88E5", "#191919"]
-
-PRIMARY_SERIAL = "00050421"
-SECONDARY_SERIAL = "00050423"
 
 VERTEX_SHADER: str = """
 uniform mat4 u_projection;
@@ -63,50 +50,22 @@ void main() {{
 
 class Canvas(vispy.app.Canvas):
     def __init__(
-        self,
-        sensor_width: int,
-        sensor_height: int,
-        device_a: nd.prophesee_evk4.PropheseeEvk4DeviceOptional,
-        device_b: nd.prophesee_evk4.PropheseeEvk4DeviceOptional,
+        self, sensor_width: int, sensor_height: int, device: nd.GenericDeviceOptional
     ):
         self.program = None
         vispy.app.Canvas.__init__(
             self,
             keys="interactive",
-            size=(sensor_width / 2, sensor_height),
+            size=(sensor_width, sensor_height),
             vsync=True,
-            title=device_a.name().value,
+            title=device.name().value,
         )
         self.sensor_width = sensor_width
         self.sensor_height = sensor_height
-        self.devices = (device_a, device_b)
-
-        dirname = pathlib.Path(__file__).resolve().parent
-        name = (
-            datetime.datetime.now(tz=datetime.timezone.utc)
-            .isoformat()
-            .replace("+00:00", "Z")
-            .replace(":", "-")
-        )
-        self.encoders = (
-            event_stream.Encoder(
-                dirname / f"{name}_{PRIMARY_SERIAL}.es",
-                "dvs",
-                sensor_width,
-                sensor_height,
-            ),
-            event_stream.Encoder(
-                dirname / f"{name}_{SECONDARY_SERIAL}.es",
-                "dvs",
-                sensor_width,
-                sensor_height,
-            ),
-        )
-        self.backlogs = np.array([0, 0], dtype=np.uint64)
-        self.current_ts = np.array([0.0, 0.0], dtype=np.float32)
+        self.device = device
         self.program = vispy.gloo.Program(VERTEX_SHADER, FRAGMENT_SHADER)
         self.ts_and_ons = np.zeros(
-            (self.sensor_width, 2 * self.sensor_height),
+            (self.sensor_width, self.sensor_height),
             dtype=np.float32,
         )
         self.current_t = 0
@@ -117,12 +76,12 @@ class Canvas(vispy.app.Canvas):
             internalformat="r32f",
         )
         self.projection = vispy.util.transforms.ortho(
-            0, sensor_width, 0, 2 * sensor_height, -1, 1
+            0, sensor_width, sensor_height, 0, -1, 1
         )
         self.program["u_projection"] = self.projection
         self.program["u_texture"] = self.texture
         self.program["u_t"] = 0
-        self.program["u_tau"] = 200000
+        self.program["u_tau"] = 100000
         self.coordinates = np.zeros(
             4,
             dtype=[("a_position", np.float32, 2), ("a_texcoord", np.float32, 2)],
@@ -131,8 +90,8 @@ class Canvas(vispy.app.Canvas):
             [
                 [0, 0],
                 [sensor_width, 0],
-                [0, 2 * sensor_height],
-                [sensor_width, 2 * sensor_height],
+                [0, sensor_height],
+                [sensor_width, sensor_height],
             ]
         )
         self.coordinates["a_texcoord"] = np.array([[0, 0], [0, 1], [1, 0], [1, 1]])
@@ -140,8 +99,8 @@ class Canvas(vispy.app.Canvas):
         self.projection = vispy.util.transforms.ortho(
             0,
             self.sensor_width,
+            self.sensor_height,
             0,
-            2 * self.sensor_height,
             -1,
             1,
         )
@@ -153,12 +112,10 @@ class Canvas(vispy.app.Canvas):
         if self.program is not None:
             width, height = event.physical_size
             vispy.gloo.set_viewport(0, 0, width, height)
-            self.projection = vispy.util.transforms.ortho(
-                0, width, 0, height, -100, 100
-            )
+            self.projection = vispy.util.transforms.ortho(0, width, height, 0, -1, 1)
             self.program["u_projection"] = self.projection
             ratio = width / float(height)
-            sensor_ratio = self.sensor_width / float(2.0 * self.sensor_height)
+            sensor_ratio = self.sensor_width / float(self.sensor_height)
             if ratio < sensor_ratio:
                 w, h = width, width / sensor_ratio
                 x, y = 0, int((height - h) / 2)
@@ -173,58 +130,32 @@ class Canvas(vispy.app.Canvas):
     def on_draw(self, event):
         assert self.program is not None
         vispy.gloo.clear(color=True, depth=True)
-        index = int(np.argmax(self.backlogs))
-        status, packet = self.devices[index].__next__()
-        if status.ring is None:
-            self.backlogs[:] += 1
-            self.backlogs[index] = 0
-        else:
-            assert packet is not None
-            self.backlogs[:] += 1
-            self.backlogs[index] = status.ring.backlog
+        status, packet = next(device)
+        if packet is not None:
             if "dvs_events" in packet:
                 assert status.ring is not None and status.ring.current_t is not None
-                self.encoders[index].write(packet["dvs_events"])
-                self.current_ts[index] = np.float32(status.ring.current_t)
-                self.program["u_t"] = self.current_ts.max()
+                self.program["u_t"] = np.float32(status.ring.current_t)
                 self.ts_and_ons[
-                    packet["dvs_events"]["x"],
-                    packet["dvs_events"]["y"] + self.sensor_height * index,
+                    packet["dvs_events"]["x"], packet["dvs_events"]["y"]
                 ] = packet["dvs_events"]["t"].astype(np.float32) * (
                     packet["dvs_events"]["on"].astype(np.float32) * 2.0 - 1.0
                 )
             elif status.ring is not None and status.ring.current_t is not None:
-                self.current_ts[index] = np.float32(status.ring.current_t)
-                self.program["u_t"] = self.current_ts.max()
+                self.program["u_t"] = np.float32(status.ring.current_t)
         self.texture.set_data(self.ts_and_ons)
         self.program.draw("triangle_strip")
 
 
 if __name__ == "__main__":
     nd.print_device_list()
-
-    device_b = nd.open(
-        serial=SECONDARY_SERIAL,
-        iterator_timeout=0.1,
-        configuration=nd.prophesee_evk4.Configuration(
-            biases=biases,
-            clock=nd.prophesee_evk4.Clock.EXTERNAL,
-        ),
-    )
-    time.sleep(1.0)  # wait to make sure that secondary is ready
-    device_a = nd.open(
-        serial=PRIMARY_SERIAL,
-        iterator_timeout=0.1,
-        configuration=nd.prophesee_evk4.Configuration(
-            biases=biases,
-            clock=nd.prophesee_evk4.Clock.INTERNAL_WITH_OUTPUT_ENABLED,
-        ),
-    )
-
-    canvas = Canvas(
-        sensor_width=int(device_a.properties().width),
-        sensor_height=int(device_a.properties().height),
-        device_a=device_a,
-        device_b=device_b,
-    )
-    vispy.app.run()
+    with nd.open(
+        configuration=nd.inivation_davis346.Configuration(),
+        iterator_timeout=FRAME_DURATION,
+    ) as device:
+        print(device.serial(), device.properties())
+        canvas = Canvas(
+            sensor_width=int(device.properties().width),
+            sensor_height=int(device.properties().height),
+            device=device,
+        )
+        vispy.app.run()

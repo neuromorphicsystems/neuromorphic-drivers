@@ -1,16 +1,16 @@
 // Copyright (c) Facebook, Inc. and its affiliates
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Module defining the Abstract Syntax Tree (AST) of Serde formats.
-//!
-//! Node of the AST are made of the following types:
-//! * `ContainerFormat`: the format of a container (struct or enum),
-//! * `Format`: the format of an unnamed value,
-//! * `Named<Format>`: the format of a field in a struct,
-//! * `VariantFormat`: the format of a variant in a enum,
-//! * `Named<VariantFormat>`: the format of a variant in a enum, together with its name,
-//! * `Variable<Format>`: a variable holding an initially unknown value format,
-//! * `Variable<VariantFormat>`: a variable holding an initially unknown variant format.
+// Module defining the Abstract Syntax Tree (AST) of Serde formats.
+//
+// Node of the AST are made of the following types:
+// * `ContainerFormat`: the format of a container (struct or enum),
+// * `Format`: the format of an unnamed value,
+// * `Named<Format>`: the format of a field in a struct,
+// * `VariantFormat`: the format of a variant in a enum,
+// * `Named<VariantFormat>`: the format of a variant in a enum, together with its name,
+// * `Variable<Format>`: a variable holding an initially unknown value format,
+// * `Variable<VariantFormat>`: a variable holding an initially unknown variant format.
 
 use crate::error::{Error, Result};
 use serde::{
@@ -25,13 +25,13 @@ use std::{
     rc::Rc,
 };
 
-/// Serde-based serialization format for anonymous "value" types.
+// Serde-based serialization format for anonymous "value" types.
 #[derive(Serialize, Deserialize, Debug, Eq, Clone, PartialEq)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum Format {
-    /// A format whose value is initially unknown. Used internally for tracing. Not (de)serializable.
+    // A format whose value is initially unknown. Used internally for tracing. Not (de)serializable.
     Variable(#[serde(with = "not_implemented")] Variable<Format>),
-    /// The name of a container.
+    // The name of a container.
     TypeName(String),
 
     // The formats of primitive types
@@ -53,21 +53,21 @@ pub enum Format {
     Str,
     Bytes,
 
-    /// The format of `Option<T>`.
+    // The format of `Option<T>`.
     Option(Box<Format>),
-    /// A sequence, e.g. the format of `Vec<Foo>`.
+    // A sequence, e.g. the format of `Vec<Foo>`.
     Seq(Box<Format>),
-    /// A map, e.g. the format of `BTreeMap<K, V>`.
+    // A map, e.g. the format of `BTreeMap<K, V>`.
     #[serde(rename_all = "UPPERCASE")]
     Map {
         key: Box<Format>,
         value: Box<Format>,
     },
 
-    /// A tuple, e.g. the format of `(Foo, Bar)`.
+    // A tuple, e.g. the format of `(Foo, Bar)`.
     Tuple(Vec<Format>),
-    /// Alias for `(Foo, ... Foo)`.
-    /// E.g. the format of `[Foo; N]`.
+    // Alias for `(Foo, ... Foo)`.
+    // E.g. the format of `[Foo; N]`.
     #[serde(rename_all = "UPPERCASE")]
     TupleArray {
         content: Box<Format>,
@@ -75,77 +75,77 @@ pub enum Format {
     },
 }
 
-/// Serde-based serialization format for named "container" types.
-/// In Rust, those are enums and structs.
+// Serde-based serialization format for named "container" types.
+// In Rust, those are enums and structs.
 #[derive(Serialize, Deserialize, Debug, Eq, Clone, PartialEq)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum ContainerFormat {
-    /// An empty struct, e.g. `struct A`.
+    // An empty struct, e.g. `struct A`.
     UnitStruct,
-    /// A struct with a single unnamed parameter, e.g. `struct A(u16)`
+    // A struct with a single unnamed parameter, e.g. `struct A(u16)`
     NewTypeStruct(Box<Format>),
-    /// A struct with several unnamed parameters, e.g. `struct A(u16, u32)`
+    // A struct with several unnamed parameters, e.g. `struct A(u16, u32)`
     TupleStruct(Vec<Format>),
-    /// A struct with named parameters, e.g. `struct A { a: Foo }`.
+    // A struct with named parameters, e.g. `struct A { a: Foo }`.
     Struct(Vec<Named<Format>>),
-    /// An enum, that is, an enumeration of variants.
-    /// Each variant has a unique name and index within the enum.
+    // An enum, that is, an enumeration of variants.
+    // Each variant has a unique name and index within the enum.
     Enum(BTreeMap<u32, Named<VariantFormat>>),
 }
 
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
-/// A named value.
-/// Used for named parameters or variants.
+// A named value.
+// Used for named parameters or variants.
 pub struct Named<T> {
     pub name: String,
     pub value: T,
 }
 
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
-/// A mutable holder for an initially unknown value.
+// A mutable holder for an initially unknown value.
 pub struct Variable<T>(Rc<RefCell<Option<T>>>);
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "UPPERCASE")]
-/// Description of a variant in an enum.
+// Description of a variant in an enum.
 pub enum VariantFormat {
-    /// A variant whose format is initially unknown. Used internally for tracing. Not (de)serializable.
+    // A variant whose format is initially unknown. Used internally for tracing. Not (de)serializable.
     Variable(#[serde(with = "not_implemented")] Variable<VariantFormat>),
-    /// A variant without parameters, e.g. `A` in `enum X { A }`
+    // A variant without parameters, e.g. `A` in `enum X { A }`
     Unit,
-    /// A variant with a single unnamed parameter, e.g. `A` in `enum X { A(u16) }`
+    // A variant with a single unnamed parameter, e.g. `A` in `enum X { A(u16) }`
     NewType(Box<Format>),
-    /// A struct with several unnamed parameters, e.g. `A` in `enum X { A(u16, u32) }`
+    // A struct with several unnamed parameters, e.g. `A` in `enum X { A(u16, u32) }`
     Tuple(Vec<Format>),
-    /// A struct with named parameters, e.g. `A` in `enum X { A { a: Foo } }`
+    // A struct with named parameters, e.g. `A` in `enum X { A { a: Foo } }`
     Struct(Vec<Named<Format>>),
 }
 
-/// Common methods for nodes in the AST of formats.
+// Common methods for nodes in the AST of formats.
 pub trait FormatHolder {
-    /// Visit all the formats in `self` in a depth-first way.
-    /// Variables are not supported and will cause an error.
+    // Visit all the formats in `self` in a depth-first way.
+    // Variables are not supported and will cause an error.
     fn visit<'a>(&'a self, f: &mut dyn FnMut(&'a Format) -> Result<()>) -> Result<()>;
 
-    /// Mutably visit all the formats in `self` in a depth-first way.
-    /// * Replace variables (if any) with their known values then apply the
-    /// visiting function `f`.
-    /// * Return an error if any variable has still an unknown value (thus cannot be removed).
+    // Mutably visit all the formats in `self` in a depth-first way.
+    // * Replace variables (if any) with their known values then apply the
+    // visiting function `f`.
+    // * Return an error if any variable has still an unknown value (thus cannot be removed).
     fn visit_mut(&mut self, f: &mut dyn FnMut(&mut Format) -> Result<()>) -> Result<()>;
 
-    /// Update variables and add missing enum variants so that the terms match.
-    /// This is a special case of [term unification](https://en.wikipedia.org/wiki/Unification_(computer_science)):
-    /// * Variables occurring in `other` must be "fresh" and distinct
-    ///   from each other. By "fresh", we mean that they do not occur in `self`
-    ///   and have no known value yet.
-    /// * If needed, enums in `self` will be extended with new variants taken from `other`.
-    /// * Although the parameter `other` is consumed (i.e. taken by value), all
-    ///   variables occurring either in `self` or `other` are correctly updated.
+    // Update variables and add missing enum variants so that the terms match.
+    // This is a special case of [term unification](https://en.wikipedia.org/wiki/Unification_(computer_science)):
+    // * Variables occurring in `other` must be "fresh" and distinct
+    //   from each other. By "fresh", we mean that they do not occur in `self`
+    //   and have no known value yet.
+    // * If needed, enums in `self` will be extended with new variants taken from `other`.
+    // * Although the parameter `other` is consumed (i.e. taken by value), all
+    //   variables occurring either in `self` or `other` are correctly updated.
     fn unify(&mut self, other: Self) -> Result<()>;
 
-    /// Finalize the formats within `self` by removing variables and making sure
-    /// that all eligible tuples are compressed into a `TupleArray`. Return an error
-    /// if any variable has an unknown value.
+    // Finalize the formats within `self` by removing variables and making sure
+    // that all eligible tuples are compressed into a `TupleArray`. Return an error
+    // if any variable has an unknown value.
     fn normalize(&mut self) -> Result<()> {
         self.visit_mut(&mut |format: &mut Format| {
             let normalized = match format {
@@ -174,13 +174,13 @@ pub trait FormatHolder {
         })
     }
 
-    /// Attempt to remove known variables within `self`. Silently abort
-    /// if some variables have unknown values.
+    // Attempt to remove known variables within `self`. Silently abort
+    // if some variables have unknown values.
     fn reduce(&mut self) {
         self.visit_mut(&mut |_| Ok(())).unwrap_or(())
     }
 
-    /// Whether this format is a variable with no known value yet.
+    // Whether this format is a variable with no known value yet.
     fn is_unknown(&self) -> bool;
 }
 
@@ -597,8 +597,8 @@ impl FormatHolder for Format {
         f(self)
     }
 
-    /// Unify the newly "traced" value `format` into the current format.
-    /// Note that there should be no `TupleArray`s at this point.
+    // Unify the newly "traced" value `format` into the current format.
+    // Note that there should be no `TupleArray`s at this point.
     fn unify(&mut self, format: Format) -> Result<()> {
         match (self, format) {
             (format1, Self::Variable(variable2)) => {
@@ -687,12 +687,12 @@ impl FormatHolder for Format {
     }
 }
 
-/// Helper trait to update formats in maps.
+// Helper trait to update formats in maps.
 pub(crate) trait ContainerFormatEntry {
     fn unify(self, format: ContainerFormat) -> Result<()>;
 }
 
-impl<'a, K> ContainerFormatEntry for Entry<'a, K, ContainerFormat>
+impl<K> ContainerFormatEntry for Entry<'_, K, ContainerFormat>
 where
     K: std::cmp::Ord,
 {
@@ -708,14 +708,14 @@ where
 }
 
 impl Format {
-    /// Return a format made of a fresh variable with no known value.
+    // Return a format made of a fresh variable with no known value.
     pub fn unknown() -> Self {
         Self::Variable(Variable::new(None))
     }
 }
 
 impl VariantFormat {
-    /// Return a format made of a fresh variable with no known value.
+    // Return a format made of a fresh variable with no known value.
     pub fn unknown() -> Self {
         Self::Variable(Variable::new(None))
     }
@@ -795,7 +795,7 @@ where
     }
 }
 
-/// For deserialization of non-human readable `Named` values, we keep it simple and use derive macros.
+// For deserialization of non-human readable `Named` values, we keep it simple and use derive macros.
 #[derive(Deserialize)]
 #[serde(rename = "Named")]
 struct NamedInternal<T> {

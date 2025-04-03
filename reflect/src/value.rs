@@ -4,8 +4,8 @@
 use crate::error::{Error, Result};
 use serde::de::{self, DeserializeSeed, IntoDeserializer, Visitor};
 
-/// A structured Serde value.
-/// Meant to be easily recorded while tracing serialization and easily used while tracing deserialization.
+// A structured Serde value.
+// Meant to be easily recorded while tracing serialization and easily used while tracing deserialization.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Unit,
@@ -35,7 +35,7 @@ pub enum Value {
     Seq(Vec<Value>),
 }
 
-/// Deserializer meant to reconstruct the Rust value behind a particular Serde value.
+// Deserializer meant to reconstruct the Rust value behind a particular Serde value.
 pub struct Deserializer<'de> {
     value: &'de Value,
 }

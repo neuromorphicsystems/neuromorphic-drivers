@@ -56,7 +56,6 @@ class char:
 
 
 unit = type(None)
-bool = bool
 int8 = typing.Union[numpy.int8, int]
 int16 = typing.Union[numpy.int16, int]
 int32 = typing.Union[numpy.int32, int]

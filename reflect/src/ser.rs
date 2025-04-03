@@ -9,9 +9,9 @@ use crate::{
 };
 use serde::{ser, Serialize};
 
-/// Serialize a single value.
-/// The lifetime 'a is set by the serialization call site and the `&'a mut`
-/// references used to return tracing results and serialization samples.
+// Serialize a single value.
+// The lifetime 'a is set by the serialization call site and the `&'a mut`
+// references used to return tracing results and serialization samples.
 pub(crate) struct Serializer<'a> {
     tracer: &'a mut Tracer,
     samples: &'a mut Samples,
@@ -279,7 +279,7 @@ pub struct SeqSerializer<'a> {
     values: Vec<Value>,
 }
 
-impl<'a> ser::SerializeSeq for SeqSerializer<'a> {
+impl ser::SerializeSeq for SeqSerializer<'_> {
     type Ok = (Format, Value);
     type Error = Error;
 
@@ -306,7 +306,7 @@ pub struct TupleSerializer<'a> {
     values: Vec<Value>,
 }
 
-impl<'a> ser::SerializeTuple for TupleSerializer<'a> {
+impl ser::SerializeTuple for TupleSerializer<'_> {
     type Ok = (Format, Value);
     type Error = Error;
 
@@ -334,7 +334,7 @@ pub struct TupleStructSerializer<'a> {
     values: Vec<Value>,
 }
 
-impl<'a> ser::SerializeTupleStruct for TupleStructSerializer<'a> {
+impl ser::SerializeTupleStruct for TupleStructSerializer<'_> {
     type Ok = (Format, Value);
     type Error = Error;
 
@@ -372,7 +372,7 @@ pub struct TupleVariantSerializer<'a> {
     values: Vec<Value>,
 }
 
-impl<'a> ser::SerializeTupleVariant for TupleVariantSerializer<'a> {
+impl ser::SerializeTupleVariant for TupleVariantSerializer<'_> {
     type Ok = (Format, Value);
     type Error = Error;
 
@@ -409,7 +409,7 @@ pub struct MapSerializer<'a> {
     values: Vec<Value>,
 }
 
-impl<'a> ser::SerializeMap for MapSerializer<'a> {
+impl ser::SerializeMap for MapSerializer<'_> {
     type Ok = (Format, Value);
     type Error = Error;
 
@@ -452,7 +452,7 @@ pub struct StructSerializer<'a> {
     values: Vec<Value>,
 }
 
-impl<'a> ser::SerializeStruct for StructSerializer<'a> {
+impl ser::SerializeStruct for StructSerializer<'_> {
     type Ok = (Format, Value);
     type Error = Error;
 
@@ -492,7 +492,7 @@ pub struct StructVariantSerializer<'a> {
     values: Vec<Value>,
 }
 
-impl<'a> ser::SerializeStructVariant for StructVariantSerializer<'a> {
+impl ser::SerializeStructVariant for StructVariantSerializer<'_> {
     type Ok = (Format, Value);
     type Error = Error;
 

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import pathlib
 import struct
 import typing
@@ -120,7 +118,7 @@ class RowColumnMask:
             uint8 = numpy.append(
                 uint8, numpy.zeros(8 - len(uint8) % 8, dtype=numpy.uint8)
             )
-        return tuple(uint8.view(dtype="=u8").tolist())
+        return tuple(uint8.view(dtype="=u8").tolist())  # type: ignore
 
     def y_mask(self) -> tuple[serde.type.uint64, ...]:
         uint8 = numpy.packbits(self.y_unpacked, bitorder="little")
@@ -128,7 +126,7 @@ class RowColumnMask:
             uint8 = numpy.append(
                 uint8, numpy.zeros(8 - len(uint8) % 8, dtype=numpy.uint8)
             )
-        return tuple(uint8.view(dtype="=u8").tolist())
+        return tuple(uint8.view(dtype="=u8").tolist())  # type: ignore
 
     def pixels(self) -> numpy.ndarray[typing.Any, numpy.dtype[numpy.bool_]]:
         result = numpy.full(

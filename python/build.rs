@@ -118,6 +118,22 @@ fn camel_case_to_screaming_case(string: &str) -> String {
     result
 }
 
+fn snake_case_to_camel_case(string: &str) -> String {
+    let mut result = String::new();
+    let mut capitalize = true;
+    for character in string.chars() {
+        if character == '_' {
+            capitalize = true;
+        } else if capitalize {
+            result.push(character.to_ascii_uppercase());
+            capitalize = false;
+        } else {
+            result.push(character);
+        }
+    }
+    result
+}
+
 enum NodeClass {
     Dataclass {
         children: std::collections::HashSet<String>,
@@ -446,8 +462,6 @@ macro_rules! generate {
                     std::fs::File::create(devices_directory.join(format!("{}.py", stringify!($module)))).unwrap(),
                 );
                 writeln!(writer, concat!(
-                    "from __future__ import annotations\n",
-                    "\n",
                     "import dataclasses\n",
                     "import enum\n",
                     "import types\n",
@@ -498,7 +512,7 @@ macro_rules! generate {
                         new_root_name: Some("Properties".into()),
                     },
                 );
-                for (class_name, iter_data_left_prefix, iter_data_right) in [
+                for (class_name_suffix, iter_data_left_prefix, iter_data_right) in [
                     ("Device",  "status.", "dict[str, numpy.ndarray[typing.Any, numpy.dtype[numpy.void]]]"),
                     ("DeviceRaw",  "status.Raw", "bytes"),
                 ] {
@@ -506,6 +520,7 @@ macro_rules! generate {
                         ("", "StatusNonOptional", "", ""),
                         ("Optional", "Status", "typing.Optional[", "]"),
                     ] {
+                        let class_name = format!("{}{}", snake_case_to_camel_case(stringify!($module)), class_name_suffix);
                         writeln!(
                             writer,
                             concat!(
@@ -657,7 +672,7 @@ macro_rules! generate {
             writeln!(
                 writer,
                 concat!(
-                    "from __future__ import annotations\n",
+                    "# pyright: reportOverlappingOverload=false\n",
                     "\n",
                     "import types\n",
                     "import typing\n",
@@ -741,13 +756,14 @@ macro_rules! generate {
                 }
             }
             $(
-                for (class_name, raw) in [
+                for (class_name_suffix, raw) in [
                     ("Device", "False"),
                     ("DeviceRaw", "True"),
                 ] {
+                    let class_name = format!("{}{}", snake_case_to_camel_case(stringify!($module)), class_name_suffix);
                     for (class_suffix, iterator_timeout) in [
-                        ("", "typing.Literal[None]"),
-                        ("Optional", "typing.Optional[float]"),
+                        ("", "typing.Literal[None] = None"),
+                        ("Optional", "float"),
                     ] {
                         writeln!(
                             writer,
@@ -757,7 +773,7 @@ macro_rules! generate {
                                 "@typing.overload\n",
                                 "def open(\n",
                                 "    configuration: {}.Configuration,\n",
-                                "    iterator_timeout: {} = None,\n",
+                                "    iterator_timeout: {},\n",
                                 "    raw: typing.Literal[{}] = {},\n",
                                 "    serial: typing.Optional[str] = None,\n",
                                 "    usb_configuration: typing.Optional[UsbConfiguration] = None,\n",
@@ -856,46 +872,11 @@ fn macos_link_search_path() -> Option<String> {
 }
 
 fn main() {
-    {
-        let cargo_toml = std::fs::read_to_string("Cargo.toml")
-            .unwrap()
-            .parse::<toml::Value>()
-            .unwrap();
-        let cargo_version = cargo_toml
-            .get("package")
-            .unwrap()
-            .get("version")
-            .unwrap()
-            .as_str()
-            .unwrap();
-        let pyproject_toml_contents =
-            std::fs::read_to_string("pyproject.toml").ok().or_else(|| {
-                std::fs::canonicalize("pyproject.toml")
-                    .ok()
-                    .map(|path| path.parent().map(|parent| parent.to_owned()))
-                    .flatten()
-                    .map(|parent| std::fs::read_to_string(parent.join("pyproject.toml")).ok())
-                    .flatten()
-            });
-        if let Some(pyproject_toml_contents) = pyproject_toml_contents {
-            let pyproject_toml = pyproject_toml_contents.parse::<toml::Value>().unwrap();
-            let pyproject_version = pyproject_toml
-                .get("project")
-                .unwrap()
-                .get("version")
-                .unwrap()
-                .as_str()
-                .unwrap();
-            if cargo_version != pyproject_version {
-                panic!("the cargo version ({cargo_version}) and the pyproject version ({pyproject_version}) are different");
-            }
-        }
-    }
     if std::env::var("TARGET").unwrap().contains("apple") {
         if let Some(path) = macos_link_search_path() {
             println!("cargo:rustc-link-lib=clang_rt.osx");
             println!("cargo:rustc-link-search={}", path);
         }
     }
-    generate!(prophesee_evk3_hd, prophesee_evk4);
+    generate!(inivation_davis346, prophesee_evk3_hd, prophesee_evk4);
 }

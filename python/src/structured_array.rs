@@ -11,22 +11,20 @@ macro_rules! dtype_base {
                 )+
             }
 
-            impl pyo3::IntoPy<core::ffi::c_int> for DtypeBase {
-                fn into_py(self, python: pyo3::Python) -> core::ffi::c_int {
-                    use numpy::prelude::PyArrayDescrMethods;
-                    match self {
-                        $(
-                            Self::[<$type:camel>] => $type::get_dtype_bound(python).num(),
-                        )+
-                    }
-                }
-            }
-
             impl DtypeBase {
                 const fn size(&self) -> usize {
                     match self {
                         $(
                             Self::[<$type:camel>] => std::mem::size_of::<$type>(),
+                        )+
+                    }
+                }
+
+                pub fn get_type_num(&self, python: pyo3::Python) -> core::ffi::c_int {
+                    use numpy::prelude::PyArrayDescrMethods;
+                    match self {
+                        $(
+                            Self::[<$type:camel>] => $type::get_dtype(python).num(),
                         )+
                     }
                 }
@@ -66,12 +64,10 @@ impl<const N: usize> Dtype<N> {
         }
         total
     }
-}
 
-impl<const N: usize> pyo3::IntoPy<*mut numpy::npyffi::PyArray_Descr> for Dtype<N> {
-    fn into_py(self, python: pyo3::Python) -> *mut numpy::npyffi::PyArray_Descr {
+    pub fn as_array_description(&self, python: pyo3::Python) -> *mut numpy::npyffi::PyArray_Descr {
         let dtype_description = unsafe { pyo3::ffi::PyList_New(N as pyo3::ffi::Py_ssize_t) };
-        for (index, field) in self.0.into_iter().enumerate() {
+        for (index, field) in self.0.iter().enumerate() {
             let tuple = unsafe { pyo3::ffi::PyTuple_New(2) };
             assert!(
                 unsafe {
@@ -92,7 +88,7 @@ impl<const N: usize> pyo3::IntoPy<*mut numpy::npyffi::PyArray_Descr> for Dtype<N
                         tuple,
                         1 as pyo3::ffi::Py_ssize_t,
                         numpy::PY_ARRAY_API
-                            .PyArray_TypeObjectFromType(python, field.base.into_py(python)),
+                            .PyArray_TypeObjectFromType(python, field.base.get_type_num(python)),
                     )
                 } == 0,
                 "PyTuple_SetItem 1 failed"

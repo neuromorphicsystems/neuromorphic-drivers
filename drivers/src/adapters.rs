@@ -22,4 +22,4 @@ macro_rules! register {
     }
 }
 
-register! { evt3 }
+register! { davis346, evt3 }

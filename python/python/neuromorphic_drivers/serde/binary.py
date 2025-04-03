@@ -52,7 +52,7 @@ class Serializer:
     def serialize_str(self, value: str):
         self.serialize_bytes(value.encode())
 
-    def serialize_unit(self, value: type.unit):
+    def serialize_unit(self, value: None):
         pass
 
     def serialize_bool(self, value: bool):
@@ -231,7 +231,7 @@ class Deserializer:
         except UnicodeDecodeError:
             raise type.DeserializationError("Invalid unicode string:", content)
 
-    def deserialize_unit(self) -> type.unit:
+    def deserialize_unit(self) -> None:
         return None
 
     def deserialize_bool(self) -> bool:
@@ -402,7 +402,7 @@ class Deserializer:
                     field_value = self.deserialize_any(field_type)
                     values.append(field_value)
                 self.decrease_container_depth()
-                return obj_type(*values)
+                return obj_type(*values)  # type: ignore
 
             # handle variant
             elif hasattr(obj_type, "VARIANTS"):

@@ -63,6 +63,7 @@ pub struct Device {
     handle: std::sync::Arc<rusb::DeviceHandle<rusb::Context>>,
     ring: usb::Ring,
     configuration_updater: configuration::Updater<Configuration>,
+    vendor_and_product_id: (u16, u16),
     serial: String,
 }
 
@@ -92,9 +93,7 @@ impl device::Usb for Device {
 
     type Properties = properties::Camera<Self::Configuration>;
 
-    const VENDOR_ID: u16 = 0x04b4;
-
-    const PRODUCT_ID: u16 = 0x00f4;
+    const VENDOR_AND_PRODUCT_IDS: &'static [(u16, u16)] = &[(0x04B4, 0x00F4), (0x04B4, 0x00F5)];
 
     const PROPERTIES: Self::Properties = Self::Properties {
         name: "Prophesee EVK3 HD",
@@ -127,8 +126,23 @@ impl device::Usb for Device {
         allow_dma: false,
     };
 
-    fn read_serial(handle: &mut rusb::DeviceHandle<rusb::Context>) -> rusb::Result<String> {
+    fn read_serial(handle: &mut rusb::DeviceHandle<rusb::Context>) -> rusb::Result<Option<String>> {
         handle.claim_interface(0)?;
+        let mut type_buffer = [0u8; 2];
+        if handle.read_control(
+            0xC0,
+            0x72,
+            0x00,
+            0x00,
+            &mut type_buffer,
+            std::time::Duration::from_secs(1),
+        )? != 2
+        {
+            return Ok(None);
+        }
+        if type_buffer[0] != 0x30 {
+            return Ok(None);
+        }
         handle.write_bulk(
             0x02,
             &[0x72, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
@@ -136,10 +150,10 @@ impl device::Usb for Device {
         )?;
         let mut buffer = vec![0u8; 16];
         handle.read_bulk(0x82, &mut buffer, std::time::Duration::from_secs(1))?;
-        Ok(format!(
+        Ok(Some(format!(
             "{:02X}{:02X}{:02X}{:02X}",
             buffer[11], buffer[10], buffer[9], buffer[8]
-        ))
+        )))
     }
 
     fn update_configuration(&self, configuration: Self::Configuration) {
@@ -157,7 +171,7 @@ impl device::Usb for Device {
         IntoError: From<Self::Error> + Clone + Send + 'static,
         IntoWarning: From<crate::usb::Overflow> + Clone + Send + 'static,
     {
-        let (handle, serial) = Self::handle_from_serial(event_loop.context(), serial)?;
+        let (handle, vendor_and_product_id, serial) = Self::open_serial(event_loop.context(), serial)?;
         std::thread::sleep(std::time::Duration::from_millis(150));
         request(
             &handle,
@@ -373,7 +387,7 @@ impl device::Usb for Device {
                 event_loop,
                 usb::TransferType::Bulk {
                     endpoint: 1 | libusb1_sys::constants::LIBUSB_ENDPOINT_IN,
-                    timeout: std::time::Duration::from_millis(100),
+                    timeout: std::time::Duration::ZERO, // @DEV this was 100 ms but the EVK4 uses 0, does this matter?
                 },
             )?,
             configuration_updater: configuration::Updater::new(
@@ -390,6 +404,7 @@ impl device::Usb for Device {
                     context
                 },
             ),
+            vendor_and_product_id,
             serial,
         })
     }
@@ -406,6 +421,10 @@ impl device::Usb for Device {
         self.ring.clutch()
     }
 
+    fn vendor_and_product_id(&self) -> (u16, u16) {
+        self.vendor_and_product_id
+    }
+
     fn serial(&self) -> String {
         self.serial.clone()
     }
@@ -418,7 +437,7 @@ impl device::Usb for Device {
         self.handle.device().speed().into()
     }
 
-    fn adapter(&self) -> Self::Adapter {
+    fn create_adapter(&self) -> Self::Adapter {
         Self::Adapter::from_dimensions(Self::PROPERTIES.width, Self::PROPERTIES.height)
     }
 
@@ -812,6 +831,7 @@ trait Register {
 
     fn offset(&self, registers: u32) -> RuntimeRegister;
 
+    #[allow(dead_code)]
     fn read(&self, handle: &rusb::DeviceHandle<rusb::Context>) -> Result<u32, Error> {
         let address = self.address();
         let buffer = [
@@ -889,6 +909,7 @@ impl Register for RuntimeRegister {
 
 macro_rules! register {
     ($name:ident, $address:literal, {$($subname:ident: $substart:literal..$subend:literal),+ $(,)?}) => {
+        #[allow(dead_code)]
         #[derive(Default)]
         struct $name {
             $(

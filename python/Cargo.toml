@@ -1,24 +1,24 @@
 [package]
 name = "python"
-version = "0.14.0"
 edition = "2021"
+resolver = "2"
 
 [lib]
 name = "neuromorphic_drivers"
 crate-type = ["cdylib"]
 
 [dependencies]
-neuromorphic-drivers = "0.14.0"
-numpy = "0.21.0"
+neuromorphic-drivers = {path = "../drivers"}
+numpy = "0.24.0"
 paste = "1.0"
-pyo3 = {version = "0.22.2", features = ["extension-module"]}
+pyo3 = {version = "0.24.0", features = ["extension-module"]}
 
 [build-dependencies]
 cc = "1.0"
-neuromorphic-drivers = "0.14.0"
+neuromorphic-drivers = {path = "../drivers"}
 paste = "1.0"
 reflect = {path = "../reflect"}
 serde = {version = "1.0", features = ["derive"]}
 serde_json = "1.0"
-serde-generate = "0.25.1"
+serde-generate = "0.29.0"
 toml = {version = "0.8", features = ["parse"]}

@@ -12,50 +12,50 @@ use once_cell::sync::Lazy;
 use serde::{de::DeserializeSeed, Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// A map of container formats.
+// A map of container formats.
 pub type Registry = BTreeMap<String, ContainerFormat>;
 
-/// Structure to drive the tracing of Serde serialization and deserialization.
-/// This typically aims at computing a `Registry`.
+// Structure to drive the tracing of Serde serialization and deserialization.
+// This typically aims at computing a `Registry`.
 #[derive(Debug)]
 pub struct Tracer {
-    /// Hold configuration options.
+    // Hold configuration options.
     pub(crate) config: TracerConfig,
 
-    /// Formats of the named containers discovered so far, while tracing
-    /// serialization and/or deserialization.
+    // Formats of the named containers discovered so far, while tracing
+    // serialization and/or deserialization.
     pub(crate) registry: Registry,
 
-    /// Enums that have detected to be yet incomplete (i.e. missing variants)
-    /// while tracing deserialization.
+    // Enums that have detected to be yet incomplete (i.e. missing variants)
+    // while tracing deserialization.
     pub(crate) incomplete_enums: BTreeSet<String>,
 }
 
-/// User inputs, aka "samples", recorded during serialization.
-/// This will help passing user-defined checks during deserialization.
+// User inputs, aka "samples", recorded during serialization.
+// This will help passing user-defined checks during deserialization.
 #[derive(Debug, Default)]
 pub struct Samples {
     pub(crate) values: BTreeMap<&'static str, Value>,
 }
 
 impl Samples {
-    /// Create a new structure to hold value samples.
+    // Create a new structure to hold value samples.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Obtain a (serialized) sample.
+    // Obtain a (serialized) sample.
     pub fn value(&self, name: &str) -> Option<&Value> {
         self.values.get(name)
     }
 
-    /// Clear stored samples.
+    // Clear stored samples.
     pub fn clear(&mut self) {
         self.values.clear();
     }
 }
 
-/// Configuration object to create a tracer.
+// Configuration object to create a tracer.
 #[derive(Debug)]
 pub struct TracerConfig {
     pub(crate) is_human_readable: bool,
@@ -65,7 +65,7 @@ pub struct TracerConfig {
 }
 
 impl Default for TracerConfig {
-    /// Create a new structure to hold value samples.
+    // Create a new structure to hold value samples.
     fn default() -> Self {
         Self {
             is_human_readable: false,
@@ -77,26 +77,26 @@ impl Default for TracerConfig {
 }
 
 impl TracerConfig {
-    /// Whether to trace the human readable encoding of (de)serialization.
+    // Whether to trace the human readable encoding of (de)serialization.
     #[allow(clippy::wrong_self_convention)]
     pub fn is_human_readable(mut self, value: bool) -> Self {
         self.is_human_readable = value;
         self
     }
 
-    /// Record samples of newtype structs during serialization and inject them during deserialization.
+    // Record samples of newtype structs during serialization and inject them during deserialization.
     pub fn record_samples_for_newtype_structs(mut self, value: bool) -> Self {
         self.record_samples_for_newtype_structs = value;
         self
     }
 
-    /// Record samples of tuple structs during serialization and inject them during deserialization.
+    // Record samples of tuple structs during serialization and inject them during deserialization.
     pub fn record_samples_for_tuple_structs(mut self, value: bool) -> Self {
         self.record_samples_for_tuple_structs = value;
         self
     }
 
-    /// Record samples of (regular) structs during serialization and inject them during deserialization.
+    // Record samples of (regular) structs during serialization and inject them during deserialization.
     pub fn record_samples_for_structs(mut self, value: bool) -> Self {
         self.record_samples_for_structs = value;
         self
@@ -104,7 +104,7 @@ impl TracerConfig {
 }
 
 impl Tracer {
-    /// Start tracing deserialization.
+    // Start tracing deserialization.
     pub fn new(config: TracerConfig) -> Self {
         Self {
             config,
@@ -113,15 +113,15 @@ impl Tracer {
         }
     }
 
-    /// Trace the serialization of a particular value,
-    /// followed by the deserialization of its type to find enum variants.
+    // Trace the serialization of a particular value,
+    // followed by the deserialization of its type to find enum variants.
     pub fn recursive_trace<'de, T>(
         &mut self,
         samples: &mut Samples,
         value: &T,
     ) -> Result<(Format, Value)>
     where
-        T: ?Sized + Serialize + Deserialize<'de>,
+        T: Serialize + Deserialize<'de>,
     {
         let (format, value) = self.trace_value(samples, value)?;
         static SAMPLES: Lazy<Samples> = Lazy::new(Samples::new);
@@ -133,11 +133,11 @@ impl Tracer {
         Ok((format, value))
     }
 
-    /// Trace the serialization of a particular value.
-    /// * Nested containers will be added to the tracing registry, indexed by
-    /// their (non-qualified) name.
-    /// * Sampled Rust values will be inserted into `samples` to benefit future calls
-    /// to the `trace_type_*` methods.
+    // Trace the serialization of a particular value.
+    // * Nested containers will be added to the tracing registry, indexed by
+    // their (non-qualified) name.
+    // * Sampled Rust values will be inserted into `samples` to benefit future calls
+    // to the `trace_type_*` methods.
     pub fn trace_value<T>(&mut self, samples: &mut Samples, value: &T) -> Result<(Format, Value)>
     where
         T: ?Sized + Serialize,
@@ -148,14 +148,14 @@ impl Tracer {
         Ok((format, sample))
     }
 
-    /// Trace a single deserialization of a particular type.
-    /// * Nested containers will be added to the tracing registry, indexed by
-    /// their (non-qualified) name.
-    /// * As a byproduct of deserialization, we also return a value of type `T`.
-    /// * Tracing deserialization of a type may fail if this type or some dependencies
-    /// have implemented a custom deserializer that validates data. The solution is
-    /// to make sure that `samples` holds enough sampled Rust values to cover all the
-    /// custom types.
+    // Trace a single deserialization of a particular type.
+    // * Nested containers will be added to the tracing registry, indexed by
+    // their (non-qualified) name.
+    // * As a byproduct of deserialization, we also return a value of type `T`.
+    // * Tracing deserialization of a type may fail if this type or some dependencies
+    // have implemented a custom deserializer that validates data. The solution is
+    // to make sure that `samples` holds enough sampled Rust values to cover all the
+    // custom types.
     pub fn trace_type_once<'de, T>(&mut self, samples: &'de Samples) -> Result<(Format, T)>
     where
         T: Deserialize<'de>,
@@ -167,7 +167,7 @@ impl Tracer {
         Ok((format, value))
     }
 
-    /// Same as `trace_type_once` for seeded deserialization.
+    // Same as `trace_type_once` for seeded deserialization.
     pub fn trace_type_once_with_seed<'de, S>(
         &mut self,
         samples: &'de Samples,
@@ -183,9 +183,9 @@ impl Tracer {
         Ok((format, value))
     }
 
-    /// Same as `trace_type_once` but if `T` is an enum, we repeat the process
-    /// until all variants of `T` are covered.
-    /// We accumulate and return all the sampled values at the end.
+    // Same as `trace_type_once` but if `T` is an enum, we repeat the process
+    // until all variants of `T` are covered.
+    // We accumulate and return all the sampled values at the end.
     pub fn trace_type<'de, T>(&mut self, samples: &'de Samples) -> Result<(Format, Vec<T>)>
     where
         T: Deserialize<'de>,
@@ -205,10 +205,10 @@ impl Tracer {
         }
     }
 
-    /// Trace a type `T` that is simple enough that no samples of values are needed.
-    /// * If `T` is an enum, the tracing iterates until all variants of `T` are covered.
-    /// * Accumulate and return all the sampled values at the end.
-    /// This is merely a shortcut for `self.trace_type` with a fixed empty set of samples.
+    // Trace a type `T` that is simple enough that no samples of values are needed.
+    // * If `T` is an enum, the tracing iterates until all variants of `T` are covered.
+    // * Accumulate and return all the sampled values at the end.
+    // This is merely a shortcut for `self.trace_type` with a fixed empty set of samples.
     pub fn trace_simple_type<'de, T>(&mut self) -> Result<(Format, Vec<T>)>
     where
         T: Deserialize<'de>,
@@ -217,7 +217,7 @@ impl Tracer {
         self.trace_type(&SAMPLES)
     }
 
-    /// Same as `trace_type` for seeded deserialization.
+    // Same as `trace_type` for seeded deserialization.
     pub fn trace_type_with_seed<'de, S>(
         &mut self,
         samples: &'de Samples,
@@ -241,12 +241,12 @@ impl Tracer {
         }
     }
 
-    /// Finish tracing and recover a map of normalized formats.
-    /// Returns an error if we detect incompletely traced types.
-    /// This may happen in a few of cases:
-    /// * We traced serialization of user-provided values but we are still missing the content
-    ///   of an option type, the content of a sequence type, the key or the value of a dictionary type.
-    /// * We traced deserialization of an enum type but we detect that some enum variants are still missing.
+    // Finish tracing and recover a map of normalized formats.
+    // Returns an error if we detect incompletely traced types.
+    // This may happen in a few of cases:
+    // * We traced serialization of user-provided values but we are still missing the content
+    //   of an option type, the content of a sequence type, the key or the value of a dictionary type.
+    // * We traced deserialization of an enum type but we detect that some enum variants are still missing.
     pub fn registry(self) -> Result<Registry> {
         let mut registry = self.registry;
         for (name, format) in registry.iter_mut() {
@@ -263,8 +263,8 @@ impl Tracer {
         }
     }
 
-    /// Same as registry but always return a value, even if we detected issues.
-    /// This should only be use for debugging.
+    // Same as registry but always return a value, even if we detected issues.
+    // This should only be use for debugging.
     pub fn registry_unchecked(self) -> Registry {
         let mut registry = self.registry;
         for format in registry.values_mut() {

@@ -80,6 +80,7 @@ macro_rules! register {
                 }
             }
 
+            #[allow(clippy::large_enum_variant)]
             pub enum Device {
                 $(
                     [<$module:camel>]($module::Device),
@@ -174,10 +175,10 @@ macro_rules! register {
             }
 
             impl Device {
-                pub fn adapter(&self) -> adapters::Adapter {
+                pub fn create_adapter(&self) -> adapters::Adapter {
                     match self {
                         $(
-                            Self::[<$module:camel>](device) => device.adapter().into(),
+                            Self::[<$module:camel>](device) => device.create_adapter().into(),
                         )+
                     }
                 }
@@ -210,6 +211,14 @@ macro_rules! register {
                     match self {
                         $(
                             Self::[<$module:camel>](_) => $module::Device::PROPERTIES.name,
+                        )+
+                    }
+                }
+
+                pub fn vendor_and_product_id(&self) -> (u16, u16) {
+                    match self {
+                        $(
+                            Self::[<$module:camel>](device) => device.vendor_and_product_id(),
                         )+
                     }
                 }
@@ -347,4 +356,4 @@ macro_rules! register {
     };
 }
 
-register! { prophesee_evk3_hd, prophesee_evk4, centuryarks_silkyevcamhd }
+register! { inivation_davis346, prophesee_evk3_hd, prophesee_evk4 }

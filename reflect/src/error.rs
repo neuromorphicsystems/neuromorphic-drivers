@@ -5,10 +5,10 @@ use serde::{de, ser};
 use std::fmt;
 use thiserror::Error;
 
-/// Result type used in this crate.
+// Result type used in this crate.
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-/// Error type used in this crate.
+// Error type used in this crate.
 #[derive(Clone, Debug, Error, PartialEq)]
 pub enum Error {
     #[error("{0}")]

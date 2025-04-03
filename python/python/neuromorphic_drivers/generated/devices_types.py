@@ -1,4 +1,4 @@
-from __future__ import annotations
+# pyright: reportOverlappingOverload=false
 
 import types
 import typing
@@ -7,6 +7,7 @@ import numpy
 
 from .. import device
 from .. import status
+from .devices import inivation_davis346 as inivation_davis346
 from .devices import prophesee_evk3_hd as prophesee_evk3_hd
 from .devices import prophesee_evk4 as prophesee_evk4
 from .enums import *
@@ -164,25 +165,73 @@ class GenericDeviceRawOptional(typing.Protocol):
 
 @typing.overload
 def open(
-    configuration: prophesee_evk3_hd.Configuration,
+    configuration: inivation_davis346.Configuration,
     iterator_timeout: typing.Literal[None] = None,
     raw: typing.Literal[False] = False,
     serial: typing.Optional[str] = None,
     usb_configuration: typing.Optional[UsbConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> prophesee_evk3_hd.Device:
+) -> inivation_davis346.InivationDavis346Device:
+    ...
+
+
+@typing.overload
+def open(
+    configuration: inivation_davis346.Configuration,
+    iterator_timeout: float,
+    raw: typing.Literal[False] = False,
+    serial: typing.Optional[str] = None,
+    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> inivation_davis346.InivationDavis346DeviceOptional:
+    ...
+
+
+@typing.overload
+def open(
+    configuration: inivation_davis346.Configuration,
+    iterator_timeout: typing.Literal[None] = None,
+    raw: typing.Literal[True] = True,
+    serial: typing.Optional[str] = None,
+    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> inivation_davis346.InivationDavis346DeviceRaw:
+    ...
+
+
+@typing.overload
+def open(
+    configuration: inivation_davis346.Configuration,
+    iterator_timeout: float,
+    raw: typing.Literal[True] = True,
+    serial: typing.Optional[str] = None,
+    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> inivation_davis346.InivationDavis346DeviceRawOptional:
     ...
 
 
 @typing.overload
 def open(
     configuration: prophesee_evk3_hd.Configuration,
-    iterator_timeout: typing.Optional[float] = None,
+    iterator_timeout: typing.Literal[None] = None,
     raw: typing.Literal[False] = False,
     serial: typing.Optional[str] = None,
     usb_configuration: typing.Optional[UsbConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> prophesee_evk3_hd.DeviceOptional:
+) -> prophesee_evk3_hd.PropheseeEvk3HdDevice:
+    ...
+
+
+@typing.overload
+def open(
+    configuration: prophesee_evk3_hd.Configuration,
+    iterator_timeout: float,
+    raw: typing.Literal[False] = False,
+    serial: typing.Optional[str] = None,
+    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> prophesee_evk3_hd.PropheseeEvk3HdDeviceOptional:
     ...
 
 
@@ -194,19 +243,19 @@ def open(
     serial: typing.Optional[str] = None,
     usb_configuration: typing.Optional[UsbConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> prophesee_evk3_hd.DeviceRaw:
+) -> prophesee_evk3_hd.PropheseeEvk3HdDeviceRaw:
     ...
 
 
 @typing.overload
 def open(
     configuration: prophesee_evk3_hd.Configuration,
-    iterator_timeout: typing.Optional[float] = None,
+    iterator_timeout: float,
     raw: typing.Literal[True] = True,
     serial: typing.Optional[str] = None,
     usb_configuration: typing.Optional[UsbConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> prophesee_evk3_hd.DeviceRawOptional:
+) -> prophesee_evk3_hd.PropheseeEvk3HdDeviceRawOptional:
     ...
 
 
@@ -218,19 +267,19 @@ def open(
     serial: typing.Optional[str] = None,
     usb_configuration: typing.Optional[UsbConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> prophesee_evk4.Device:
+) -> prophesee_evk4.PropheseeEvk4Device:
     ...
 
 
 @typing.overload
 def open(
     configuration: prophesee_evk4.Configuration,
-    iterator_timeout: typing.Optional[float] = None,
+    iterator_timeout: float,
     raw: typing.Literal[False] = False,
     serial: typing.Optional[str] = None,
     usb_configuration: typing.Optional[UsbConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> prophesee_evk4.DeviceOptional:
+) -> prophesee_evk4.PropheseeEvk4DeviceOptional:
     ...
 
 
@@ -242,19 +291,19 @@ def open(
     serial: typing.Optional[str] = None,
     usb_configuration: typing.Optional[UsbConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> prophesee_evk4.DeviceRaw:
+) -> prophesee_evk4.PropheseeEvk4DeviceRaw:
     ...
 
 
 @typing.overload
 def open(
     configuration: prophesee_evk4.Configuration,
-    iterator_timeout: typing.Optional[float] = None,
+    iterator_timeout: float,
     raw: typing.Literal[True] = True,
     serial: typing.Optional[str] = None,
     usb_configuration: typing.Optional[UsbConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> prophesee_evk4.DeviceRawOptional:
+) -> prophesee_evk4.PropheseeEvk4DeviceRawOptional:
     ...
 
 

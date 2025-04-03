@@ -62,17 +62,16 @@ impl From<rusb::Speed> for Speed {
     }
 }
 
-impl ToString for Speed {
-    fn to_string(&self) -> String {
-        (match self {
-            Self::Unknown => "USB Unknown speed",
-            Self::Low => "USB 1.0 Low Speed (1.5 Mb/s)",
-            Self::Full => "USB 1.1 Full Speed (12 Mb/s)",
-            Self::High => "USB 2.0 High Speed (480 Mb/s)",
-            Self::Super => "USB 3.0 SuperSpeed (5.0 Gb/s)",
-            Self::SuperPlus => "USB 3.1 SuperSpeed+ (10.0 Gb/s)",
-        })
-        .to_owned()
+impl std::fmt::Display for Speed {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unknown => write!(formatter, "USB Unknown speed"),
+            Self::Low => write!(formatter, "USB 1.0 Low Speed (1.5 Mb/s)"),
+            Self::Full => write!(formatter, "USB 1.1 Full Speed (12 Mb/s)"),
+            Self::High => write!(formatter, "USB 2.0 High Speed (480 Mb/s)"),
+            Self::Super => write!(formatter, "USB 3.0 SuperSpeed (5.0 Gb/s)"),
+            Self::SuperPlus => write!(formatter, "USB 3.1 SuperSpeed+ (10.0 Gb/s)"),
+        }
     }
 }
 

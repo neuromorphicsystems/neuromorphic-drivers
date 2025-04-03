@@ -1,6 +1,3 @@
-#[derive(thiserror::Error, Debug, Clone)]
-pub enum Error {}
-
 pub struct Adapter {
     t: u64,
     overflows: u32,
