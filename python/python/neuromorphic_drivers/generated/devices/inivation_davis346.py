@@ -101,7 +101,7 @@ class Configuration:
 
 @dataclasses.dataclass
 class UsbConfiguration:
-    buffer_length: serde.type.uint64 = 8192
+    buffer_length: serde.type.uint64 = 131072
     ring_length: serde.type.uint64 = 4096
     transfer_queue_length: serde.type.uint64 = 32
     allow_dma: bool = False

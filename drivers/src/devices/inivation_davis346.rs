@@ -194,7 +194,7 @@ impl device::Usb for Device {
     };
 
     const DEFAULT_USB_CONFIGURATION: usb::Configuration = usb::Configuration {
-        buffer_length: 1 << 13,
+        buffer_length: 1 << 17,
         ring_length: 1 << 12,
         transfer_queue_length: 1 << 5,
         allow_dma: false,
@@ -427,6 +427,21 @@ impl device::Usb for Device {
 
     fn temperature_celsius(&self) -> Result<device::TemperatureCelsius, Self::Error> {
         Err(Error::NotImplemented("temperature_celsius".to_owned()))
+    }
+}
+
+impl Drop for Device {
+    fn drop(&mut self) {
+        let _ = DVS_RUN.set(&self.handle, 0);
+        let _ = APS_RUN.set(&self.handle, 0);
+        let _ = IMU_ACCELEROMETER_RUN.set(&self.handle, 0);
+        let _ = IMU_GYROSCOPE_RUN.set(&self.handle, 0);
+        let _ = IMU_TEMPERATURE_RUN.set(&self.handle, 0);
+        let _ = EXTERNAL_INPUT_DETECTOR_RUN.set(&self.handle, 0);
+        let _ = MULTIPLEXER_RUN.set(&self.handle, 0);
+        let _ = MULTIPLEXER_TIMESTAMP_RUN.set(&self.handle, 0);
+        let _ = USB_RUN.set(&self.handle, 0);
+        let _ = MULTIPLEXER_CHIP_RUN.set(&self.handle, 0);
     }
 }
 
@@ -738,12 +753,12 @@ fn update_configuration(
             DVS_FILTER_ROI_END_COLUMN.set(
                 handle,
                 (configuration.region_of_interest.left + configuration.region_of_interest.width)
-                    .min(346) as u32,
+                    .min(345) as u32,
             )?;
             DVS_FILTER_ROI_END_ROW.set(
                 handle,
                 (configuration.region_of_interest.top + configuration.region_of_interest.height)
-                    .min(260) as u32,
+                    .min(259) as u32,
             )?;
             APS_START_COLUMN_0.set(handle, configuration.region_of_interest.left as u32)?;
             APS_START_ROW_0.set(handle, configuration.region_of_interest.top as u32)?;
@@ -812,7 +827,7 @@ fn update_configuration(
         None => true,
     } {
         println!(
-            "set frame interval to {} µs ({} cycles)",
+            "set exposure to {} µs ({} cycles)",
             configuration.exposure_us,
             (configuration.exposure_us as f64 * adc_clock).round() as u32
         ); // @DEV

@@ -27,7 +27,7 @@ class Device(ExtensionDevice):
 
     def __next__(self):
         system_time, ring_status, packet = super().__next__()
-        if ring_status[5] is None:
+        if ring_status is None or ring_status[5] is None:
             return (
                 status.RawStatus(
                     system_time=system_time,
