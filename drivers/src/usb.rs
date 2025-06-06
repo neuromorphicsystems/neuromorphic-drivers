@@ -23,6 +23,27 @@ pub enum Error {
     #[error("device with serial not found")]
     Serial(String),
 
+    #[error("there is no device on bus {bus_number} at address {address}")]
+    BusNumberAndAddressNotFound { bus_number: u8, address: u8 },
+
+    #[error("unsupported device on bus {bus_number} at address {address}")]
+    BusNumberAndAddressUnsupportedDevice { bus_number: u8, address: u8 },
+
+    #[error("could not access device on bus {bus_number} at address {address} ({error:?})")]
+    BusNumberAndAddressAccessError {
+        bus_number: u8,
+        address: u8,
+        error: rusb::Error,
+    },
+
+    #[error("the device on bus {bus_number} at address {address} has an unsupported VID:PID ({vendor_id:04X}:{product_id:04X})")]
+    BusNumberAndAddressUnexpectedIds {
+        bus_number: u8,
+        address: u8,
+        vendor_id: u16,
+        product_id: u16,
+    },
+
     #[error("device not found")]
     Device,
 
@@ -122,6 +143,7 @@ impl BufferData {
 }
 
 struct Buffer {
+    system_time: std::time::SystemTime,
     instant: std::time::Instant,
     first_after_overflow: bool,
     data: BufferData,
@@ -293,6 +315,7 @@ struct TransferContext {
 
 #[no_mangle]
 extern "system" fn usb_transfer_callback(transfer_pointer: *mut libusb1_sys::libusb_transfer) {
+    let system_time = std::time::SystemTime::now();
     let now = std::time::Instant::now();
     let mut resubmit = false;
     {
@@ -315,6 +338,7 @@ extern "system" fn usb_transfer_callback(transfer_pointer: *mut libusb1_sys::lib
                     | libusb1_sys::constants::LIBUSB_TRANSFER_TIMED_OUT => {
                         if !matches!(context.clutch, TransferClutch::Engaged) {
                             let active_buffer = shared.write_range.start;
+                            shared.buffers[active_buffer].system_time = system_time;
                             shared.buffers[active_buffer].instant = now;
                             shared.buffers[active_buffer].first_after_overflow =
                                 matches!(context.clutch, TransferClutch::DisengagedFirst);
@@ -357,6 +381,7 @@ extern "system" fn usb_transfer_callback(transfer_pointer: *mut libusb1_sys::lib
                     | libusb1_sys::constants::LIBUSB_TRANSFER_OVERFLOW) => {
                         if !matches!(context.clutch, TransferClutch::Engaged) {
                             let active_buffer = shared.write_range.start;
+                            shared.buffers[active_buffer].system_time = system_time;
                             shared.buffers[active_buffer].instant = now;
                             shared.buffers[active_buffer].length = transfer.actual_length as usize;
                             shared.write_range.increment_start();
@@ -397,6 +422,7 @@ extern "system" fn usb_transfer_callback(transfer_pointer: *mut libusb1_sys::lib
                     | libusb1_sys::constants::LIBUSB_TRANSFER_NO_DEVICE => {
                         if !matches!(context.clutch, TransferClutch::Engaged) {
                             let active_buffer = shared.write_range.start;
+                            shared.buffers[active_buffer].system_time = system_time;
                             shared.buffers[active_buffer].instant = now;
                             shared.buffers[active_buffer].length = transfer.actual_length as usize;
                             shared.write_range.increment_start();
@@ -507,6 +533,7 @@ impl Ring {
                     &mut freewheel_buffers
                 })
                 .push(Buffer {
+                    system_time: std::time::SystemTime::now(),
                     instant: std::time::Instant::now(),
                     first_after_overflow: false,
                     data: BufferData(
@@ -536,6 +563,7 @@ impl Ring {
                     &mut freewheel_buffers
                 })
                 .push(Buffer {
+                    system_time: std::time::SystemTime::now(),
                     instant: std::time::Instant::now(),
                     first_after_overflow: false,
                     // unsafe: dma_buffer is not null
@@ -740,6 +768,7 @@ impl Ring {
 }
 
 pub struct BufferView<'a> {
+    pub system_time: std::time::SystemTime,
     pub instant: std::time::Instant,
     pub first_after_overflow: bool,
     pub slice: &'a [u8],
@@ -798,7 +827,7 @@ impl Ring {
         {
             panic!("the buffer returned by a previous call of next_with_timeout must be dropped before calling next_with_timeout again");
         }
-        let (instant, first_after_overflow, slice, read, write_range, clutch) = {
+        let (system_time, instant, first_after_overflow, slice, read, write_range, clutch) = {
             let start = std::time::Instant::now();
             let mut shared = self
                 .context
@@ -831,6 +860,7 @@ impl Ring {
                 }
             }
             (
+                shared.buffers[shared.read].system_time,
                 shared.buffers[shared.read].instant,
                 shared.buffers[shared.read].first_after_overflow,
                 // unsafe: data validity guaranteed by read / write_range in shared
@@ -846,6 +876,7 @@ impl Ring {
             )
         };
         Some(BufferView {
+            system_time,
             instant,
             first_after_overflow,
             slice,

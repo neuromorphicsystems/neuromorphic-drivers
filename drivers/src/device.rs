@@ -2,7 +2,10 @@ use crate::flag;
 use crate::usb;
 use rusb::UsbContext;
 
+#[derive(Debug, Clone)]
 pub struct ListedDevice {
+    pub bus_number: u8,
+    pub address: u8,
     pub speed: usb::Speed,
     pub serial: Result<String, usb::Error>,
 }
@@ -11,6 +14,13 @@ pub struct ListedDevice {
 pub struct TemperatureCelsius(pub f32);
 
 pub type HandleAndProperties = (rusb::DeviceHandle<rusb::Context>, (u16, u16), String);
+
+#[derive(Debug, Clone, Copy)]
+pub enum SerialOrBusNumberAndAddress<'a> {
+    Serial(&'a str),
+    BusNumberAndAddress((u8, u8)),
+    None,
+}
 
 pub trait Usb: Sized {
     type Adapter;
@@ -36,7 +46,7 @@ pub trait Usb: Sized {
     fn update_configuration(&self, configuration: Self::Configuration);
 
     fn open<IntoError, IntoWarning>(
-        serial: &Option<&str>,
+        serial_or_bus_number_and_address: SerialOrBusNumberAndAddress,
         configuration: Self::Configuration,
         usb_configuration: &usb::Configuration,
         event_loop: std::sync::Arc<usb::EventLoop>,
@@ -57,6 +67,10 @@ pub trait Usb: Sized {
     fn serial(&self) -> String;
 
     fn chip_firmware_configuration(&self) -> Self::Configuration;
+
+    fn bus_number(&self) -> u8;
+
+    fn address(&self) -> u8;
 
     fn speed(&self) -> usb::Speed;
 
@@ -83,6 +97,8 @@ pub trait Usb: Sized {
         {
             if let Some(serial) = Self::read_serial(&mut device.open()?).transpose() {
                 result.push(ListedDevice {
+                    bus_number: device.bus_number(),
+                    address: device.address(),
                     speed: device.speed().into(),
                     serial: serial.map_err(|error| error.into()),
                 });
@@ -91,9 +107,46 @@ pub trait Usb: Sized {
         Ok(result)
     }
 
+    fn open_any(context: &rusb::Context) -> Result<HandleAndProperties, usb::Error> {
+        match context.devices()?.iter().find_map(
+            |device| -> Option<rusb::Result<HandleAndProperties>> {
+                match device.device_descriptor() {
+                    Ok(descriptor) => {
+                        let device_vendor_and_product_id =
+                            (descriptor.vendor_id(), descriptor.product_id());
+                        if Self::VENDOR_AND_PRODUCT_IDS
+                            .iter()
+                            .any(|vendor_and_product_id| {
+                                device_vendor_and_product_id == *vendor_and_product_id
+                            })
+                        {
+                            let mut handle = match device.open() {
+                                Ok(handle) => handle,
+                                Err(error) => return Some(Err(error)),
+                            };
+                            let device_serial = match Self::read_serial(&mut handle) {
+                                Ok(Some(serial)) => serial,
+                                Ok(None) => return None, // ignore unsupported devices
+                                Err(_) => return None, // do not raise an error if the device is already open
+                            };
+                            let _ = handle.set_auto_detach_kernel_driver(true);
+                            Some(Ok((handle, device_vendor_and_product_id, device_serial)))
+                        } else {
+                            None
+                        }
+                    }
+                    Err(_) => None,
+                }
+            },
+        ) {
+            Some(result) => Ok(result?),
+            None => Err(usb::Error::Device),
+        }
+    }
+
     fn open_serial(
         context: &rusb::Context,
-        serial: &Option<&str>,
+        serial: &str,
     ) -> Result<HandleAndProperties, usb::Error> {
         match context.devices()?.iter().find_map(
             |device| -> Option<rusb::Result<HandleAndProperties>> {
@@ -114,25 +167,13 @@ pub trait Usb: Sized {
                             let device_serial = match Self::read_serial(&mut handle) {
                                 Ok(Some(serial)) => serial,
                                 Ok(None) => return None, // ignore unsupported devices
-                                Err(_) => return None, // ignore errors to support devices that are already open
+                                Err(_) => return None, // do not raise an error if the device is already open
                             };
-                            match serial {
-                                Some(serial) => {
-                                    if *serial == device_serial {
-                                        let _ = handle.set_auto_detach_kernel_driver(true);
-                                        Some(Ok((
-                                            handle,
-                                            device_vendor_and_product_id,
-                                            device_serial,
-                                        )))
-                                    } else {
-                                        None
-                                    }
-                                }
-                                None => {
-                                    let _ = handle.set_auto_detach_kernel_driver(true);
-                                    Some(Ok((handle, device_vendor_and_product_id, device_serial)))
-                                }
+                            if *serial == device_serial {
+                                let _ = handle.set_auto_detach_kernel_driver(true);
+                                Some(Ok((handle, device_vendor_and_product_id, device_serial)))
+                            } else {
+                                None
                             }
                         } else {
                             None
@@ -143,9 +184,73 @@ pub trait Usb: Sized {
             },
         ) {
             Some(result) => Ok(result?),
-            None => Err(match serial {
-                Some(serial) => usb::Error::Serial((*serial).to_owned()),
-                None => usb::Error::Device,
+            None => Err(usb::Error::Serial((*serial).to_owned())),
+        }
+    }
+
+    fn open_bus_number_and_address(
+        context: &rusb::Context,
+        bus_number: u8,
+        address: u8,
+    ) -> Result<HandleAndProperties, usb::Error> {
+        match context.devices()?.iter().find_map(
+            |device| -> Option<Result<HandleAndProperties, usb::Error>> {
+                if device.bus_number() == bus_number && device.address() == address {
+                    Some(match device.device_descriptor() {
+                        Ok(descriptor) => {
+                            let device_vendor_and_product_id =
+                                (descriptor.vendor_id(), descriptor.product_id());
+                            if Self::VENDOR_AND_PRODUCT_IDS
+                                .iter()
+                                .any(|vendor_and_product_id| {
+                                    device_vendor_and_product_id == *vendor_and_product_id
+                                })
+                            {
+                                let mut handle = match device.open() {
+                                    Ok(handle) => handle,
+                                    Err(error) => return Some(Err(error.into())),
+                                };
+                                match Self::read_serial(&mut handle) {
+                                    Ok(Some(serial)) => {
+                                        let _ = handle.set_auto_detach_kernel_driver(true);
+                                        Ok((handle, device_vendor_and_product_id, serial))
+                                    }
+                                    Ok(None) => {
+                                        Err(usb::Error::BusNumberAndAddressUnsupportedDevice {
+                                            bus_number,
+                                            address,
+                                        })
+                                    }
+                                    Err(error) => Err(usb::Error::BusNumberAndAddressAccessError {
+                                        bus_number,
+                                        address,
+                                        error,
+                                    }),
+                                }
+                            } else {
+                                Err(usb::Error::BusNumberAndAddressUnexpectedIds {
+                                    bus_number,
+                                    address,
+                                    vendor_id: device_vendor_and_product_id.0,
+                                    product_id: device_vendor_and_product_id.1,
+                                })
+                            }
+                        }
+                        Err(error) => Err(usb::Error::BusNumberAndAddressAccessError {
+                            bus_number,
+                            address,
+                            error,
+                        }),
+                    })
+                } else {
+                    None
+                }
+            },
+        ) {
+            Some(result) => Ok(result?),
+            None => Err(usb::Error::BusNumberAndAddressNotFound {
+                bus_number,
+                address,
             }),
         }
     }

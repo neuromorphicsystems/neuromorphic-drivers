@@ -75,7 +75,12 @@ impl Device {
         let (flag, event_loop) = neuromorphic_drivers_rs::flag_and_event_loop()
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(format!("{error}")))?;
         let device = neuromorphic_drivers_rs::open(
-            serial.as_deref(),
+            match serial.as_ref() {
+                Some(serial) => {
+                    neuromorphic_drivers_rs::SerialOrBusNumberAndAddress::Serial(serial.as_str())
+                }
+                None => neuromorphic_drivers_rs::SerialOrBusNumberAndAddress::None,
+            },
             if let Some(device_type) = device_type {
                 if let Some(configuration) = configuration {
                     Some(

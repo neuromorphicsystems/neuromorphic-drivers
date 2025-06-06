@@ -1,3 +1,9 @@
+// @DEV implement adapter using state
+#[derive(Clone, Copy)]
+pub struct State {
+    pub t: u64,
+}
+
 enum FrameDataRow {
     Idle,
     Reset(u16),
@@ -15,7 +21,7 @@ pub struct Adapter {
     frame_reset_column: Option<u16>,
     frame_signal_column: Option<u16>,
     frame_data_row: FrameDataRow,
-    time_ref: std::time::Instant, // @DEV
+    state: State, // @DEV move state props here
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -42,7 +48,8 @@ pub struct ImuEvent {
 
 #[derive(Default)]
 pub struct EventsLengths {
-    pub dvs: usize,
+    pub on: usize,
+    pub off: usize,
     pub imu: usize,
     pub trigger: usize,
 }
@@ -60,20 +67,39 @@ impl Adapter {
             frame_reset_column: None,
             frame_signal_column: None,
             frame_data_row: FrameDataRow::Idle,
-            time_ref: std::time::Instant::now(), // @DEV
+            state: State { t: 0 }, // @DEV move state props here
         }
     }
 
-    pub fn events_lengths(&self, slice: &[u8]) -> EventsLengths {
-        EventsLengths {
-            dvs: 0,
-            imu: 0,
-            trigger: 0,
-        } // @TODO
+    pub fn state(&self) -> &State {
+        &self.state
     }
 
-    pub fn current_t(&self) -> u64 {
-        self.t
+    pub fn events_lengths(&self, slice: &[u8]) -> EventsLengths {
+        // @TODO
+        EventsLengths {
+            on: 0,
+            off: 0,
+            imu: 0,
+            trigger: 0,
+        }
+    }
+
+    pub fn events_lengths_until(
+        &mut self,
+        slice: &[u8],
+        threshold_t: u64,
+    ) -> (EventsLengths, usize) {
+        // @TODO
+        (
+            EventsLengths {
+                on: 0,
+                off: 0,
+                imu: 0,
+                trigger: 0,
+            },
+            0,
+        )
     }
 
     pub fn convert<HandleDvsEvent, HandleImuEvent, HandleTriggerEvent, HandleFrameEvent>(

@@ -7,7 +7,10 @@ fn convert() {
             let mut adapter =
                 neuromorphic_drivers::adapters::evt3::Adapter::from_dimensions(1280, 720);
             let start = std::time::Instant::now();
-            let dvs_events_length = adapter.events_lengths(&bytes).dvs;
+            let dvs_events_length = {
+                let events_lengths = adapter.events_lengths(&bytes);
+                events_lengths.on + events_lengths.off
+            };
             let mut events = Vec::new();
             events.reserve(dvs_events_length);
             unsafe {
@@ -27,7 +30,7 @@ fn convert() {
             println!(
                 "convert (calc. size + single allocation): {} µs, t = {}, dvs={}",
                 start.elapsed().as_micros(),
-                adapter.current_t(),
+                adapter.state().t,
                 events.len(),
             );
             std::fs::write("tests/test.events", unsafe {
@@ -48,7 +51,7 @@ fn convert() {
             println!(
                 "convert (dynamic allocation): {} µs, t = {}, dvs={}",
                 start.elapsed().as_micros(),
-                adapter.current_t(),
+                adapter.state().t,
                 events.len(),
             );
             std::fs::write("tests/test.events", unsafe {
@@ -64,11 +67,11 @@ fn convert() {
             let mut adapter =
                 neuromorphic_drivers::adapters::evt3::Adapter::from_dimensions(1280, 720);
             let start = std::time::Instant::now();
-            adapter.consume(&bytes);
+            adapter.convert(&bytes, |_| {}, |_| {});
             println!(
                 "consume: {} µs, t = {}",
                 start.elapsed().as_micros(),
-                adapter.current_t(),
+                adapter.state().t,
             );
         }
     }

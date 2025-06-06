@@ -121,7 +121,7 @@ pub const PROPERTIES: properties::Camera<Configuration> = Device::PROPERTIES;
 pub const DEFAULT_CONFIGURATION: Configuration = Device::PROPERTIES.default_configuration;
 pub const DEFAULT_USB_CONFIGURATION: usb::Configuration = Device::DEFAULT_USB_CONFIGURATION;
 pub fn open<IntoError, IntoWarning>(
-    serial: &Option<&str>,
+    serial_or_bus_number_and_address: device::SerialOrBusNumberAndAddress,
     configuration: Configuration,
     usb_configuration: &usb::Configuration,
     event_loop: std::sync::Arc<usb::EventLoop>,
@@ -131,7 +131,13 @@ where
     IntoError: From<Error> + Clone + Send + 'static,
     IntoWarning: From<usb::Overflow> + Clone + Send + 'static,
 {
-    Device::open(serial, configuration, usb_configuration, event_loop, flag)
+    Device::open(
+        serial_or_bus_number_and_address,
+        configuration,
+        usb_configuration,
+        event_loop,
+        flag,
+    )
 }
 
 impl device::Usb for Device {
@@ -217,7 +223,7 @@ impl device::Usb for Device {
     }
 
     fn open<IntoError, IntoWarning>(
-        serial: &Option<&str>,
+        serial_or_bus_number_and_address: device::SerialOrBusNumberAndAddress,
         configuration: Self::Configuration,
         usb_configuration: &usb::Configuration,
         event_loop: std::sync::Arc<usb::EventLoop>,
@@ -227,8 +233,15 @@ impl device::Usb for Device {
         IntoError: From<Self::Error> + Clone + Send + 'static,
         IntoWarning: From<usb::Overflow> + Clone + Send + 'static,
     {
-        let (handle, vendor_and_product_id, serial) =
-            Self::open_serial(event_loop.context(), serial)?;
+        let (handle, vendor_and_product_id, serial) = match serial_or_bus_number_and_address {
+            device::SerialOrBusNumberAndAddress::Serial(serial) => {
+                Self::open_serial(event_loop.context(), serial)?
+            }
+            device::SerialOrBusNumberAndAddress::BusNumberAndAddress((bus_number, address)) => {
+                Self::open_bus_number_and_address(event_loop.context(), bus_number, address)?
+            }
+            device::SerialOrBusNumberAndAddress::None => Self::open_any(event_loop.context())?,
+        };
         let device_version = handle.device().device_descriptor()?.device_version();
         if device_version.minor() == 0 && device_version.sub_minor() < 6 {
             return Err(Self::Error::FirmwareVersion {
@@ -283,12 +296,25 @@ impl device::Usb for Device {
             "APS_HAS_GLOBAL_SHUTTER={}",
             APS_HAS_GLOBAL_SHUTTER.get(&handle)?
         );
+        println!("IMU_TYPE={}", IMU_TYPE.get(&handle)?);
         println!("IMU_ORIENTATION={}", IMU_ORIENTATION.get(&handle)?);
         println!("LOGIC_CLOCK={}", LOGIC_CLOCK.get(&handle)?);
         println!("ADC_CLOCK={}", ADC_CLOCK.get(&handle)?);
         println!("USB_CLOCK={}", USB_CLOCK.get(&handle)?);
         println!("CLOCK_DEVIATION={}", CLOCK_DEVIATION.get(&handle)?);
         // }
+
+        // reset + start sequence
+        DVS_RUN.set(&handle, 0)?;
+        APS_RUN.set(&handle, 0)?;
+        IMU_ACCELEROMETER_RUN.set(&handle, 0)?;
+        IMU_GYROSCOPE_RUN.set(&handle, 0)?;
+        IMU_TEMPERATURE_RUN.set(&handle, 0)?;
+        EXTERNAL_INPUT_DETECTOR_RUN.set(&handle, 0)?;
+        MULTIPLEXER_RUN.set(&handle, 0)?;
+        MULTIPLEXER_TIMESTAMP_RUN.set(&handle, 0)?;
+        USB_RUN.set(&handle, 0)?;
+        MULTIPLEXER_CHIP_RUN.set(&handle, 0)?;
 
         update_configuration(
             &handle,
@@ -304,31 +330,6 @@ impl device::Usb for Device {
             adc_clock,
             usb_clock,
         )?;
-
-        // reset + start sequence
-        DVS_RUN.set(&handle, 0)?;
-        APS_RUN.set(&handle, 0)?;
-        IMU_ACCELEROMETER_RUN.set(&handle, 0)?;
-        IMU_GYROSCOPE_RUN.set(&handle, 0)?;
-        IMU_TEMPERATURE_RUN.set(&handle, 0)?;
-        EXTERNAL_INPUT_DETECTOR_RUN.set(&handle, 0)?;
-        MULTIPLEXER_RUN.set(&handle, 0)?;
-        MULTIPLEXER_TIMESTAMP_RUN.set(&handle, 0)?;
-        USB_RUN.set(&handle, 0)?;
-        MULTIPLEXER_CHIP_RUN.set(&handle, 0)?;
-        std::thread::sleep(std::time::Duration::from_millis(10));
-        MULTIPLEXER_CHIP_RUN.set(&handle, 1)?;
-        std::thread::sleep(std::time::Duration::from_millis(200));
-        USB_RUN.set(&handle, 1)?;
-        MULTIPLEXER_TIMESTAMP_RUN.set(&handle, 1)?;
-        MULTIPLEXER_RUN.set(&handle, 1)?;
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        DVS_RUN.set(&handle, 1)?;
-        APS_RUN.set(&handle, 1)?;
-        IMU_ACCELEROMETER_RUN.set(&handle, 1)?;
-        IMU_GYROSCOPE_RUN.set(&handle, 1)?;
-        IMU_TEMPERATURE_RUN.set(&handle, 1)?;
-        EXTERNAL_INPUT_DETECTOR_RUN.set(&handle, 1)?;
 
         let handle = std::sync::Arc::new(handle);
         let error_flag = flag.clone();
@@ -415,6 +416,14 @@ impl device::Usb for Device {
 
     fn chip_firmware_configuration(&self) -> Self::Configuration {
         Self::PROPERTIES.default_configuration.clone()
+    }
+
+    fn bus_number(&self) -> u8 {
+        self.handle.device().bus_number()
+    }
+
+    fn address(&self) -> u8 {
+        self.handle.device().address()
     }
 
     fn speed(&self) -> usb::Speed {
@@ -686,15 +695,20 @@ fn update_configuration(
         CHIP_RESETTESTPIXEL.set(handle, 1)?;
         CHIP_AERNAROW.set(handle, 0)?;
         CHIP_USEAOUT.set(handle, 0)?;
-        CHIP_SPECIALPIXELCONTROL.set(handle, 0)?;
         CHIP_SELECTGRAYCOUNTER.set(handle, 1)?;
         CHIP_TESTADC.set(handle, 0)?;
-        MULTIPLEXER_TIMESTAMP_RESET.set(handle, 0)?;
-        MULTIPLEXER_DROP_EXTERNAL_INPUT_ON_STALL.set(handle, 1)?;
-        MULTIPLEXER_DROP_DVS_ON_STALL.set(handle, 1)?;
-        MULTIPLEXER_DROP_DVS_ON_STALL.set(handle, 1)?;
-        DVS_WAIT_ON_STALL.set(handle, 0)?;
-        DVS_EXTERNAL_AER_CONTROL.set(handle, 0)?;
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        MULTIPLEXER_CHIP_RUN.set(&handle, 1)?;
+        USB_EARLY_PACKET_DELAY.set(handle, (1000.0 * usb_clock).round() as u32)?;
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        USB_RUN.set(&handle, 1)?;
+        MULTIPLEXER_DROP_DVS_ON_STALL.set(&handle, 1)?;
+        MULTIPLEXER_DROP_EXTERNAL_INPUT_ON_STALL.set(&handle, 1)?;
+        MULTIPLEXER_TIMESTAMP_RUN.set(&handle, 1)?;
+        MULTIPLEXER_RUN.set(&handle, 1)?;
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        DVS_WAIT_ON_STALL.set(&handle, 0)?;
+        DVS_EXTERNAL_AER_CONTROL.set(&handle, 0)?;
     }
 
     if has_pixel_filter {
@@ -760,18 +774,6 @@ fn update_configuration(
                 (configuration.region_of_interest.top + configuration.region_of_interest.height)
                     .min(259) as u32,
             )?;
-            APS_START_COLUMN_0.set(handle, configuration.region_of_interest.left as u32)?;
-            APS_START_ROW_0.set(handle, configuration.region_of_interest.top as u32)?;
-            APS_END_COLUMN_0.set(
-                handle,
-                (configuration.region_of_interest.left + configuration.region_of_interest.width - 1)
-                    .min(345) as u32,
-            )?;
-            APS_END_ROW_0.set(
-                handle,
-                (configuration.region_of_interest.top + configuration.region_of_interest.height - 1)
-                    .min(259) as u32,
-            )?;
         }
     }
 
@@ -814,10 +816,32 @@ fn update_configuration(
     }
 
     if previous_configuration.is_none() {
-        APS_WAIT_ON_STALL.set(handle, 1)?;
+        DVS_RUN.set(&handle, 1)?;
+        APS_WAIT_ON_STALL.set(&handle, 1)?;
+        CHIP_GLOBAL_SHUTTER.set(&handle, has_global_shutter as u32)?;
         APS_GLOBAL_SHUTTER.set(handle, has_global_shutter as u32)?;
-        APS_AUTOEXPOSURE.set(handle, 0)?;
-        APS_FRAME_MODE.set(handle, 0)?;
+    }
+
+    if has_roi_filter {
+        if match previous_configuration {
+            Some(previous_configuration) => {
+                previous_configuration.region_of_interest != configuration.region_of_interest
+            }
+            None => true,
+        } {
+            APS_START_COLUMN_0.set(handle, configuration.region_of_interest.left as u32)?;
+            APS_START_ROW_0.set(handle, configuration.region_of_interest.top as u32)?;
+            APS_END_COLUMN_0.set(
+                handle,
+                (configuration.region_of_interest.left + configuration.region_of_interest.width - 1)
+                    .min(345) as u32,
+            )?;
+            APS_END_ROW_0.set(
+                handle,
+                (configuration.region_of_interest.top + configuration.region_of_interest.height - 1)
+                    .min(259) as u32,
+            )?;
+        }
     }
 
     if match previous_configuration {
@@ -854,17 +878,20 @@ fn update_configuration(
     }
 
     if previous_configuration.is_none() {
+        APS_RUN.set(&handle, 1)?;
         IMU_SAMPLE_RATE_DIVIDER.set(handle, 0)?;
         IMU_ACCELEROMETER_DIGITAL_LOW_PASS_FILTER.set(handle, 1)?;
         IMU_ACCELEROMETER_FULL_SCALE.set(handle, 1)?;
         IMU_GYROSCOPE_DIGITAL_LOW_PASS_FILTER.set(handle, 1)?;
         IMU_GYROSCOPE_FULL_SCALE.set(handle, 1)?;
+        IMU_GYROSCOPE_RUN.set(&handle, 1)?;
+        IMU_TEMPERATURE_RUN.set(&handle, 1)?;
         EXTERNAL_INPUT_DETECT_RISING_EDGES.set(handle, 0)?;
         EXTERNAL_INPUT_DETECT_FALLING_EDGES.set(handle, 0)?;
         EXTERNAL_INPUT_DETECT_PULSES.set(handle, 1)?;
         EXTERNAL_INPUT_DETECT_PULSE_POLARITY.set(handle, 1)?;
         EXTERNAL_INPUT_DETECT_PULSE_LENGTH.set(handle, (10.0 * logic_clock).round() as u32)?;
-        USB_EARLY_PACKET_DELAY.set(handle, (1000.0 * usb_clock).round() as u32)?;
+        EXTERNAL_INPUT_DETECTOR_RUN.set(&handle, 0)?;
     }
 
     Ok(())
@@ -893,6 +920,11 @@ struct SpiRegister {
     parameter_address: u16,
 }
 
+struct SpiRegister64 {
+    module_address: u16,
+    parameter_address: u16,
+}
+
 // module addresses
 const MULTIPLEXER_MODULE_ADDRESS: u16 = 0;
 const DVS_MODULE_ADDRESS: u16 = 1;
@@ -911,6 +943,11 @@ const MULTIPLEXER_CHIP_RUN: SpiRegister = SpiRegister::new(MULTIPLEXER_MODULE_AD
 const MULTIPLEXER_DROP_EXTERNAL_INPUT_ON_STALL: SpiRegister =
     SpiRegister::new(MULTIPLEXER_MODULE_ADDRESS, 4);
 const MULTIPLEXER_DROP_DVS_ON_STALL: SpiRegister = SpiRegister::new(MULTIPLEXER_MODULE_ADDRESS, 5);
+const MULTIPLEXER_HAS_STATISTICS: SpiRegister = SpiRegister::new(MULTIPLEXER_MODULE_ADDRESS, 80);
+const MULTIPLEXER_STATISTICS_EXTERNAL_INPUT_DROPPED: SpiRegister64 =
+    SpiRegister64::new(MULTIPLEXER_MODULE_ADDRESS, 81);
+const MULTIPLEXER_STATISTICS_DVS_DROPPED: SpiRegister64 =
+    SpiRegister64::new(MULTIPLEXER_MODULE_ADDRESS, 83);
 
 // dvs module registers
 const DVS_SIZE_COLUMNS: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 0);
@@ -937,11 +974,22 @@ const DVS_HAS_POLARITY_FILTER: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS
 const DVS_FILTER_POLARITY_FLATTEN: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 61);
 const DVS_FILTER_POLARITY_SUPPRESS: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 62);
 const DVS_FILTER_POLARITY_SUPPRESS_TYPE: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 63);
+const DVS_HAS_STATISTICS: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 80);
+const DVS_STATISTICS_EVENTS_ROW: SpiRegister64 = SpiRegister64::new(DVS_MODULE_ADDRESS, 81);
+const DVS_STATISTICS_EVENTS_COLUMN: SpiRegister64 = SpiRegister64::new(DVS_MODULE_ADDRESS, 83);
+const DVS_STATISTICS_EVENTS_DROPPED: SpiRegister64 = SpiRegister64::new(DVS_MODULE_ADDRESS, 85);
+const DVS_STATISTICS_FILTERED_PIXELS: SpiRegister64 = SpiRegister64::new(DVS_MODULE_ADDRESS, 87);
+const DVS_STATISTICS_FILTERED_BACKGROUND_ACTIVITY: SpiRegister64 =
+    SpiRegister64::new(DVS_MODULE_ADDRESS, 89);
+const DVS_STATISTICS_FILTERED_REFRACTORY_PERIOD: SpiRegister64 =
+    SpiRegister64::new(DVS_MODULE_ADDRESS, 91);
+const DVS_FILTER_PIXEL_AUTO_TRAIN: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 100);
 
 // aps module registers
 const APS_SIZE_COLUMNS: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 0);
 const APS_SIZE_ROWS: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 1);
 const APS_ORIENTATION: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 2);
+const APS_COLOR_FILTER: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 3);
 const APS_RUN: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 4);
 const APS_WAIT_ON_STALL: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 5);
 const APS_HAS_GLOBAL_SHUTTER: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 6);
@@ -956,6 +1004,7 @@ const APS_AUTOEXPOSURE: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 101);
 const APS_FRAME_MODE: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 102);
 
 // imu module registers
+const IMU_TYPE: SpiRegister = SpiRegister::new(IMU_MODULE_ADDRESS, 0);
 const IMU_ORIENTATION: SpiRegister = SpiRegister::new(IMU_MODULE_ADDRESS, 1);
 const IMU_ACCELEROMETER_RUN: SpiRegister = SpiRegister::new(IMU_MODULE_ADDRESS, 2);
 const IMU_GYROSCOPE_RUN: SpiRegister = SpiRegister::new(IMU_MODULE_ADDRESS, 3);
@@ -1037,11 +1086,14 @@ const CHIP_RESETTESTPIXEL: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 1
 const CHIP_SPECIALPIXELCONTROL: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 139);
 const CHIP_AERNAROW: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 140);
 const CHIP_USEAOUT: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 141);
+const CHIP_GLOBAL_SHUTTER: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 142);
 const CHIP_SELECTGRAYCOUNTER: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 143);
 const CHIP_TESTADC: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 144);
 
 // system information module registers
 const LOGIC_VERSION: SpiRegister = SpiRegister::new(SYSTEM_INFORMATION_MODULE_ADDRESS, 0);
+const CHIP_IDENTIFIER: SpiRegister = SpiRegister::new(SYSTEM_INFORMATION_MODULE_ADDRESS, 1);
+const CHIP_IS_PRIMARY: SpiRegister = SpiRegister::new(SYSTEM_INFORMATION_MODULE_ADDRESS, 2);
 const LOGIC_CLOCK: SpiRegister = SpiRegister::new(SYSTEM_INFORMATION_MODULE_ADDRESS, 3);
 const ADC_CLOCK: SpiRegister = SpiRegister::new(SYSTEM_INFORMATION_MODULE_ADDRESS, 4);
 const USB_CLOCK: SpiRegister = SpiRegister::new(SYSTEM_INFORMATION_MODULE_ADDRESS, 5);
@@ -1071,11 +1123,37 @@ impl SpiRegister {
                 read,
             });
         }
+
+        println!("libusb_control_transfer(request_type=0x{:02X}, request=0x{:02X}, value=0x{:04X}, index=0x{:04X}) -> {} ({:02x}:{:02x}:{:02x}:{:02x})",
+            0xC0,
+            0xBF,
+            self.module_address,
+            self.parameter_address,
+            u32::from_be_bytes(buffer),
+            buffer[0],
+            buffer[1],
+            buffer[2],
+            buffer[3],
+        ); // @DEV
+
         Ok(u32::from_be_bytes(buffer))
     }
 
     fn set(&self, handle: &rusb::DeviceHandle<rusb::Context>, value: u32) -> Result<(), Error> {
         let buffer = value.to_be_bytes();
+
+        println!("libusb_control_transfer(request_type=0x{:02X}, request=0x{:02X}, value=0x{:04X}, index=0x{:04X}, data={} ({:02x}:{:02x}:{:02x}:{:02x}))",
+            0x40,
+            0xBF,
+            self.module_address,
+            self.parameter_address,
+            value,
+            buffer[0],
+            buffer[1],
+            buffer[2],
+            buffer[3],
+        ); // @DEV
+
         let wrote = handle.write_control(
             0x40,
             0xBF,
@@ -1093,6 +1171,29 @@ impl SpiRegister {
             });
         }
         Ok(())
+    }
+
+    const fn new(module_address: u16, parameter_address: u16) -> Self {
+        Self {
+            module_address,
+            parameter_address,
+        }
+    }
+}
+
+impl SpiRegister64 {
+    fn get(&self, handle: &rusb::DeviceHandle<rusb::Context>) -> Result<u64, Error> {
+        let msb = SpiRegister {
+            module_address: self.module_address,
+            parameter_address: self.parameter_address,
+        }
+        .get(handle)?;
+        let lsb = SpiRegister {
+            module_address: self.module_address,
+            parameter_address: self.parameter_address + 1,
+        }
+        .get(handle)?;
+        Ok(((msb as u64) << 32) | (lsb as u64))
     }
 
     const fn new(module_address: u16, parameter_address: u16) -> Self {

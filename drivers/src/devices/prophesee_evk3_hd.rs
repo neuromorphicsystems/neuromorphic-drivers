@@ -71,7 +71,7 @@ pub const PROPERTIES: properties::Camera<Configuration> = Device::PROPERTIES;
 pub const DEFAULT_CONFIGURATION: Configuration = Device::PROPERTIES.default_configuration;
 pub const DEFAULT_USB_CONFIGURATION: usb::Configuration = Device::DEFAULT_USB_CONFIGURATION;
 pub fn open<IntoError, IntoWarning>(
-    serial: &Option<&str>,
+    serial_or_bus_number_and_address: device::SerialOrBusNumberAndAddress,
     configuration: Configuration,
     usb_configuration: &usb::Configuration,
     event_loop: std::sync::Arc<usb::EventLoop>,
@@ -81,7 +81,13 @@ where
     IntoError: From<Error> + Clone + Send + 'static,
     IntoWarning: From<usb::Overflow> + Clone + Send + 'static,
 {
-    Device::open(serial, configuration, usb_configuration, event_loop, flag)
+    Device::open(
+        serial_or_bus_number_and_address,
+        configuration,
+        usb_configuration,
+        event_loop,
+        flag,
+    )
 }
 
 impl device::Usb for Device {
@@ -161,7 +167,7 @@ impl device::Usb for Device {
     }
 
     fn open<IntoError, IntoWarning>(
-        serial: &Option<&str>,
+        serial_or_bus_number_and_address: device::SerialOrBusNumberAndAddress,
         configuration: Self::Configuration,
         usb_configuration: &usb::Configuration,
         event_loop: std::sync::Arc<usb::EventLoop>,
@@ -171,7 +177,15 @@ impl device::Usb for Device {
         IntoError: From<Self::Error> + Clone + Send + 'static,
         IntoWarning: From<crate::usb::Overflow> + Clone + Send + 'static,
     {
-        let (handle, vendor_and_product_id, serial) = Self::open_serial(event_loop.context(), serial)?;
+        let (handle, vendor_and_product_id, serial) = match serial_or_bus_number_and_address {
+            device::SerialOrBusNumberAndAddress::Serial(serial) => {
+                Self::open_serial(event_loop.context(), serial)?
+            }
+            device::SerialOrBusNumberAndAddress::BusNumberAndAddress((bus_number, address)) => {
+                Self::open_bus_number_and_address(event_loop.context(), bus_number, address)?
+            }
+            device::SerialOrBusNumberAndAddress::None => Self::open_any(event_loop.context())?,
+        };
         std::thread::sleep(std::time::Duration::from_millis(150));
         request(
             &handle,
@@ -431,6 +445,14 @@ impl device::Usb for Device {
 
     fn chip_firmware_configuration(&self) -> Self::Configuration {
         Self::PROPERTIES.default_configuration.clone()
+    }
+
+    fn bus_number(&self) -> u8 {
+        self.handle.device().bus_number()
+    }
+
+    fn address(&self) -> u8 {
+        self.handle.device().address()
     }
 
     fn speed(&self) -> usb::Speed {

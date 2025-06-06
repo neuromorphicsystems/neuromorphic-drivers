@@ -69,15 +69,15 @@ pub enum Adapter {
 impl Adapter {
     pub fn current_t(&self) -> u64 {
         match self {
-            Adapter::Davis346 { inner, .. } => inner.current_t(),
-            Adapter::Evt3 { inner, .. } => inner.current_t(),
+            Adapter::Davis346 { inner, .. } => inner.state().t,
+            Adapter::Evt3 { inner, .. } => inner.state().t,
         }
     }
 
     pub fn consume(&mut self, slice: &[u8]) {
         match self {
             Adapter::Davis346 { inner, .. } => {} // @TODO
-            Adapter::Evt3 { inner, .. } => inner.consume(slice),
+            Adapter::Evt3 { inner, .. } => inner.convert(slice, |_| {}, |_| {}),
         }
     }
 
@@ -95,7 +95,7 @@ impl Adapter {
                         .push(dvs_events.len() / structured_array::DVS_EVENTS_DTYPE.size());
                 }
                 let events_lengths = inner.events_lengths(slice);
-                dvs_events.reserve_exact(events_lengths.dvs);
+                dvs_events.reserve_exact(events_lengths.on + events_lengths.off);
                 inner.convert(
                     slice,
                     |dvs_event| {
@@ -133,8 +133,9 @@ impl Adapter {
                         .push(dvs_events.len() / structured_array::TRIGGER_EVENTS_DTYPE.size());
                 }
                 let events_lengths = inner.events_lengths(slice);
-                dvs_events.reserve_exact(events_lengths.dvs);
-                trigger_events.reserve_exact(events_lengths.trigger);
+                dvs_events.reserve_exact(events_lengths.on + events_lengths.off);
+                trigger_events
+                    .reserve_exact(events_lengths.trigger_rising + events_lengths.trigger_falling);
                 inner.convert(
                     slice,
                     |dvs_event| {

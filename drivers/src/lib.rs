@@ -8,6 +8,7 @@ pub mod usb;
 
 pub use adapters::Adapter;
 pub use device::Usb as UsbDevice;
+pub use device::SerialOrBusNumberAndAddress as SerialOrBusNumberAndAddress;
 pub use devices::list_devices;
 pub use devices::open;
 pub use devices::Configuration;
@@ -17,6 +18,7 @@ pub use devices::Properties;
 pub use devices::Type;
 pub use flag::Flag;
 pub use usb::Configuration as UsbConfiguration;
+pub use usb::EventLoop as UsbEventLoop;
 pub use usb::Overflow as UsbOverflow;
 
 pub use devices::prophesee_evk3_hd;
@@ -29,9 +31,9 @@ pub use neuromorphic_types as types;
 pub use rusb;
 
 pub fn flag_and_event_loop(
-) -> Result<(Flag<Error, usb::Overflow>, std::sync::Arc<usb::EventLoop>), usb::Error> {
+) -> Result<(Flag<Error, UsbOverflow>, std::sync::Arc<UsbEventLoop>), usb::Error> {
     let flag = Flag::new();
-    let event_loop = std::sync::Arc::new(usb::EventLoop::new(
+    let event_loop = std::sync::Arc::new(UsbEventLoop::new(
         std::time::Duration::from_millis(100),
         flag.clone(),
     )?);

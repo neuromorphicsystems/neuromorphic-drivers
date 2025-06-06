@@ -124,8 +124,6 @@ GL_BLEND: int = 0x0BE2
 GL_SCISSOR_TEST: int = 0x0C11
 GL_FLOAT: int = 0x1406
 GL_COLOR_BUFFER_BIT: int = 0x4000
-GL_TEXTURE0: int = 0x84C0
-GL_TEXTURE1: int = 0x84C1
 
 
 def style_to_integer(style: EventStyle) -> int:
@@ -192,6 +190,7 @@ class EventDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
     def __init__(
         self,
         window: PySide6.QtQuick.QQuickWindow,
+        visible: bool,
         sensor_size: PySide6.QtCore.QSize,
         style: EventStyle,
         tau: float,
@@ -202,6 +201,7 @@ class EventDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
     ):
         super().__init__()
         self.window = window
+        self.visible = visible
         self.sensor_size = sensor_size
         self.style = style_to_integer(style=style)
         self.tau = tau
@@ -227,9 +227,11 @@ class EventDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
         with PySide6.QtCore.QMutexLocker(self.lock):
             while current_t - self.offset_t > MAXIMUM_DELTA:
                 self.offset_t += MAXIMUM_DELTA // 2
-                mask = self.ts_and_ons[::2] > MAXIMUM_DELTA // 2
-                self.ts_and_ons[::2][mask] -= MAXIMUM_DELTA // 2
-                self.ts_and_ons[::2][numpy.logical_not(mask)] = 0.0
+                recent = numpy.abs(self.ts_and_ons) > MAXIMUM_DELTA // 2
+                on = self.ts_and_ons > 0
+                self.ts_and_ons[numpy.logical_and(recent, on)] -= MAXIMUM_DELTA // 2
+                self.ts_and_ons[numpy.logical_and(recent, numpy.logical_not(on))] += MAXIMUM_DELTA // 2
+                self.ts_and_ons[numpy.logical_not(recent)] = 0.0
             if len(events) > 0:
                 t_and_on = (events["t"] - self.offset_t).astype(numpy.float32)
                 t_and_on[numpy.logical_not(events["on"])] *= -1.0
@@ -238,6 +240,10 @@ class EventDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
                     + events["y"].astype(numpy.uint32) * self.sensor_size.width()
                 ] = t_and_on
             self.current_t = float(current_t - self.offset_t)
+
+    def set_visible(self, visible: bool):
+        with PySide6.QtCore.QMutexLocker(self.lock):
+            self.visible = visible
 
     def set_style(self, style: EventStyle):
         with PySide6.QtCore.QMutexLocker(self.lock):
@@ -355,7 +361,7 @@ class EventDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
     @PySide6.QtCore.Slot()
     def paint(self):
         with PySide6.QtCore.QMutexLocker(self.lock):
-            if self.program is None:
+            if self.program is None or not self.visible:
                 return
             self.window.beginExternalCommands()
             self.program.inner.bind()
@@ -381,7 +387,10 @@ class EventDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
                 self.glEnable(GL_SCISSOR_TEST)
                 self.glScissor(
                     round(self.clear_area.left()),
-                    round(self.clear_area.top()),
+                    round(
+                        self.window.height() * self.window.devicePixelRatio()
+                        - self.clear_area.bottom()
+                    ),
                     round(self.clear_area.width()),
                     round(self.clear_area.height()),
                 )
@@ -395,7 +404,10 @@ class EventDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
                 self.glDisable(GL_SCISSOR_TEST)
             self.glViewport(
                 round(self.draw_area.left()),
-                round(self.draw_area.top()),
+                round(
+                    self.window.height() * self.window.devicePixelRatio()
+                    - self.draw_area.bottom()
+                ),
                 round(self.draw_area.width()),
                 round(self.draw_area.height()),
             )
@@ -474,6 +486,8 @@ class EventDisplay(PySide6.QtQuick.QQuickItem):
 
     def __init__(self, parent: typing.Optional[PySide6.QtQuick.QQuickItem] = None):
         super().__init__(parent)
+        self._window: typing.Optional[PySide6.QtQuick.QQuickWindow] = None
+        self._visible: bool = True
         self._renderer: typing.Optional[EventDisplayRenderer] = None
         self._clear_area: typing.Optional[PySide6.QtCore.QRectF] = None
         self._draw_area: typing.Optional[PySide6.QtCore.QRectF] = None
@@ -494,6 +508,7 @@ class EventDisplay(PySide6.QtQuick.QQuickItem):
         self._timer.timeout.connect(self.trigger_draw)
         self._timer.start()
         self.windowChanged.connect(self.handleWindowChanged)
+        self.visibleChanged.connect(self.handleVisibleChanged)
 
     def push(self, events: numpy.ndarray, current_t: int):
         if hasattr(self, "_renderer") and self._renderer is not None:
@@ -632,6 +647,12 @@ class EventDisplay(PySide6.QtQuick.QQuickItem):
             )
             self.sync()
 
+    @PySide6.QtCore.Slot(bool)
+    def handleVisibleChanged(self):
+        self._visible = self.isVisible()
+        if self._renderer is not None:
+            self._renderer.set_visible(visible=self._visible)
+
     @PySide6.QtCore.Slot()
     def cleanup(self):
         if self._renderer is not None:
@@ -652,6 +673,7 @@ class EventDisplay(PySide6.QtQuick.QQuickItem):
         if self._renderer is None:
             self._renderer = EventDisplayRenderer(
                 window=window,
+                visible=self._visible,
                 sensor_size=self._sensor_size,
                 style=self._style,
                 tau=self._tau,
@@ -727,6 +749,7 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
     def __init__(
         self,
         window: PySide6.QtQuick.QQuickWindow,
+        visible: bool,
         sensor_size: PySide6.QtCore.QSize,
         mode: typing.Literal["L", "RGB", "RGBA"],
         dtype: typing.Literal["u1", "u2", "f4"],
@@ -735,6 +758,7 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
     ):
         super().__init__()
         self.window = window
+        self.visible = visible
         self.sensor_size = sensor_size
         self.mode: FrameMode = mode
         if dtype == "u1":
@@ -801,6 +825,10 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
             )
         with PySide6.QtCore.QMutexLocker(self.lock):
             numpy.copyto(self.frame, frame.flatten())
+
+    def set_visible(self, visible: bool):
+        with PySide6.QtCore.QMutexLocker(self.lock):
+            self.visible = visible
 
     def set_padding_color(self, padding_color: PySide6.QtGui.QColor):
         with PySide6.QtCore.QMutexLocker(self.lock):
@@ -892,7 +920,7 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
     @PySide6.QtCore.Slot()
     def paint(self):
         with PySide6.QtCore.QMutexLocker(self.lock):
-            if self.program is None:
+            if self.program is None or not self.visible:
                 return
             self.window.beginExternalCommands()
             self.program.inner.bind()
@@ -900,7 +928,10 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
                 self.glEnable(GL_SCISSOR_TEST)
                 self.glScissor(
                     round(self.clear_area.left()),
-                    round(self.clear_area.top()),
+                    round(
+                        self.window.height() * self.window.devicePixelRatio()
+                        - self.clear_area.bottom()
+                    ),
                     round(self.clear_area.width()),
                     round(self.clear_area.height()),
                 )
@@ -914,7 +945,10 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
                 self.glDisable(GL_SCISSOR_TEST)
             self.glViewport(
                 round(self.draw_area.left()),
-                round(self.draw_area.top()),
+                round(
+                    self.window.height() * self.window.devicePixelRatio()
+                    - self.draw_area.bottom()
+                ),
                 round(self.draw_area.width()),
                 round(self.draw_area.height()),
             )
@@ -956,6 +990,8 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
 
     def __init__(self, parent: typing.Optional[PySide6.QtQuick.QQuickItem] = None):
         super().__init__(parent)
+        self._window: typing.Optional[PySide6.QtQuick.QQuickWindow] = None
+        self._visible: bool = True
         self._renderer: typing.Optional[FrameDisplayRenderer] = None
         self._clear_area: typing.Optional[PySide6.QtCore.QRectF] = None
         self._draw_area: typing.Optional[PySide6.QtCore.QRectF] = None
@@ -968,6 +1004,7 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
         self._timer.timeout.connect(self.trigger_draw)
         self._timer.start()
         self.windowChanged.connect(self.handleWindowChanged)
+        self.visibleChanged.connect(self.handleVisibleChanged)
 
     def push(self, frame: numpy.ndarray):
         if hasattr(self, "_renderer") and self._renderer is not None:
@@ -1065,6 +1102,12 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
             )
             self.sync()
 
+    @PySide6.QtCore.Slot(bool)
+    def handleVisibleChanged(self):
+        self._visible = self.isVisible()
+        if self._renderer is not None:
+            self._renderer.set_visible(visible=self._visible)
+
     @PySide6.QtCore.Slot()
     def cleanup(self):
         if self._renderer is not None:
@@ -1093,6 +1136,7 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
         if self._renderer is None:
             self._renderer = FrameDisplayRenderer(
                 window=window,
+                visible=self._visible,
                 sensor_size=self._sensor_size,
                 mode=self._mode,
                 dtype=self._dtype,
@@ -1119,7 +1163,6 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
         if self._clear_area != clear_area:
             self._clear_area = clear_area
             self._draw_area = PySide6.QtCore.QRectF()
-
             if (
                 clear_area.width() * self._sensor_size.height()
                 > clear_area.height() * self._sensor_size.width()
@@ -1147,7 +1190,6 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
                     clear_area.top()
                     + (clear_area.height() - self._draw_area.height()) / 2
                 )
-
             self._renderer.set_clear_and_draw_areas(
                 clear_area=self._clear_area, draw_area=self._draw_area
             )
@@ -1188,7 +1230,10 @@ class App:
         self.window: PySide6.QtQuick.QQuickWindow = self.engine.rootObjects()[0]  # type: ignore
 
     def event_display(self, object_name: typing.Optional[str] = None) -> EventDisplay:
-        child = self.window.findChild(EventDisplay)
+        if object_name is None:
+            child = self.window.findChild(EventDisplay)
+        else:
+            child = self.window.findChild(EventDisplay, name=object_name)
         if child is None:
             if object_name is None:
                 raise Exception(f"no EventDisplay found in the QML tree")
@@ -1199,7 +1244,10 @@ class App:
         return child
 
     def frame_display(self, object_name: typing.Optional[str] = None) -> FrameDisplay:
-        child = self.window.findChild(FrameDisplay)
+        if object_name is None:
+            child = self.window.findChild(FrameDisplay)
+        else:
+            child = self.window.findChild(FrameDisplay, name=object_name)
         if child is None:
             if object_name is None:
                 raise Exception(f"no FrameDisplay found in the QML tree")
@@ -1209,6 +1257,6 @@ class App:
                 )
         return child
 
-    def run(self):
+    def run(self) -> int:
         self.window.show()
-        sys.exit(self.app.exec())
+        return self.app.exec()

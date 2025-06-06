@@ -1,4 +1,5 @@
 use crate::adapters;
+use crate::device::SerialOrBusNumberAndAddress;
 use crate::device::TemperatureCelsius;
 use crate::device::Usb;
 use crate::flag;
@@ -12,7 +13,7 @@ macro_rules! register {
                 pub mod $module;
             )+
 
-            #[derive(Debug, Copy, Clone)]
+            #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
             pub enum Type {
                 $(
                     [<$module:camel>],
@@ -87,10 +88,77 @@ macro_rules! register {
                 )+
             }
 
+            #[derive(Debug)]
             pub struct ListedDevice {
                 pub device_type: Type,
+                pub bus_number: u8,
+                pub address: u8,
                 pub speed: usb::Speed,
                 pub serial: Result<String, usb::Error>,
+            }
+
+            impl ListedDevice {
+                pub fn open(
+                    &self,
+                    configuration: Option<Configuration>,
+                    usb_configuration: Option<usb::Configuration>,
+                    event_loop: std::sync::Arc<usb::EventLoop>,
+                    flag: flag::Flag<Error, usb::Overflow>,
+                ) -> Result<Device, Error> {
+                    match configuration {
+                        Some(configuration) => {
+                            let device_type_name = self.device_type.name();
+                            let configuration_type_name = match configuration {
+                                $(
+                                    Configuration::[<$module:camel>](_) => Type::[<$module:camel>].name(),
+                                )+
+                            };
+                            if (device_type_name != configuration_type_name) {
+                                Err(Error::ConfigurationType {
+                                    device: device_type_name.to_owned(),
+                                    configuration: configuration_type_name.to_owned(),
+                                })
+                            } else {
+                                match configuration {
+                                    $(
+                                        Configuration::[<$module:camel>](configuration) => Ok(
+                                            $module::Device::open(
+                                                SerialOrBusNumberAndAddress::BusNumberAndAddress((self.bus_number, self.address)),
+                                                configuration,
+                                                usb_configuration
+                                                .as_ref()
+                                                .unwrap_or(&$module::Device::DEFAULT_USB_CONFIGURATION),
+                                                event_loop.clone(),
+                                                flag.clone(),
+                                            )
+                                            .map(|device| paste::paste! {Device::[<$module:camel>](device)})
+                                            .map_err(|error| Error::from(error).unpack())?
+                                        ),
+                                    )+
+                                }
+                            }
+                        }
+                        None => {
+                            match self.device_type {
+                                $(
+                                    Type::[<$module:camel>] => Ok(
+                                        $module::Device::open(
+                                            SerialOrBusNumberAndAddress::BusNumberAndAddress((self.bus_number, self.address)),
+                                            $module::Device::PROPERTIES.default_configuration.clone(),
+                                            usb_configuration
+                                            .as_ref()
+                                            .unwrap_or(&$module::Device::DEFAULT_USB_CONFIGURATION),
+                                            event_loop.clone(),
+                                            flag.clone(),
+                                        )
+                                        .map(|device| paste::paste! {Device::[<$module:camel>](device)})
+                                        .map_err(|error| Error::from(error).unpack())?
+                                    ),
+                                )+
+                            }
+                        }
+                    }
+                }
             }
 
             pub fn list_devices() -> rusb::Result<Vec<ListedDevice>> {
@@ -103,6 +171,8 @@ macro_rules! register {
                             .into_iter()
                             .map(|listed_device| ListedDevice {
                                 device_type: Type::[<$module:camel>],
+                                bus_number: listed_device.bus_number,
+                                address: listed_device.address,
                                 speed: listed_device.speed,
                                 serial: listed_device.serial,
                             }),
@@ -112,7 +182,7 @@ macro_rules! register {
             }
 
             pub fn open(
-                serial: Option<&str>,
+                serial_or_bus_number_and_address: SerialOrBusNumberAndAddress,
                 configuration: Option<Configuration>,
                 usb_configuration: Option<usb::Configuration>,
                 event_loop: std::sync::Arc<usb::EventLoop>,
@@ -125,7 +195,7 @@ macro_rules! register {
                             $(
                                 Configuration::[<$module:camel>](configuration) => Ok(
                                     $module::Device::open(
-                                        &serial,
+                                        serial_or_bus_number_and_address,
                                         configuration,
                                         usb_configuration
                                         .as_ref()
@@ -142,7 +212,7 @@ macro_rules! register {
                     None => {
                         $(
                             match $module::Device::open(
-                                &serial,
+                                serial_or_bus_number_and_address,
                                 $module::Device::PROPERTIES.default_configuration.clone(),
                                 usb_configuration
                                 .as_ref()
@@ -158,9 +228,12 @@ macro_rules! register {
                                 }
                             };
                         )+
-                        Err(match serial {
-                            Some(serial) => Error::Serial(serial.to_owned()),
-                            None => Error::NoDevice
+                        Err(match serial_or_bus_number_and_address {
+                            SerialOrBusNumberAndAddress::Serial(serial) => Error::Serial(serial.to_owned()),
+                            SerialOrBusNumberAndAddress::BusNumberAndAddress((bus_number, address)) => {
+                                Error::BusNumberAndAddressNotFound {bus_number, address}
+                            },
+                            SerialOrBusNumberAndAddress::None => Error::NoDevice
                         })
                     }
                 }
@@ -310,6 +383,12 @@ macro_rules! register {
 
                 #[error("serial \"{0}\" not found")]
                 Serial(String),
+
+                #[error("there is no device on bus {bus_number} at address {address}")]
+                BusNumberAndAddressNotFound { bus_number: u8, address: u8 },
+
+                #[error("unexpected configuration type (the device is a \"{device}\", got a \"{configuration}\" configuration)")]
+                ConfigurationType { device: String, configuration: String },
 
                 #[error("no device found")]
                 NoDevice,

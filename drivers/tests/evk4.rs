@@ -4,7 +4,7 @@ use neuromorphic_drivers::UsbDevice;
 fn read() -> Result<(), neuromorphic_drivers::Error> {
     let (flag, event_loop) = neuromorphic_drivers::flag_and_event_loop()?;
     let device = neuromorphic_drivers::prophesee_evk4::open(
-        &None,
+        neuromorphic_drivers::SerialOrBusNumberAndAddress::None,
         neuromorphic_drivers::prophesee_evk4::DEFAULT_CONFIGURATION,
         &neuromorphic_drivers::prophesee_evk4::DEFAULT_USB_CONFIGURATION,
         event_loop,
