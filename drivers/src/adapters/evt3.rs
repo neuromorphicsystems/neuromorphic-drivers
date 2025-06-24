@@ -48,8 +48,20 @@ impl Adapter {
         }
     }
 
+    pub fn width(&self) -> u16 {
+        self.width
+    }
+
+    pub fn height(&self) -> u16 {
+        self.height
+    }
+
     pub fn state(&self) -> &State {
         &self.state
+    }
+
+    pub fn current_t(&self) -> u64 {
+        self.state.t
     }
 
     pub fn events_lengths(&self, slice: &[u8]) -> EventsLengths {

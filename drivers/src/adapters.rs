@@ -38,6 +38,14 @@ macro_rules! register {
                         )+
                     }
                 }
+
+                pub fn current_t(&self) -> u64 {
+                    match self {
+                        $(
+                            Self::[<$module:camel>](adapter) => adapter.current_t(),
+                        )+
+                    }
+                }
             }
 
             $(
@@ -48,11 +56,22 @@ macro_rules! register {
                 }
             )+
 
+            #[derive(Clone, Copy)]
             #[allow(clippy::large_enum_variant)]
             pub enum State {
                 $(
                     [<$module:camel>]($module::State),
                 )+
+            }
+
+            impl State {
+                pub fn current_t(&self) -> u64 {
+                    match self {
+                        $(
+                            Self::[<$module:camel>](state) => state.t,
+                        )+
+                    }
+                }
             }
 
             pub enum EventsLengths {

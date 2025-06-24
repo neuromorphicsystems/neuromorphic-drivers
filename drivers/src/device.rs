@@ -43,6 +43,10 @@ pub trait Usb: Sized {
     /// This is required even if read_serial does not use bulk transfers.
     fn read_serial(handle: &mut rusb::DeviceHandle<rusb::Context>) -> rusb::Result<Option<String>>;
 
+    fn default_configuration(&self) -> Self::Configuration;
+
+    fn current_configuration(&self) -> Self::Configuration;
+
     fn update_configuration(&self, configuration: Self::Configuration);
 
     fn open<IntoError, IntoWarning>(

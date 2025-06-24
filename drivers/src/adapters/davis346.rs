@@ -75,6 +75,10 @@ impl Adapter {
         &self.state
     }
 
+    pub fn current_t(&self) -> u64 {
+        self.state.t
+    }
+
     pub fn events_lengths(&self, slice: &[u8]) -> EventsLengths {
         // @TODO
         EventsLengths {

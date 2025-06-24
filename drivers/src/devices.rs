@@ -328,6 +328,22 @@ macro_rules! register {
                     }
                 }
 
+                pub fn default_configuration(&self) -> Configuration {
+                    match self {
+                        $(
+                            Self::[<$module:camel>](device) => Configuration::[<$module:camel>](device.default_configuration()),
+                        )+
+                    }
+                }
+
+                pub fn current_configuration(&self) -> Configuration {
+                    match self {
+                        $(
+                            Self::[<$module:camel>](device) => Configuration::[<$module:camel>](device.current_configuration()),
+                        )+
+                    }
+                }
+
                 pub fn update_configuration(&self, configuration: Configuration) -> Result<(), Error> {
                     match self {
                         $(

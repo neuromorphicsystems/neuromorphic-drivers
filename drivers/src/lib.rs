@@ -21,6 +21,7 @@ pub use usb::Configuration as UsbConfiguration;
 pub use usb::EventLoop as UsbEventLoop;
 pub use usb::Overflow as UsbOverflow;
 
+pub use devices::inivation_davis346;
 pub use devices::prophesee_evk3_hd;
 pub use devices::prophesee_evk4;
 

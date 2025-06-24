@@ -162,6 +162,14 @@ impl device::Usb for Device {
         )))
     }
 
+    fn default_configuration(&self) -> Self::Configuration {
+        PROPERTIES.default_configuration
+    }
+
+    fn current_configuration(&self) -> Self::Configuration {
+        self.configuration_updater.current_configuration()
+    }
+
     fn update_configuration(&self, configuration: Self::Configuration) {
         self.configuration_updater.update(configuration);
     }

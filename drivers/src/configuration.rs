@@ -40,16 +40,16 @@ impl<Configuration: Clone + Send + 'static> Updater<Configuration> {
                 while thread_running.load(std::sync::atomic::Ordering::Acquire) {
                     let configuration = {
                         let (lock, condvar) = &*thread_flagged_configuration_and_condition;
-                        // unwrap: mutex is not poisoned
-                        let mut flagged_configuration = lock.lock().unwrap();
+                        let mut flagged_configuration = lock
+                            .lock()
+                            .expect("flagged configuration mutex is not poisoned");
                         if !flagged_configuration.updated {
-                            // unwrap: mutex is not poisoned
                             flagged_configuration = condvar
                                 .wait_timeout(
                                     flagged_configuration,
                                     std::time::Duration::from_millis(100),
                                 )
-                                .unwrap()
+                                .expect("flagged configuration mutex is not poisoned")
                                 .0;
                         }
                         if flagged_configuration.updated {
@@ -71,11 +71,21 @@ impl<Configuration: Clone + Send + 'static> Updater<Configuration> {
 
     pub fn update(&self, configuration: Configuration) {
         let (lock, condvar) = &*self.flagged_configuration_and_condition;
-        // unwrap: mutex is not poisoned
-        let mut flagged_configuration = lock.lock().unwrap();
+        let mut flagged_configuration = lock
+            .lock()
+            .expect("flagged configuration mutex is not poisoned");
         flagged_configuration.configuration = configuration;
         flagged_configuration.updated = true;
         condvar.notify_one();
+    }
+
+    pub fn current_configuration(&self) -> Configuration {
+        self.flagged_configuration_and_condition
+            .0
+            .lock()
+            .expect("flagged configuration mutex is not poisoned")
+            .configuration
+            .clone()
     }
 }
 
@@ -84,8 +94,7 @@ impl<Configuration> Drop for Updater<Configuration> {
         self.running
             .store(false, std::sync::atomic::Ordering::Release);
         if let Some(thread) = self.thread.take() {
-            // unwrap: not joining self
-            thread.join().unwrap();
+            thread.join().expect("not joining self");
         }
     }
 }
