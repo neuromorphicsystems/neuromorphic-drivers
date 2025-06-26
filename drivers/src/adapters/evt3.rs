@@ -158,7 +158,7 @@ impl Adapter {
         let mut index = 0;
         while index < slice.len() / 2 {
             let word = u16::from_le_bytes([slice[index * 2], slice[index * 2 + 1]]);
-            index += 2;
+            index += 1;
             match word >> 12 {
                 0b0000 => {
                     self.state.y = word & 0b11111111111;
