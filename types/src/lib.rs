@@ -13,7 +13,7 @@ pub trait SliceView {
 }
 
 #[repr(u8)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum DvsPolarity {
     Off = 0,
     On = 1,
@@ -21,7 +21,7 @@ pub enum DvsPolarity {
 impl SliceView for DvsPolarity {}
 
 #[repr(C, packed)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct DvsEvent<Timestamp, X, Y> {
     pub t: Timestamp,
     pub x: X,
@@ -31,7 +31,7 @@ pub struct DvsEvent<Timestamp, X, Y> {
 impl<Timestamp, X, Y> SliceView for DvsEvent<Timestamp, X, Y> {}
 
 #[repr(u8)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum AtisPolarity {
     Off = 0,
     On = 1,
@@ -41,7 +41,7 @@ pub enum AtisPolarity {
 impl SliceView for AtisPolarity {}
 
 #[repr(C, packed)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct AtisEvent<Timestamp, X, Y> {
     pub t: Timestamp,
     pub x: X,
@@ -51,7 +51,7 @@ pub struct AtisEvent<Timestamp, X, Y> {
 impl<Timestamp, X, Y> SliceView for AtisEvent<Timestamp, X, Y> {}
 
 #[repr(u8)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum TriggerPolarity {
     Falling = 0,
     Rising = 1,
@@ -59,7 +59,7 @@ pub enum TriggerPolarity {
 impl SliceView for TriggerPolarity {}
 
 #[repr(C, packed)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct TriggerEvent<Timestamp, Id> {
     pub t: Timestamp,
     pub id: Id,

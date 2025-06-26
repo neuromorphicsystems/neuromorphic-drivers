@@ -1,5 +1,5 @@
 // @DEV implement adapter using state
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct State {
     pub t: u64,
 }
