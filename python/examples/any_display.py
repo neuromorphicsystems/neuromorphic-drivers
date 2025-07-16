@@ -6,10 +6,7 @@ import numpy as np
 import ui
 
 
-def camera_thread_target(
-    device: nd.inivation_davis346.InivationDavis346DeviceOptional,
-    event_display: ui.EventDisplay,
-):
+def camera_thread_target(device, event_display: ui.EventDisplay):
     for status, packet in device:
         if packet is not None:
             if "dvs_events" in packet:

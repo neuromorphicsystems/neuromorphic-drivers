@@ -9,9 +9,9 @@ crate-type = ["cdylib"]
 
 [dependencies]
 neuromorphic-drivers = {path = "../drivers"}
-numpy = "0.24.0"
+numpy = "0.25.0"
 paste = "1.0"
-pyo3 = {version = "0.24.0", features = ["extension-module"]}
+pyo3 = {version = "0.25.1", features = ["extension-module"]}
 
 [build-dependencies]
 cc = "1.0"

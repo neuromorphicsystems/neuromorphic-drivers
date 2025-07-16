@@ -104,7 +104,13 @@ where
     IntoError: From<Error> + Clone + Send + 'static,
     IntoWarning: From<usb::Overflow> + Clone + Send + 'static,
 {
-    Device::open(serial_or_bus_number_and_address, configuration, usb_configuration, event_loop, flag)
+    Device::open(
+        serial_or_bus_number_and_address,
+        configuration,
+        usb_configuration,
+        event_loop,
+        flag,
+    )
 }
 
 impl device::Usb for Device {
@@ -116,8 +122,12 @@ impl device::Usb for Device {
 
     type Properties = properties::Camera<Self::Configuration>;
 
-    const VENDOR_AND_PRODUCT_IDS: &'static [(u16, u16)] =
-        &[(0x04B4, 0x00F4), (0x04B4, 0x00F5), (0x31F7, 0x0003)];
+    const VENDOR_AND_PRODUCT_IDS: &'static [(u16, u16)] = &[
+        (0x04B4, 0x00F4),
+        (0x04B4, 0x00F5),
+        (0x31F7, 0x0003),
+        (0x1409, 0x8E00),
+    ];
 
     const PROPERTIES: Self::Properties = Self::Properties {
         name: "Prophesee EVK4",
@@ -228,18 +238,25 @@ impl device::Usb for Device {
             &[0x04, 0x03, 0x09, 0x04],
             TIMEOUT,
         )?;
-        usb::assert_control_transfer(
+        usb::assert_control_transfer_any(
             &handle,
             0x80,
             0x06,
             0x0301,
             0x0409,
             &[
-                0x14, 0x03, b'P', 0x00, b'r', 0x00, b'o', 0x00, b'p', 0x00, b'h', 0x00, b'e', 0x00,
-                b's', 0x00, b'e', 0x00, b'e', 0x00,
+                &[
+                    0x14, 0x03, b'P', 0x00, b'r', 0x00, b'o', 0x00, b'p', 0x00, b'h', 0x00, b'e',
+                    0x00, b's', 0x00, b'e', 0x00, b'e', 0x00,
+                ],
+                &[
+                    b'I', b'D', b'S', b' ', b'I', b'm', b'a', b'g', b'i', b'n', b'g', b' ', b'D',
+                    b'e', b'v', b'e', b'l', b'o', b'p', b'm', b'e', b'n', b't', b' ', b'S', b'y',
+                    b's', b't', b'e', b'm', b's', b' ', b'G', b'm', b'b', b'H',
+                ],
             ],
             TIMEOUT,
-        )?;
+        )?; // IDS returns a different name (IDS Imaging Development Systems GmbH)
         usb::assert_control_transfer(
             &handle,
             0x80,
@@ -248,16 +265,19 @@ impl device::Usb for Device {
             0x0000,
             &[0x04, 0x03, 0x09, 0x04],
             TIMEOUT,
-        )?; // potentially redundant
-        usb::assert_control_transfer(
+        )?; // potentially redundant (it is, this is a standard language request)
+        usb::assert_control_transfer_any(
             &handle,
             0x80,
             0x06,
             0x0302,
             0x0409,
-            &[0x0a, 0x03, b'E', 0x00, b'V', 0x00, b'K', 0x00, b'4', 0x00],
+            &[
+                &[0x0a, 0x03, b'E', 0x00, b'V', 0x00, b'K', 0x00, b'4', 0x00],
+                &[b'U', b'E', b'-', b'3', b'9', b'B', b'0', b'X', b'C', b'P'],
+            ],
             TIMEOUT,
-        )?;
+        )?; // IDS returns a different name (UE-39B0XCP)
         request(
             &handle,
             &[0x79, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],

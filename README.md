@@ -185,7 +185,7 @@ cd python
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
-pip install maturin numpy
+pip install maturin==1.9.1 numpy
 maturin develop  # or maturin develop --release to build with optimizations
 ```
 

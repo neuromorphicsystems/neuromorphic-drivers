@@ -1,4 +1,5 @@
 import threading
+import typing
 
 import neuromorphic_drivers as nd
 import numpy as np
@@ -33,14 +34,43 @@ def camera_thread_target(
 
 if __name__ == "__main__":
     nd.print_device_list()
+    configuration = nd.inivation_davis346.Configuration()
     device = nd.open(
-        configuration=nd.inivation_davis346.Configuration(),
+        configuration=configuration,
         iterator_timeout=1.0 / 60.0,
     )
     print(device.serial(), device.properties())
 
+    transparent_on_colormap: list[str] = []
+    for index, color in enumerate(ui.DEFAULT_ON_COLORMAP):
+        transparent_on_colormap.append(
+            '"#{:02X}{:02X}{:02X}{:02X}"'.format(
+                int(round(index / (len(ui.DEFAULT_ON_COLORMAP) - 1) * 255)),
+                color.red(),
+                color.green(),
+                color.blue(),
+            )
+        )
+    transparent_off_colormap: list[str] = []
+    for index, color in enumerate(ui.DEFAULT_OFF_COLORMAP):
+        transparent_off_colormap.append(
+            '"#{:02X}{:02X}{:02X}{:02X}"'.format(
+                int(round(index / (len(ui.DEFAULT_OFF_COLORMAP) - 1) * 255)),
+                color.red(),
+                color.green(),
+                color.blue(),
+            )
+        )
+
+    def on_emit(key: str, value: typing.Any):
+        if key == "exposure":
+            configuration.exposure_us = int(value)
+            device.update_configuration(configuration)
+        else:
+            print(f"Unknown emit key: {key}")
+
     app = ui.App(
-        f"""
+        qml=f"""
         import QtQuick
         import QtQuick.Controls
         import QtQuick.Layouts 1.2
@@ -74,6 +104,7 @@ if __name__ == "__main__":
                         }}
 
                         EventDisplay {{
+                            id: eventDisplayOverlay
                             visible: overlayEventsOnFrames
                             width: container.width
                             height: container.height
@@ -81,13 +112,14 @@ if __name__ == "__main__":
                             sensor_size: "{device.properties().width}x{device.properties().height}"
                             style: "exponential"
                             tau: 200000
-                            on_colormap: ["#00191919", "#CCFBBC05"]
-                            off_colormap: ["#00191919", "#CC4285F4"]
+                            on_colormap: [{','.join(transparent_on_colormap)}]
+                            off_colormap: [{','.join(transparent_off_colormap)}]
                             clear_background: false
                         }}
                     }}
 
                     EventDisplay {{
+                        id: eventDisplayStandalone
                         visible: !overlayEventsOnFrames
                         objectName: "event-display-standalone"
                         Layout.fillWidth: true
@@ -98,18 +130,80 @@ if __name__ == "__main__":
                     }}
                 }}
 
-                RowLayout {{
+                ColumnLayout {{
                     Layout.margins: 10
+                    Label {{
+                        text: "Display properties"
+                        color: "#AAAAAA"
+                    }}
+                    RowLayout {{
+                        spacing: 10
 
-                    Switch {{
-                        text: "Overlay events on frames"
-                        checked: overlayEventsOnFrames
-                        onClicked: overlayEventsOnFrames = checked
+                        Switch {{
+                            text: "Overlay events on frames"
+                            checked: overlayEventsOnFrames
+                            onClicked: overlayEventsOnFrames = checked
+                        }}
+
+                        RowLayout {{
+                            spacing: 5
+                            Label {{
+                                text: "Style"
+                            }}
+                            ComboBox {{
+                                model: ["Exponential", "Linear", "Window"]
+                                currentIndex: 0
+                                onCurrentIndexChanged: {{
+                                    eventDisplayOverlay.style = model[currentIndex].toLowerCase()
+                                    eventDisplayStandalone.style = model[currentIndex].toLowerCase()
+                                }}
+                            }}
+                        }}
+
+                        RowLayout {{
+                            spacing: 5
+                            Label {{
+                                text: "𝜏 (ms)"
+                            }}
+                            SpinBox {{
+                                from: 1
+                                to: 100000
+                                stepSize: 1
+                                editable: true
+                                value: {int(round(ui.DEFAULT_TAU / 1000))}
+                                onValueChanged: {{
+                                    eventDisplayOverlay.tau = value * 1000
+                                    eventDisplayStandalone.tau = value * 1000
+                                }}
+                            }}
+                        }}
+                    }}
+
+                    Label {{
+                        text: "Camera properties"
+                        Layout.topMargin: 10
+                        color: "#AAAAAA"
+                    }}
+
+                    RowLayout {{
+                        spacing: 5
+                        Label {{
+                            text: "Exposure (ms)"
+                        }}
+                        SpinBox {{
+                            from: 1
+                            to: 1000
+                            stepSize: 1
+                            editable: true
+                            value: 4
+                            onValueChanged: emit.exposure = value * 1000
+                        }}
                     }}
                 }}
             }}
         }}
-        """
+        """,
+        on_emit=on_emit,
     )
 
     event_displays = (

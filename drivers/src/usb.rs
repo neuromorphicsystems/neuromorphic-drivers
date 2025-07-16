@@ -56,6 +56,12 @@ pub enum Error {
     #[error("control transfer error (expected {expected:?}, read {read:?})")]
     Mismatch { expected: Vec<u8>, read: Vec<u8> },
 
+    #[error("control transfer error (expected one of {expected:?}, read {read:?})")]
+    MismatchAny {
+        expected: Vec<Vec<u8>>,
+        read: Vec<u8>,
+    },
+
     #[error("the device is already used by another program")]
     Busy,
 }
@@ -116,6 +122,38 @@ pub fn assert_control_transfer(
             read: buffer,
         })
     }
+}
+
+pub fn assert_control_transfer_any(
+    handle: &rusb::DeviceHandle<rusb::Context>,
+    request_type: u8,
+    request: u8,
+    value: u16,
+    index: u16,
+    expected_buffers: &[&[u8]],
+    timeout: std::time::Duration,
+) -> Result<(), Error> {
+    let mut buffer = vec![
+        0;
+        expected_buffers
+            .iter()
+            .fold(0, |maximum, expected_buffer| maximum
+                .max(expected_buffer.len()))
+    ];
+    let read = handle.read_control(request_type, request, value, index, &mut buffer, timeout)?;
+    buffer.truncate(read);
+    for expected_buffer in expected_buffers {
+        if *expected_buffer == &buffer[..] {
+            return Ok(());
+        }
+    }
+    Err(Error::MismatchAny {
+        expected: expected_buffers
+            .iter()
+            .map(|expected_buffer| Vec::from(*expected_buffer))
+            .collect(),
+        read: buffer,
+    })
 }
 
 extern "system" {
