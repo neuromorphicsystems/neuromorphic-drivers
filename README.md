@@ -221,6 +221,8 @@ See https://docs.rs/neuromorphic-drivers/latest/neuromorphic_drivers/ for docume
     ```txt
     SUBSYSTEM=="usb", ATTRS{idVendor}=="152a",ATTRS{idProduct}=="84[0-1]?", MODE="0666"
     SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4",ATTRS{idProduct}=="00f[4-5]", MODE="0666"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="31f7",ATTRS{idProduct}=="0003", MODE="0666"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="1409",ATTRS{idProduct}=="8E00", MODE="0666"
     ```
 
 2. Run the following commands (or reboot the machine).
