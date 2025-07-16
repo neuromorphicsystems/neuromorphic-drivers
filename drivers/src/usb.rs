@@ -124,7 +124,7 @@ pub fn assert_control_transfer(
     }
 }
 
-pub fn assert_control_transfer_any(
+pub fn assert_string_descriptor_any(
     handle: &rusb::DeviceHandle<rusb::Context>,
     request_type: u8,
     request: u8,
@@ -138,15 +138,17 @@ pub fn assert_control_transfer_any(
         expected_buffers
             .iter()
             .fold(0, |maximum, expected_buffer| maximum
-                .max(expected_buffer.len()))
+                .max(expected_buffer.len())
+                + 2)
     ];
     let read = handle.read_control(request_type, request, value, index, &mut buffer, timeout)?;
     buffer.truncate(read);
     for expected_buffer in expected_buffers {
-        if *expected_buffer == &buffer[..] {
+        if *expected_buffer == &buffer[2..] {
             return Ok(());
         }
     }
+    buffer.drain(0..2);
     Err(Error::MismatchAny {
         expected: expected_buffers
             .iter()

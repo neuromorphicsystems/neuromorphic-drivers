@@ -172,7 +172,7 @@ class UsbConfiguration:
 
 See _python/examples_ for different usage examples.
 
-_python/examples/any_display.py_ implements a live event viewer with exponential decays caculated by the GPU. It requires vispy and glfw (`pip install vispy glfw pyopengl`).
+_python/examples/any_display.py_ implements a live event viewer with exponential decays caculated by the GPU. It requires PySide6 (`pip install PySide6`).
 
 _python/examples/evk4_plot_hot_pixels_ generates plots and require Plotly (`pip install plotly pandas kaleido`).
 
@@ -185,7 +185,7 @@ cd python
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
-pip install maturin==1.9.1 numpy
+pip install maturin==1.9.1 patchelf numpy
 maturin develop  # or maturin develop --release to build with optimizations
 ```
 

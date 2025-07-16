@@ -238,7 +238,7 @@ impl device::Usb for Device {
             &[0x04, 0x03, 0x09, 0x04],
             TIMEOUT,
         )?;
-        usb::assert_control_transfer_any(
+        usb::assert_string_descriptor_any(
             &handle,
             0x80,
             0x06,
@@ -246,13 +246,16 @@ impl device::Usb for Device {
             0x0409,
             &[
                 &[
-                    0x14, 0x03, b'P', 0x00, b'r', 0x00, b'o', 0x00, b'p', 0x00, b'h', 0x00, b'e',
-                    0x00, b's', 0x00, b'e', 0x00, b'e', 0x00,
+                    b'P', 0x00, b'r', 0x00, b'o', 0x00, b'p', 0x00, b'h', 0x00, b'e', 0x00, b's',
+                    0x00, b'e', 0x00, b'e', 0x00,
                 ],
                 &[
-                    b'I', b'D', b'S', b' ', b'I', b'm', b'a', b'g', b'i', b'n', b'g', b' ', b'D',
-                    b'e', b'v', b'e', b'l', b'o', b'p', b'm', b'e', b'n', b't', b' ', b'S', b'y',
-                    b's', b't', b'e', b'm', b's', b' ', b'G', b'm', b'b', b'H',
+                    b'I', 0x00, b'D', 0x00, b'S', 0x00, b' ', 0x00, b'I', 0x00, b'm', 0x00, b'a',
+                    0x00, b'g', 0x00, b'i', 0x00, b'n', 0x00, b'g', 0x00, b' ', 0x00, b'D', 0x00,
+                    b'e', 0x00, b'v', 0x00, b'e', 0x00, b'l', 0x00, b'o', 0x00, b'p', 0x00, b'm',
+                    0x00, b'e', 0x00, b'n', 0x00, b't', 0x00, b' ', 0x00, b'S', 0x00, b'y', 0x00,
+                    b's', 0x00, b't', 0x00, b'e', 0x00, b'm', 0x00, b's', 0x00, b' ', 0x00, b'G',
+                    0x00, b'm', 0x00, b'b', 0x00, b'H', 0x00,
                 ],
             ],
             TIMEOUT,
@@ -266,15 +269,18 @@ impl device::Usb for Device {
             &[0x04, 0x03, 0x09, 0x04],
             TIMEOUT,
         )?; // potentially redundant (it is, this is a standard language request)
-        usb::assert_control_transfer_any(
+        usb::assert_string_descriptor_any(
             &handle,
             0x80,
             0x06,
             0x0302,
             0x0409,
             &[
-                &[0x0a, 0x03, b'E', 0x00, b'V', 0x00, b'K', 0x00, b'4', 0x00],
-                &[b'U', b'E', b'-', b'3', b'9', b'B', b'0', b'X', b'C', b'P'],
+                &[b'E', 0x00, b'V', 0x00, b'K', 0x00, b'4', 0x00],
+                &[
+                    b'U', 0x00, b'E', 0x00, b'-', 0x00, b'3', 0x00, b'9', 0x00, b'B', 0x00, b'0',
+                    0x00, b'X', 0x00, b'C', 0x00, b'P',
+                ],
             ],
             TIMEOUT,
         )?; // IDS returns a different name (UE-39B0XCP)
