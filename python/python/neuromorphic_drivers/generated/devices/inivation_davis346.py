@@ -5,9 +5,10 @@ import typing
 
 import numpy
 
+from .. import enums
+from ... import packet
 from ... import serde
 from ... import status
-from .. import enums
 
 
 @dataclasses.dataclass
@@ -23,27 +24,27 @@ class ActivityFilter:
 
 @dataclasses.dataclass
 class Biases:
-    localbufbn: serde.type.uint16 = 1444
-    padfollbn: serde.type.uint16 = 2007
+    localbufbn: serde.type.uint16 = 1461
+    padfollbn: serde.type.uint16 = 2000
     diffbn: serde.type.uint16 = 1063
-    onbn: serde.type.uint16 = 1535
-    offbn: serde.type.uint16 = 1025
-    pixinvbn: serde.type.uint16 = 1680
-    prbp: serde.type.uint16 = 570
-    prsfbp: serde.type.uint16 = 272
-    refrbp: serde.type.uint16 = 1049
-    readoutbufbp: serde.type.uint16 = 1556
-    apsrosfbn: serde.type.uint16 = 1755
-    adccompbp: serde.type.uint16 = 1300
+    onbn: serde.type.uint16 = 1564
+    offbn: serde.type.uint16 = 583
+    pixinvbn: serde.type.uint16 = 1691
+    prbp: serde.type.uint16 = 575
+    prsfbp: serde.type.uint16 = 153
+    refrbp: serde.type.uint16 = 993
+    readoutbufbp: serde.type.uint16 = 1457
+    apsrosfbn: serde.type.uint16 = 1776
+    adccompbp: serde.type.uint16 = 1202
     colsellowbn: serde.type.uint16 = 1
-    dacbufbp: serde.type.uint16 = 1596
-    lcoltimeoutbn: serde.type.uint16 = 1329
-    aepdbn: serde.type.uint16 = 1627
-    aepuxbp: serde.type.uint16 = 1104
-    aepuybp: serde.type.uint16 = 1944
-    ifrefrbn: serde.type.uint16 = 1535
-    ifthrbn: serde.type.uint16 = 1535
-    biasbuffer: serde.type.uint16 = 1534
+    dacbufbp: serde.type.uint16 = 1597
+    lcoltimeoutbn: serde.type.uint16 = 1330
+    aepdbn: serde.type.uint16 = 1632
+    aepuxbp: serde.type.uint16 = 1110
+    aepuybp: serde.type.uint16 = 1937
+    ifrefrbn: serde.type.uint16 = 1564
+    ifthrbn: serde.type.uint16 = 1564
+    biasbuffer: serde.type.uint16 = 1563
 
     def serialize(self) -> bytes:
         return serde.bincode.serialize(self, Biases)
@@ -129,7 +130,7 @@ class InivationDavis346Device(typing.Protocol):
 
     def __iter__(self) -> "InivationDavis346Device": ...
 
-    def __next__(self) -> tuple[status.StatusNonOptional, dict[str, numpy.ndarray[typing.Any, numpy.dtype[numpy.void]]]]: ...
+    def __next__(self) -> tuple[status.StatusNonOptional, packet.Davis346Packet]: ...
 
     def backlog(self) -> int: ...
 
@@ -165,7 +166,7 @@ class InivationDavis346DeviceOptional(typing.Protocol):
 
     def __iter__(self) -> "InivationDavis346DeviceOptional": ...
 
-    def __next__(self) -> tuple[status.Status, typing.Optional[dict[str, numpy.ndarray[typing.Any, numpy.dtype[numpy.void]]]]]: ...
+    def __next__(self) -> tuple[status.Status, typing.Optional[packet.Davis346Packet]]: ...
 
     def backlog(self) -> int: ...
 

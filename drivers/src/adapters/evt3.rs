@@ -6,7 +6,7 @@ pub struct State {
     pub previous_lsb_t: u16,
     pub x: u16,
     pub y: u16,
-    pub polarity: neuromorphic_types::DvsPolarity,
+    pub polarity: neuromorphic_types::Polarity,
 }
 
 pub struct Adapter {
@@ -35,7 +35,7 @@ impl Adapter {
                 previous_lsb_t: 0,
                 x: 0,
                 y: 0,
-                polarity: neuromorphic_types::DvsPolarity::Off,
+                polarity: neuromorphic_types::Polarity::Off,
             },
         }
     }
@@ -79,16 +79,16 @@ impl Adapter {
                 0b0010 => {
                     x = word & 0b11111111111;
                     polarity = if (word & (1 << 11)) > 0 {
-                        neuromorphic_types::DvsPolarity::On
+                        neuromorphic_types::Polarity::On
                     } else {
-                        neuromorphic_types::DvsPolarity::Off
+                        neuromorphic_types::Polarity::Off
                     };
                     if x < self.width && y < self.height {
                         match polarity {
-                            neuromorphic_types::DvsPolarity::On => {
+                            neuromorphic_types::Polarity::On => {
                                 lengths.on += 1;
                             }
-                            neuromorphic_types::DvsPolarity::Off => {
+                            neuromorphic_types::Polarity::Off => {
                                 lengths.off += 1;
                             }
                         }
@@ -97,20 +97,20 @@ impl Adapter {
                 0b0011 => {
                     x = word & 0b11111111111;
                     polarity = if (word & (1 << 11)) > 0 {
-                        neuromorphic_types::DvsPolarity::On
+                        neuromorphic_types::Polarity::On
                     } else {
-                        neuromorphic_types::DvsPolarity::Off
+                        neuromorphic_types::Polarity::Off
                     };
                 }
                 0b0100 => {
                     if x < self.width && y < self.height {
                         match polarity {
-                            neuromorphic_types::DvsPolarity::On => {
+                            neuromorphic_types::Polarity::On => {
                                 lengths.on +=
                                     (word & ((1 << std::cmp::min(12, self.width - x)) - 1))
                                         .count_ones() as usize;
                             }
-                            neuromorphic_types::DvsPolarity::Off => {
+                            neuromorphic_types::Polarity::Off => {
                                 lengths.off +=
                                     (word & ((1 << std::cmp::min(12, self.width - x)) - 1))
                                         .count_ones() as usize;
@@ -122,12 +122,12 @@ impl Adapter {
                 0b0101 => {
                     if x < self.width && y < self.height {
                         match polarity {
-                            neuromorphic_types::DvsPolarity::On => {
+                            neuromorphic_types::Polarity::On => {
                                 lengths.on += (word & ((1 << std::cmp::min(8, self.width - x)) - 1))
                                     .count_ones()
                                     as usize;
                             }
-                            neuromorphic_types::DvsPolarity::Off => {
+                            neuromorphic_types::Polarity::Off => {
                                 lengths.off +=
                                     (word & ((1 << std::cmp::min(8, self.width - x)) - 1))
                                         .count_ones() as usize;
@@ -167,16 +167,16 @@ impl Adapter {
                 0b0010 => {
                     self.state.x = word & 0b11111111111;
                     self.state.polarity = if (word & (1 << 11)) > 0 {
-                        neuromorphic_types::DvsPolarity::On
+                        neuromorphic_types::Polarity::On
                     } else {
-                        neuromorphic_types::DvsPolarity::Off
+                        neuromorphic_types::Polarity::Off
                     };
                     if self.state.x < self.width && self.state.y < self.height {
                         match self.state.polarity {
-                            neuromorphic_types::DvsPolarity::On => {
+                            neuromorphic_types::Polarity::On => {
                                 lengths.on += 1;
                             }
-                            neuromorphic_types::DvsPolarity::Off => {
+                            neuromorphic_types::Polarity::Off => {
                                 lengths.off += 1;
                             }
                         }
@@ -185,21 +185,21 @@ impl Adapter {
                 0b0011 => {
                     self.state.x = word & 0b11111111111;
                     self.state.polarity = if (word & (1 << 11)) > 0 {
-                        neuromorphic_types::DvsPolarity::On
+                        neuromorphic_types::Polarity::On
                     } else {
-                        neuromorphic_types::DvsPolarity::Off
+                        neuromorphic_types::Polarity::Off
                     };
                 }
                 0b0100 => {
                     if self.state.x < self.width && self.state.y < self.height {
                         match self.state.polarity {
-                            neuromorphic_types::DvsPolarity::On => {
+                            neuromorphic_types::Polarity::On => {
                                 lengths.on += (word
                                     & ((1 << std::cmp::min(12, self.width - self.state.x)) - 1))
                                     .count_ones()
                                     as usize;
                             }
-                            neuromorphic_types::DvsPolarity::Off => {
+                            neuromorphic_types::Polarity::Off => {
                                 lengths.off += (word
                                     & ((1 << std::cmp::min(12, self.width - self.state.x)) - 1))
                                     .count_ones()
@@ -212,13 +212,13 @@ impl Adapter {
                 0b0101 => {
                     if self.state.x < self.width && self.state.y < self.height {
                         match self.state.polarity {
-                            neuromorphic_types::DvsPolarity::On => {
+                            neuromorphic_types::Polarity::On => {
                                 lengths.on += (word
                                     & ((1 << std::cmp::min(8, self.width - self.state.x)) - 1))
                                     .count_ones()
                                     as usize;
                             }
-                            neuromorphic_types::DvsPolarity::Off => {
+                            neuromorphic_types::Polarity::Off => {
                                 lengths.off += (word
                                     & ((1 << std::cmp::min(8, self.width - self.state.x)) - 1))
                                     .count_ones()
@@ -292,7 +292,7 @@ impl Adapter {
         mut handle_dvs_event: HandleDvsEvent,
         mut handle_trigger_event: HandleTriggerEvent,
     ) where
-        HandleDvsEvent: FnMut(neuromorphic_types::DvsEvent<u64, u16, u16>),
+        HandleDvsEvent: FnMut(neuromorphic_types::PolarityEvent<u64, u16, u16>),
         HandleTriggerEvent: FnMut(neuromorphic_types::TriggerEvent<u64, u8>),
     {
         for index in 0..slice.len() / 2 {
@@ -305,12 +305,12 @@ impl Adapter {
                 0b0010 => {
                     self.state.x = word & 0b11111111111;
                     self.state.polarity = if (word & (1 << 11)) > 0 {
-                        neuromorphic_types::DvsPolarity::On
+                        neuromorphic_types::Polarity::On
                     } else {
-                        neuromorphic_types::DvsPolarity::Off
+                        neuromorphic_types::Polarity::Off
                     };
                     if self.state.x < self.width && self.state.y < self.height {
-                        handle_dvs_event(neuromorphic_types::DvsEvent {
+                        handle_dvs_event(neuromorphic_types::PolarityEvent {
                             t: self.state.t,
                             x: self.state.x,
                             y: self.state.y,
@@ -321,9 +321,9 @@ impl Adapter {
                 0b0011 => {
                     self.state.x = word & 0b11111111111;
                     self.state.polarity = if (word & (1 << 11)) > 0 {
-                        neuromorphic_types::DvsPolarity::On
+                        neuromorphic_types::Polarity::On
                     } else {
-                        neuromorphic_types::DvsPolarity::Off
+                        neuromorphic_types::Polarity::Off
                     };
                 }
                 0b0100 => {
@@ -331,7 +331,7 @@ impl Adapter {
                         let set = word & ((1 << std::cmp::min(12, self.width - self.state.x)) - 1);
                         for bit in 0..12 {
                             if (set & (1 << bit)) > 0 {
-                                handle_dvs_event(neuromorphic_types::DvsEvent {
+                                handle_dvs_event(neuromorphic_types::PolarityEvent {
                                     t: self.state.t,
                                     x: self.state.x + bit,
                                     y: self.state.y,
@@ -347,7 +347,7 @@ impl Adapter {
                         let set = word & ((1 << std::cmp::min(8, self.width - self.state.x)) - 1);
                         for bit in 0..8 {
                             if (set & (1 << bit)) > 0 {
-                                handle_dvs_event(neuromorphic_types::DvsEvent {
+                                handle_dvs_event(neuromorphic_types::PolarityEvent {
                                     t: self.state.t,
                                     x: self.state.x + bit,
                                     y: self.state.y,

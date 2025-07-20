@@ -5,9 +5,10 @@ import typing
 
 import numpy
 
+from .. import enums
+from ... import packet
 from ... import serde
 from ... import status
-from .. import enums
 
 
 @dataclasses.dataclass
@@ -116,7 +117,7 @@ class PropheseeEvk3HdDevice(typing.Protocol):
 
     def __iter__(self) -> "PropheseeEvk3HdDevice": ...
 
-    def __next__(self) -> tuple[status.StatusNonOptional, dict[str, numpy.ndarray[typing.Any, numpy.dtype[numpy.void]]]]: ...
+    def __next__(self) -> tuple[status.StatusNonOptional, packet.Evt3Packet]: ...
 
     def backlog(self) -> int: ...
 
@@ -152,7 +153,7 @@ class PropheseeEvk3HdDeviceOptional(typing.Protocol):
 
     def __iter__(self) -> "PropheseeEvk3HdDeviceOptional": ...
 
-    def __next__(self) -> tuple[status.Status, typing.Optional[dict[str, numpy.ndarray[typing.Any, numpy.dtype[numpy.void]]]]]: ...
+    def __next__(self) -> tuple[status.Status, typing.Optional[packet.Evt3Packet]]: ...
 
     def backlog(self) -> int: ...
 

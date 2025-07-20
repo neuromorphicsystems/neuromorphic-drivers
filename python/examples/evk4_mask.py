@@ -29,9 +29,11 @@ with nd.open(
     )
 ) as device:
     for status, packet in device:
-        if "dvs_events" in packet:
-            np.add.at(counts, (packet["dvs_events"]["x"], packet["dvs_events"]["y"]), 1)
-            if packet["dvs_events"]["t"][-1] > 2000000:
+        if packet.polarity_events is not None:
+            np.add.at(
+                counts, (packet.polarity_events["x"], packet.polarity_events["y"]), 1
+            )
+            if packet.polarity_events["t"][-1] > 2000000:
                 break
 
 log_counts = np.flipud(np.log((counts + 1).astype(np.float64)).transpose())

@@ -243,7 +243,7 @@ impl Device {
                 {
                     return pyo3::Python::with_gil(|python| {
                         let packet = match &mut buffer {
-                            Buffer::Adapter(adapter) => Some(adapter.take_into_dict(python)?),
+                            Buffer::Adapter(adapter) => Some(adapter.take_into_packet(python)?),
                             Buffer::Bytes(bytes) => pyo3::Python::with_gil(|python| {
                                 bytes.take(python).map(|bytes| bytes.into())
                             }),

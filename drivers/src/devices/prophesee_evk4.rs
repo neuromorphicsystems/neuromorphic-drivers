@@ -245,10 +245,12 @@ impl device::Usb for Device {
             0x0301,
             0x0409,
             &[
+                // Prophesee (UTF-16)
                 &[
                     b'P', 0x00, b'r', 0x00, b'o', 0x00, b'p', 0x00, b'h', 0x00, b'e', 0x00, b's',
                     0x00, b'e', 0x00, b'e', 0x00,
                 ],
+                // IDS Imaging Development Systems GmbH (UTF-16)
                 &[
                     b'I', 0x00, b'D', 0x00, b'S', 0x00, b' ', 0x00, b'I', 0x00, b'm', 0x00, b'a',
                     0x00, b'g', 0x00, b'i', 0x00, b'n', 0x00, b'g', 0x00, b' ', 0x00, b'D', 0x00,
@@ -259,16 +261,7 @@ impl device::Usb for Device {
                 ],
             ],
             TIMEOUT,
-        )?; // IDS returns a different name (IDS Imaging Development Systems GmbH)
-        usb::assert_control_transfer(
-            &handle,
-            0x80,
-            0x06,
-            0x0300,
-            0x0000,
-            &[0x04, 0x03, 0x09, 0x04],
-            TIMEOUT,
-        )?; // potentially redundant (it is, this is a standard language request)
+        )?;
         usb::assert_string_descriptor_any(
             &handle,
             0x80,
@@ -276,14 +269,16 @@ impl device::Usb for Device {
             0x0302,
             0x0409,
             &[
+                // EVK4 (UTF-16)
                 &[b'E', 0x00, b'V', 0x00, b'K', 0x00, b'4', 0x00],
+                // UE-39B0XCP (UTF-16)
                 &[
                     b'U', 0x00, b'E', 0x00, b'-', 0x00, b'3', 0x00, b'9', 0x00, b'B', 0x00, b'0',
                     0x00, b'X', 0x00, b'C', 0x00, b'P',
                 ],
             ],
             TIMEOUT,
-        )?; // IDS returns a different name (UE-39B0XCP)
+        )?;
         request(
             &handle,
             &[0x79, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],

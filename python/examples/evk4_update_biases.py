@@ -20,8 +20,8 @@ with nd.open(configuration=configuration) as device:
             print(f"{count / (now - previous_output):.2f} events/s")
             previous_output = now
             count = 0
-        if "dvs_events" in packet:
-            count += len(packet["dvs_events"])
+        if packet.polarity_events is not None:
+            count += len(packet.polarity_events)
         if not updated and now - start > 5.0:
             print("update biases")
             configuration.biases.diff_on -= 50

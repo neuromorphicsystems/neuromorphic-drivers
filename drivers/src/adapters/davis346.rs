@@ -1,26 +1,25 @@
-// @DEV implement adapter using state
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct State {
-    pub t: u64,
-}
-
-enum FrameDataRow {
+pub enum FrameDataRow {
     Idle,
     Reset(u16),
     Signal(u16),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct State {
+    pub t: u64,
+    pub t_offset: u64,
+    pub column: Option<u16>,
+    pub start_t: Option<u64>,
+    pub exposure_start_t: Option<u64>,
+    pub exposure_end_t: Option<u64>,
+    pub frame_reset_column: Option<u16>,
+    pub frame_signal_column: Option<u16>,
+    pub frame_data_row: FrameDataRow,
+}
+
 pub struct Adapter {
-    t: u64,
-    t_offset: u64,
-    column: Option<u16>,
-    start_t: Option<u64>,
-    exposure_start_t: Option<u64>,
-    exposure_end_t: Option<u64>,
     pixels: Vec<u16>,
-    frame_reset_column: Option<u16>,
-    frame_signal_column: Option<u16>,
-    frame_data_row: FrameDataRow,
     state: State, // @DEV move state props here
 }
 
@@ -57,17 +56,18 @@ pub struct EventsLengths {
 impl Adapter {
     pub fn new() -> Self {
         Self {
-            t: 0,
-            t_offset: 0,
-            column: None,
-            start_t: None,
-            exposure_start_t: None,
-            exposure_end_t: None,
             pixels: vec![0u16; 346 * 260],
-            frame_reset_column: None,
-            frame_signal_column: None,
-            frame_data_row: FrameDataRow::Idle,
-            state: State { t: 0 }, // @DEV move state props here
+            state: State {
+                t: 0,
+                t_offset: 0,
+                column: None,
+                start_t: None,
+                exposure_start_t: None,
+                exposure_end_t: None,
+                frame_reset_column: None,
+                frame_signal_column: None,
+                frame_data_row: FrameDataRow::Idle,
+            },
         }
     }
 
@@ -114,7 +114,7 @@ impl Adapter {
         mut handle_trigger_event: HandleTriggerEvent,
         mut handle_frame_event: HandleFrameEvent,
     ) where
-        HandleDvsEvent: FnMut(neuromorphic_types::DvsEvent<u64, u16, u16>),
+        HandleDvsEvent: FnMut(neuromorphic_types::PolarityEvent<u64, u16, u16>),
         HandleImuEvent: FnMut(ImuEvent),
         HandleTriggerEvent: FnMut(neuromorphic_types::TriggerEvent<u64, u8>),
         HandleFrameEvent: FnMut(FrameEvent),
@@ -122,9 +122,9 @@ impl Adapter {
         for index in 0..slice.len() / 2 {
             let word = u16::from_le_bytes([slice[index * 2], slice[index * 2 + 1]]);
             if (word & 0x8000) > 0 {
-                let candidate_t = self.t_offset + (word & 0x7FFF) as u64;
-                if candidate_t >= self.t {
-                    self.t = candidate_t;
+                let candidate_t = self.state.t_offset + (word & 0x7FFF) as u64;
+                if candidate_t >= self.state.t {
+                    self.state.t = candidate_t;
                 }
             } else {
                 let message_type = (word & 0x7000) >> 12;
@@ -134,20 +134,20 @@ impl Adapter {
                             0 => {} // reserved code
                             1 => {} // timestamp reset
                             2 => handle_trigger_event(neuromorphic_types::TriggerEvent {
-                                t: self.t,
+                                t: self.state.t,
                                 id: 0,
                                 polarity: neuromorphic_types::TriggerPolarity::Falling,
                             }),
 
                             3 => handle_trigger_event(neuromorphic_types::TriggerEvent {
-                                t: self.t,
+                                t: self.state.t,
                                 id: 0,
                                 polarity: neuromorphic_types::TriggerPolarity::Rising,
                             }),
                             4 => handle_trigger_event(neuromorphic_types::TriggerEvent {
-                                t: self.t,
+                                t: self.state.t,
                                 id: 0,
-                                polarity: neuromorphic_types::TriggerPolarity::Rising, // @TODO replace with pulse after updating neuromorphic_types
+                                polarity: neuromorphic_types::TriggerPolarity::Pulse,
                             }),
                             5 => {
                                 // IMU start
@@ -156,16 +156,16 @@ impl Adapter {
                                 // IMU end
                             }
                             8 | 9 => {
-                                self.start_t = Some(self.t);
-                                self.exposure_start_t = None;
-                                self.exposure_end_t = None;
-                                self.frame_reset_column = Some(0);
-                                self.frame_signal_column = Some(0);
-                                self.frame_data_row = FrameDataRow::Idle;
+                                self.state.start_t = Some(self.state.t);
+                                self.state.exposure_start_t = None;
+                                self.state.exposure_end_t = None;
+                                self.state.frame_reset_column = Some(0);
+                                self.state.frame_signal_column = Some(0);
+                                self.state.frame_data_row = FrameDataRow::Idle;
                                 self.pixels.fill(u16::MAX);
                             }
                             10 => {
-                                if let Some(start_t) = self.start_t {
+                                if let Some(start_t) = self.state.start_t {
                                     for pixel in self.pixels.iter_mut() {
                                         if *pixel == u16::MAX {
                                             *pixel = 0;
@@ -173,48 +173,50 @@ impl Adapter {
                                     }
                                     handle_frame_event(FrameEvent {
                                         start_t,
-                                        exposure_start_t: self.exposure_start_t,
-                                        exposure_end_t: self.exposure_end_t,
-                                        t: self.t,
+                                        exposure_start_t: self.state.exposure_start_t,
+                                        exposure_end_t: self.state.exposure_end_t,
+                                        t: self.state.t,
                                         pixels: &self.pixels,
                                     });
-                                    self.start_t = None;
-                                    self.exposure_start_t = None;
-                                    self.exposure_end_t = None;
-                                    self.frame_reset_column = None;
-                                    self.frame_signal_column = None;
+                                    self.state.start_t = None;
+                                    self.state.exposure_start_t = None;
+                                    self.state.exposure_end_t = None;
+                                    self.state.frame_reset_column = None;
+                                    self.state.frame_signal_column = None;
                                 }
                             }
                             11 => {
-                                if let Some(frame_reset_column) = self.frame_reset_column {
+                                if let Some(frame_reset_column) = self.state.frame_reset_column {
                                     if frame_reset_column < 260 {
-                                        self.frame_reset_column = Some(frame_reset_column + 1);
-                                        self.frame_data_row = FrameDataRow::Reset(0);
+                                        self.state.frame_reset_column =
+                                            Some(frame_reset_column + 1);
+                                        self.state.frame_data_row = FrameDataRow::Reset(0);
                                     } else {
-                                        self.frame_reset_column = None;
-                                        self.frame_data_row = FrameDataRow::Idle;
+                                        self.state.frame_reset_column = None;
+                                        self.state.frame_data_row = FrameDataRow::Idle;
                                     }
                                 }
                             }
                             12 => {
-                                if let Some(frame_signal_column) = self.frame_signal_column {
+                                if let Some(frame_signal_column) = self.state.frame_signal_column {
                                     if frame_signal_column < 260 {
-                                        self.frame_signal_column = Some(frame_signal_column + 1);
-                                        self.frame_data_row = FrameDataRow::Signal(0);
+                                        self.state.frame_signal_column =
+                                            Some(frame_signal_column + 1);
+                                        self.state.frame_data_row = FrameDataRow::Signal(0);
                                     } else {
-                                        self.frame_signal_column = None;
-                                        self.frame_data_row = FrameDataRow::Idle;
+                                        self.state.frame_signal_column = None;
+                                        self.state.frame_data_row = FrameDataRow::Idle;
                                     }
                                 }
                             }
                             13 => {
-                                self.frame_data_row = FrameDataRow::Idle;
+                                self.state.frame_data_row = FrameDataRow::Idle;
                             }
                             14 => {
-                                self.exposure_start_t = Some(self.t);
+                                self.state.exposure_start_t = Some(self.state.t);
                             }
                             15 => {
-                                self.exposure_end_t = Some(self.t);
+                                self.state.exposure_end_t = Some(self.state.t);
                             }
                             16 => {
                                 // External generator (falling edge)
@@ -228,33 +230,33 @@ impl Adapter {
                     1 => {
                         let candidate_column = word & 0x0FFF;
                         if candidate_column < 346 {
-                            self.column = Some(candidate_column);
+                            self.state.column = Some(candidate_column);
                         } else {
-                            self.column = None;
+                            self.state.column = None;
                         }
                     }
                     2 | 3 => {
-                        if let Some(column) = self.column {
+                        if let Some(column) = self.state.column {
                             let row = word & 0x0FFF;
                             if row < 260 {
-                                handle_dvs_event(neuromorphic_types::DvsEvent {
-                                    t: self.t,
+                                handle_dvs_event(neuromorphic_types::PolarityEvent {
+                                    t: self.state.t,
                                     x: column,
                                     y: row,
                                     polarity: if message_type == 2 {
-                                        neuromorphic_types::DvsPolarity::Off
+                                        neuromorphic_types::Polarity::Off
                                     } else {
-                                        neuromorphic_types::DvsPolarity::On
+                                        neuromorphic_types::Polarity::On
                                     },
                                 })
                             }
                         }
                     }
                     4 => {
-                        self.frame_data_row = match self.frame_data_row {
+                        self.state.frame_data_row = match self.state.frame_data_row {
                             FrameDataRow::Idle => FrameDataRow::Idle,
                             FrameDataRow::Reset(row) => {
-                                if let Some(column) = self.frame_reset_column {
+                                if let Some(column) = self.state.frame_reset_column {
                                     if column > 0 {
                                         let x = 345 - row;
                                         let y = column - 1;
@@ -272,7 +274,7 @@ impl Adapter {
                                 }
                             }
                             FrameDataRow::Signal(row) => {
-                                if let Some(column) = self.frame_signal_column {
+                                if let Some(column) = self.state.frame_signal_column {
                                     if column > 0 {
                                         let x = 345 - row;
                                         let y = column - 1;
@@ -310,7 +312,7 @@ impl Adapter {
                         // misc 10  bit (frame exposure), related to auto exposure?
                     }
                     7 => {
-                        self.t_offset += 0x8000;
+                        self.state.t_offset += 0x8000;
                     }
                     _ => unreachable!(),
                 }

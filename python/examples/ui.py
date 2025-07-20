@@ -21,7 +21,7 @@ in vec2 vertices;
 out vec2 coordinates;
 
 void main() {
-    gl_Position = vec4(1.0 - vertices.x * 2.0, vertices.y * 2.0 - 1.0, 0.0, 1.0);
+    gl_Position = vec4(vertices.x * 2.0 - 1.0, 1.0 - vertices.y * 2.0, 0.0, 1.0);
     coordinates = vertices;
 }
 """

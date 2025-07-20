@@ -17,19 +17,19 @@ def camera_thread_target(
         if not context["running"]:
             break
         if packet is not None:
-            if "dvs_events" in packet:
+            if packet.polarity_events is not None:
                 assert status.ring is not None and status.ring.current_t is not None
                 for event_display in event_displays:
                     event_display.push(
-                        events=packet["dvs_events"], current_t=status.ring.current_t
+                        events=packet.polarity_events, current_t=status.ring.current_t
                     )
             elif status.ring is not None and status.ring.current_t is not None:
                 for event_display in event_displays:
                     event_display.push(
                         events=np.array([]), current_t=status.ring.current_t
                     )
-            if "frames" in packet and len(packet["frames"]) > 0:
-                frame_display.push(packet["frames"][-1].pixels)
+            if len(packet.frames) > 0:
+                frame_display.push(packet.frames[-1].pixels)
 
 
 if __name__ == "__main__":
@@ -62,12 +62,18 @@ if __name__ == "__main__":
             )
         )
 
-    def on_emit(key: str, value: typing.Any):
+    def to_python(key: str, value: typing.Any):
         if key == "exposure":
             configuration.exposure_us = int(value)
             device.update_configuration(configuration)
+        elif key == "diff_on":
+            configuration.biases.onbn = int(value)
+            device.update_configuration(configuration)
+        elif key == "diff_off":
+            configuration.biases.offbn = int(value)
+            device.update_configuration(configuration)
         else:
-            print(f"Unknown emit key: {key}")
+            print(f"Unknown to_python key: {key}")
 
     app = ui.App(
         qml=f"""
@@ -196,14 +202,29 @@ if __name__ == "__main__":
                             stepSize: 1
                             editable: true
                             value: 4
-                            onValueChanged: emit.exposure = value * 1000
+                            onValueChanged: to_python.exposure = value * 1000
+                        }}
+                    }}
+
+                    RowLayout {{
+                        spacing: 5
+                        Label {{
+                            text: "Diff ON"
+                        }}
+                        SpinBox {{
+                            from: 0
+                            to: 2040
+                            stepSize: 1
+                            editable: true
+                            value: {configuration.biases.onbn}
+                            onValueChanged: to_python.diff_on = value
                         }}
                     }}
                 }}
             }}
         }}
         """,
-        on_emit=on_emit,
+        to_python=to_python,
     )
 
     event_displays = (

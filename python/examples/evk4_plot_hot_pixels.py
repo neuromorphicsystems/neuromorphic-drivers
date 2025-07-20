@@ -26,22 +26,22 @@ with nd.open(configuration=nd.prophesee_evk4.Configuration()) as device:
     for status, packet in device:
         if diff_off == 45:
             break
-        if "dvs_events" in packet:
+        if packet.polarity_events is not None:
             if state == 1:
-                events = packet["dvs_events"][packet["dvs_events"]["t"] >= start_t]
+                events = packet.polarity_events[packet.polarity_events["t"] >= start_t]
                 total += len(events)
                 np.add.at(counts, (events["x"], events["y"]), 1)
-            if packet["dvs_events"]["t"][-1] > next_t:
+            if packet.polarity_events["t"][-1] > next_t:
                 match state:
                     case 0:
                         print("start counting")
-                        start_t = packet["dvs_events"]["t"][-1] + 1
+                        start_t = packet.polarity_events["t"][-1] + 1
                         next_t += 1000000
                         total = 0
                         counts.fill(0)
                         state = 1
                     case 1:
-                        duration = packet["dvs_events"]["t"][-1] - start_t
+                        duration = packet.polarity_events["t"][-1] - start_t
                         print(
                             f"{diff_off=}, {total=}, {duration=}, {total / duration * 1e6} events/s"
                         )

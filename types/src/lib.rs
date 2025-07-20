@@ -14,21 +14,21 @@ pub trait SliceView {
 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum DvsPolarity {
+pub enum Polarity {
     Off = 0,
     On = 1,
 }
-impl SliceView for DvsPolarity {}
+impl SliceView for Polarity {}
 
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct DvsEvent<Timestamp, X, Y> {
+pub struct PolarityEvent<Timestamp, X, Y> {
     pub t: Timestamp,
     pub x: X,
     pub y: Y,
-    pub polarity: DvsPolarity,
+    pub polarity: Polarity,
 }
-impl<Timestamp, X, Y> SliceView for DvsEvent<Timestamp, X, Y> {}
+impl<Timestamp, X, Y> SliceView for PolarityEvent<Timestamp, X, Y> {}
 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -55,6 +55,7 @@ impl<Timestamp, X, Y> SliceView for AtisEvent<Timestamp, X, Y> {}
 pub enum TriggerPolarity {
     Falling = 0,
     Rising = 1,
+    Pulse = 2,
 }
 impl SliceView for TriggerPolarity {}
 

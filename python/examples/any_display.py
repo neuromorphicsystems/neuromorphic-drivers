@@ -6,13 +6,16 @@ import numpy as np
 import ui
 
 
-def camera_thread_target(device, event_display: ui.EventDisplay):
+def camera_thread_target(
+    device: nd.GenericDeviceOptional,
+    event_display: ui.EventDisplay,
+):
     for status, packet in device:
         if packet is not None:
-            if "dvs_events" in packet:
+            if packet.polarity_events is not None:
                 assert status.ring is not None and status.ring.current_t is not None
                 event_display.push(
-                    events=packet["dvs_events"], current_t=status.ring.current_t
+                    events=packet.polarity_events, current_t=status.ring.current_t
                 )
             elif status.ring is not None and status.ring.current_t is not None:
                 event_display.push(events=np.array([]), current_t=status.ring.current_t)

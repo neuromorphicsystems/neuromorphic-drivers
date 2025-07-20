@@ -37,7 +37,7 @@ fn convert() {
                 std::slice::from_raw_parts(
                     events.as_ptr() as *const u8,
                     events.len()
-                        * core::mem::size_of::<neuromorphic_types::DvsEvent<u64, u16, u16>>(),
+                        * core::mem::size_of::<neuromorphic_types::PolarityEvent<u64, u16, u16>>(),
                 )
             })
             .unwrap();
@@ -58,7 +58,7 @@ fn convert() {
                 std::slice::from_raw_parts(
                     events.as_ptr() as *const u8,
                     events.len()
-                        * core::mem::size_of::<neuromorphic_types::DvsEvent<u64, u16, u16>>(),
+                        * core::mem::size_of::<neuromorphic_types::PolarityEvent<u64, u16, u16>>(),
                 )
             })
             .unwrap();

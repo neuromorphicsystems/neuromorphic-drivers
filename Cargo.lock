@@ -202,7 +202,7 @@ dependencies = [
  "bincode",
  "libc",
  "libusb1-sys",
- "neuromorphic-types 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "neuromorphic-types",
  "paste",
  "rusb",
  "serde",
@@ -212,12 +212,6 @@ dependencies = [
 [[package]]
 name = "neuromorphic-types"
 version = "0.5.0"
-
-[[package]]
-name = "neuromorphic-types"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9aa7a12e89a20c62414532ebd85b6466451fcad3d969414610efcca557c12bd5"
 
 [[package]]
 name = "num-complex"

@@ -408,7 +408,7 @@ fn generate_dataclasses<Writer: std::io::Write, Structure>(
 }
 
 macro_rules! generate {
-    ($($module:ident),+) => {
+    ($(($module:ident, $packet:ident)),+) => {
         let python_generated_directory = std::path::Path::new("python/neuromorphic_drivers/generated");
         let _ = std::fs::remove_dir_all(python_generated_directory);
         std::fs::create_dir(python_generated_directory).unwrap();
@@ -469,9 +469,10 @@ macro_rules! generate {
                     "\n",
                     "import numpy\n",
                     "\n",
+                    "from .. import enums\n",
+                    "from ... import packet\n",
                     "from ... import serde\n",
-                    "from ... import status\n",
-                    "from .. import enums",
+                    "from ... import status",
                 )).unwrap();
                 generate_dataclasses(
                     &mut writer,
@@ -513,7 +514,7 @@ macro_rules! generate {
                     },
                 );
                 for (class_name_suffix, iter_data_left_prefix, iter_data_right) in [
-                    ("Device",  "status.", "dict[str, numpy.ndarray[typing.Any, numpy.dtype[numpy.void]]]"),
+                    ("Device",  "status.", concat!("packet.", stringify!($packet))),
                     ("DeviceRaw",  "status.Raw", "bytes"),
                 ] {
                     for (class_suffix, iter_data_left, iter_data_right_prefix, iter_data_right_suffix) in [
@@ -680,6 +681,7 @@ macro_rules! generate {
                     "import numpy\n",
                     "\n",
                     "from .. import device\n",
+                    "from .. import packet\n",
                     "from .. import status",
                 ),
             ).unwrap();
@@ -694,7 +696,7 @@ macro_rules! generate {
                 ),
             ).unwrap();
             for (class_name, iter_data_left_prefix, iter_data_right) in [
-                ("GenericDevice", "status.", "dict[str, numpy.ndarray[typing.Any, numpy.dtype[numpy.void]]]"),
+                ("GenericDevice", "status.", "typing.Union[packet.Davis346Packet, packet.Evt3Packet]"),
                 ("GenericDeviceRaw", "status.Raw", "bytes"),
             ] {
                 for (class_suffix, iter_data_left, iter_data_right_prefix, iter_data_right_suffix) in [
@@ -878,5 +880,9 @@ fn main() {
             println!("cargo:rustc-link-search={}", path);
         }
     }
-    generate!(inivation_davis346, prophesee_evk3_hd, prophesee_evk4);
+    generate!(
+        (inivation_davis346, Davis346Packet),
+        (prophesee_evk3_hd, Evt3Packet),
+        (prophesee_evk4, Evt3Packet)
+    );
 }

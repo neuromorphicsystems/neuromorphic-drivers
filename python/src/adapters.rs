@@ -1,4 +1,5 @@
 use pyo3::prelude::*;
+use pyo3::types::PyListMethods;
 
 use neuromorphic_drivers::types::SliceView;
 use numpy::IntoPyArray;
@@ -27,6 +28,28 @@ pub struct Frame {
     pixels: PyObject,
 }
 
+#[pyclass]
+pub struct Davis346Packet {
+    #[pyo3(get)]
+    polarity_events: Option<PyObject>,
+    #[pyo3(get)]
+    polarity_events_overflow_indices: Option<PyObject>,
+    #[pyo3(get)]
+    frames: pyo3::Py<pyo3::types::PyList>,
+}
+
+#[pyclass]
+pub struct Evt3Packet {
+    #[pyo3(get)]
+    polarity_events: Option<PyObject>,
+    #[pyo3(get)]
+    polarity_events_overflow_indices: Option<PyObject>,
+    #[pyo3(get)]
+    trigger_events: Option<PyObject>,
+    #[pyo3(get)]
+    trigger_events_overflow_indices: Option<PyObject>,
+}
+
 #[pymethods]
 impl Frame {
     fn __repr__(&self) -> String {
@@ -49,19 +72,19 @@ impl Frame {
 pub enum Adapter {
     Davis346 {
         inner: neuromorphic_drivers_rs::adapters::davis346::Adapter,
-        dvs_events: Vec<u8>,
+        polarity_events: Vec<u8>,
         //imu_events: Vec<u8>,
         //trigger_events: Vec<u8>,
         frames: Vec<InternalFrame>,
-        dvs_events_overflow_indices: Vec<usize>,
+        polarity_events_overflow_indices: Vec<usize>,
+        //imu_events_overflow_indices: Vec<usize>,
         //trigger_events_overflow_indices: Vec<usize>,
-        frame_write_index: usize, // @DEV
     },
     Evt3 {
         inner: neuromorphic_drivers_rs::adapters::evt3::Adapter,
-        dvs_events: Vec<u8>,
+        polarity_events: Vec<u8>,
         trigger_events: Vec<u8>,
-        dvs_events_overflow_indices: Vec<usize>,
+        polarity_events_overflow_indices: Vec<usize>,
         trigger_events_overflow_indices: Vec<usize>,
     },
 }
@@ -76,7 +99,7 @@ impl Adapter {
 
     pub fn consume(&mut self, slice: &[u8]) {
         match self {
-            Adapter::Davis346 { inner, .. } => {} // @TODO
+            Adapter::Davis346 { inner, .. } => inner.convert(slice, |_| {}, |_| {}, |_| {}, |_| {}),
             Adapter::Evt3 { inner, .. } => inner.convert(slice, |_| {}, |_| {}),
         }
     }
@@ -85,21 +108,20 @@ impl Adapter {
         match self {
             Adapter::Davis346 {
                 inner,
-                dvs_events,
+                polarity_events,
                 frames,
-                dvs_events_overflow_indices,
-                ref mut frame_write_index, // @DEV
+                polarity_events_overflow_indices,
             } => {
                 if first_after_overflow {
-                    dvs_events_overflow_indices
-                        .push(dvs_events.len() / structured_array::DVS_EVENTS_DTYPE.size());
+                    polarity_events_overflow_indices
+                        .push(polarity_events.len() / structured_array::DVS_EVENTS_DTYPE.size());
                 }
                 let events_lengths = inner.events_lengths(slice);
-                dvs_events.reserve_exact(events_lengths.on + events_lengths.off);
+                polarity_events.reserve_exact(events_lengths.on + events_lengths.off);
                 inner.convert(
                     slice,
-                    |dvs_event| {
-                        dvs_events.extend_from_slice(dvs_event.as_bytes());
+                    |polarity_event| {
+                        polarity_events.extend_from_slice(polarity_event.as_bytes());
                     },
                     |imu_event| {},
                     |trigger_event| {},
@@ -121,25 +143,26 @@ impl Adapter {
             }
             Adapter::Evt3 {
                 inner,
-                dvs_events,
+                polarity_events,
                 trigger_events,
-                dvs_events_overflow_indices,
+                polarity_events_overflow_indices,
                 trigger_events_overflow_indices,
             } => {
                 if first_after_overflow {
-                    dvs_events_overflow_indices
-                        .push(dvs_events.len() / structured_array::DVS_EVENTS_DTYPE.size());
-                    trigger_events_overflow_indices
-                        .push(dvs_events.len() / structured_array::TRIGGER_EVENTS_DTYPE.size());
+                    polarity_events_overflow_indices
+                        .push(polarity_events.len() / structured_array::DVS_EVENTS_DTYPE.size());
+                    trigger_events_overflow_indices.push(
+                        polarity_events.len() / structured_array::TRIGGER_EVENTS_DTYPE.size(),
+                    );
                 }
                 let events_lengths = inner.events_lengths(slice);
-                dvs_events.reserve_exact(events_lengths.on + events_lengths.off);
+                polarity_events.reserve_exact(events_lengths.on + events_lengths.off);
                 trigger_events
                     .reserve_exact(events_lengths.trigger_rising + events_lengths.trigger_falling);
                 inner.convert(
                     slice,
-                    |dvs_event| {
-                        dvs_events.extend_from_slice(dvs_event.as_bytes());
+                    |polarity_event| {
+                        polarity_events.extend_from_slice(polarity_event.as_bytes());
                     },
                     |trigger_event| {
                         trigger_events.extend_from_slice(trigger_event.as_bytes());
@@ -149,116 +172,116 @@ impl Adapter {
         }
     }
 
-    pub fn take_into_dict(&mut self, python: pyo3::Python) -> pyo3::PyResult<pyo3::PyObject> {
+    pub fn take_into_packet(&mut self, python: pyo3::Python) -> pyo3::PyResult<pyo3::PyObject> {
         match self {
             Adapter::Davis346 {
                 inner: _,
-                dvs_events,
+                polarity_events,
                 frames,
-                dvs_events_overflow_indices,
-                frame_write_index, // @DEV
+                polarity_events_overflow_indices,
             } => {
-                let dict = pyo3::types::PyDict::new(python);
-                if !dvs_events.is_empty() {
-                    let dvs_events_array = {
-                        let mut taken_dvs_events = Vec::new();
-                        std::mem::swap(dvs_events, &mut taken_dvs_events);
-                        taken_dvs_events.into_pyarray(python)
+                let mut packet_polarity_events = None;
+                let mut packet_polarity_events_overflow_indices = None;
+                let packet_frames = pyo3::types::PyList::empty(python);
+                if !polarity_events.is_empty() {
+                    let polarity_events_array = {
+                        let mut taken_polarity_events = Vec::new();
+                        std::mem::swap(polarity_events, &mut taken_polarity_events);
+                        taken_polarity_events.into_pyarray(python)
                     };
                     let description =
                         structured_array::DVS_EVENTS_DTYPE.as_array_description(python);
                     use numpy::prelude::PyUntypedArrayMethods;
                     {
-                        let dvs_events_array_pointer = dvs_events_array.as_array_ptr();
+                        let polarity_events_array_pointer = polarity_events_array.as_array_ptr();
                         unsafe {
-                            *(*dvs_events_array_pointer).dimensions /=
+                            *(*polarity_events_array_pointer).dimensions /=
                                 structured_array::DVS_EVENTS_DTYPE.size() as isize;
-                            *(*dvs_events_array_pointer).strides =
+                            *(*polarity_events_array_pointer).strides =
                                 structured_array::DVS_EVENTS_DTYPE.size() as isize;
-                            let previous_description = (*dvs_events_array_pointer).descr;
-                            (*dvs_events_array_pointer).descr = description;
+                            let previous_description = (*polarity_events_array_pointer).descr;
+                            (*polarity_events_array_pointer).descr = description;
                             pyo3::ffi::Py_DECREF(previous_description as *mut pyo3::ffi::PyObject);
                         }
                     }
-                    dict.set_item("dvs_events", dvs_events_array)?;
-                    if !dvs_events_overflow_indices.is_empty() {
-                        let dvs_events_overflow_indices_array = {
-                            let mut taken_dvs_events_overflow_indices = Vec::new();
+                    packet_polarity_events = Some(polarity_events_array.unbind().into_any());
+                    if !polarity_events_overflow_indices.is_empty() {
+                        let polarity_events_overflow_indices_array = {
+                            let mut taken_polarity_events_overflow_indices = Vec::new();
                             std::mem::swap(
-                                dvs_events_overflow_indices,
-                                &mut taken_dvs_events_overflow_indices,
+                                polarity_events_overflow_indices,
+                                &mut taken_polarity_events_overflow_indices,
                             );
-                            taken_dvs_events_overflow_indices.into_pyarray(python)
+                            taken_polarity_events_overflow_indices.into_pyarray(python)
                         };
-                        dict.set_item(
-                            "dvs_events_overflow_indices",
-                            dvs_events_overflow_indices_array,
-                        )?;
+                        packet_polarity_events_overflow_indices =
+                            Some(polarity_events_overflow_indices_array.unbind().into_any());
                     }
                 }
-                if !frames.is_empty() {
-                    let frames_array = {
-                        let mut taken_frames = Vec::new();
-                        std::mem::swap(frames, &mut taken_frames);
-                        taken_frames
-                            .into_iter()
-                            .map(|frame| Frame {
-                                start_t: frame.start_t,
-                                exposure_start_t: frame.exposure_start_t,
-                                exposure_end_t: frame.exposure_end_t,
-                                t: frame.t,
-                                pixels: frame.pixels.into_pyarray(python).into(),
-                            })
-                            .collect::<Vec<Frame>>()
-                            .into_pyobject(python)?
-                    };
-                    dict.set_item("frames", frames_array)?;
+                for frame in frames.iter() {
+                    packet_frames.append(Frame {
+                        start_t: frame.start_t,
+                        exposure_start_t: frame.exposure_start_t,
+                        exposure_end_t: frame.exposure_end_t,
+                        t: frame.t,
+                        pixels: frame.pixels.clone().into_pyarray(python).into(),
+                    })?;
                 }
-                Ok(dict.into())
+                frames.clear();
+                Davis346Packet {
+                    polarity_events: packet_polarity_events,
+                    polarity_events_overflow_indices: packet_polarity_events_overflow_indices,
+                    frames: packet_frames.unbind(),
+                }
+                .into_pyobject(python)
+                .map(|object| object.unbind().into_any())
             }
             Adapter::Evt3 {
                 inner: _,
-                dvs_events,
+                polarity_events,
                 trigger_events,
-                dvs_events_overflow_indices,
+                polarity_events_overflow_indices,
                 trigger_events_overflow_indices,
             } => {
-                let dict = pyo3::types::PyDict::new(python);
-                if !dvs_events.is_empty() {
-                    let dvs_events_array = {
-                        let mut taken_dvs_events = Vec::new();
-                        std::mem::swap(dvs_events, &mut taken_dvs_events);
-                        taken_dvs_events.into_pyarray(python)
+                let mut packet = Evt3Packet {
+                    polarity_events: None,
+                    polarity_events_overflow_indices: None,
+                    trigger_events: None,
+                    trigger_events_overflow_indices: None,
+                };
+                if !polarity_events.is_empty() {
+                    let polarity_events_array = {
+                        let mut taken_polarity_events = Vec::new();
+                        std::mem::swap(polarity_events, &mut taken_polarity_events);
+                        taken_polarity_events.into_pyarray(python)
                     };
                     let description =
                         structured_array::DVS_EVENTS_DTYPE.as_array_description(python);
                     use numpy::prelude::PyUntypedArrayMethods;
                     {
-                        let dvs_events_array_pointer = dvs_events_array.as_array_ptr();
+                        let polarity_events_array_pointer = polarity_events_array.as_array_ptr();
                         unsafe {
-                            *(*dvs_events_array_pointer).dimensions /=
+                            *(*polarity_events_array_pointer).dimensions /=
                                 structured_array::DVS_EVENTS_DTYPE.size() as isize;
-                            *(*dvs_events_array_pointer).strides =
+                            *(*polarity_events_array_pointer).strides =
                                 structured_array::DVS_EVENTS_DTYPE.size() as isize;
-                            let previous_description = (*dvs_events_array_pointer).descr;
-                            (*dvs_events_array_pointer).descr = description;
+                            let previous_description = (*polarity_events_array_pointer).descr;
+                            (*polarity_events_array_pointer).descr = description;
                             pyo3::ffi::Py_DECREF(previous_description as *mut pyo3::ffi::PyObject);
                         }
                     }
-                    dict.set_item("dvs_events", dvs_events_array)?;
-                    if !dvs_events_overflow_indices.is_empty() {
-                        let dvs_events_overflow_indices_array = {
-                            let mut taken_dvs_events_overflow_indices = Vec::new();
+                    packet.polarity_events = Some(polarity_events_array.unbind().into_any());
+                    if !polarity_events_overflow_indices.is_empty() {
+                        let polarity_events_overflow_indices_array = {
+                            let mut taken_polarity_events_overflow_indices = Vec::new();
                             std::mem::swap(
-                                dvs_events_overflow_indices,
-                                &mut taken_dvs_events_overflow_indices,
+                                polarity_events_overflow_indices,
+                                &mut taken_polarity_events_overflow_indices,
                             );
-                            taken_dvs_events_overflow_indices.into_pyarray(python)
+                            taken_polarity_events_overflow_indices.into_pyarray(python)
                         };
-                        dict.set_item(
-                            "dvs_events_overflow_indices",
-                            dvs_events_overflow_indices_array,
-                        )?;
+                        packet.polarity_events_overflow_indices =
+                            Some(polarity_events_overflow_indices_array.unbind().into_any());
                     }
                 }
                 if !trigger_events.is_empty() {
@@ -282,8 +305,7 @@ impl Adapter {
                             pyo3::ffi::Py_DECREF(previous_description as *mut pyo3::ffi::PyObject);
                         }
                     }
-
-                    dict.set_item("trigger_events", trigger_events_array)?;
+                    packet.trigger_events = Some(trigger_events_array.unbind().into_any());
                     if !trigger_events_overflow_indices.is_empty() {
                         let trigger_events_overflow_indices_array = {
                             let mut taken_trigger_events_overflow_indices = Vec::new();
@@ -293,13 +315,13 @@ impl Adapter {
                             );
                             taken_trigger_events_overflow_indices.into_pyarray(python)
                         };
-                        dict.set_item(
-                            "trigger_events_overflow_indices",
-                            trigger_events_overflow_indices_array,
-                        )?;
+                        packet.trigger_events_overflow_indices =
+                            Some(trigger_events_overflow_indices_array.unbind().into_any());
                     }
                 }
-                Ok(dict.into())
+                packet
+                    .into_pyobject(python)
+                    .map(|object| object.unbind().into_any())
             }
         }
     }
@@ -310,16 +332,15 @@ impl From<neuromorphic_drivers::Adapter> for Adapter {
         match adapter {
             neuromorphic_drivers_rs::Adapter::Davis346(inner) => Adapter::Davis346 {
                 inner,
-                dvs_events: Vec::new(),
+                polarity_events: Vec::new(),
                 frames: Vec::new(),
-                dvs_events_overflow_indices: Vec::new(),
-                frame_write_index: 0, // @DEV
+                polarity_events_overflow_indices: Vec::new(),
             },
             neuromorphic_drivers::Adapter::Evt3(inner) => Adapter::Evt3 {
                 inner,
-                dvs_events: Vec::new(),
+                polarity_events: Vec::new(),
                 trigger_events: Vec::new(),
-                dvs_events_overflow_indices: Vec::new(),
+                polarity_events_overflow_indices: Vec::new(),
                 trigger_events_overflow_indices: Vec::new(),
             },
         }
