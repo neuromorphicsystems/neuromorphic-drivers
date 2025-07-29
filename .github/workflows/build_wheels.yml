@@ -47,7 +47,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}
-          path: python/wheelhouse
+          path: wheelhouse
   test_library:
     name: Test library on ${{ matrix.os }} with Python ${{ matrix.python }} and numpy ${{ matrix.numpy }}
     runs-on: ${{ matrix.os }}
