@@ -25,9 +25,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.27"
+version = "1.2.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d487aa071b5f64da6f19a3e848e3578944b726ee5a4854b82172f02aa876bfdc"
+checksum = "deec109607ca693028562ed836a5f1c4b8bd77755c4e132fc5ce11b0b6211ae7"
 dependencies = [
  "shlex",
 ]
@@ -117,9 +117,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.9.0"
+version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cea70ddb795996207ad57735b50c5982d8844f38ba9ee5f1aedcfb708a2aa11e"
+checksum = "fe4cd85333e22411419a0bcae1297d25e58c9443848b11dc6a86fefe8c78a661"
 dependencies = [
  "equivalent",
  "hashbrown",
@@ -202,7 +202,23 @@ dependencies = [
  "bincode",
  "libc",
  "libusb1-sys",
- "neuromorphic-types",
+ "neuromorphic-types 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "paste",
+ "rusb",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "neuromorphic-drivers"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "078191073482d56cfaba100dab0fc3d87bc96000264faeecb7c4e4f5a9fa9f42"
+dependencies = [
+ "bincode",
+ "libc",
+ "libusb1-sys",
+ "neuromorphic-types 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "paste",
  "rusb",
  "serde",
@@ -212,6 +228,12 @@ dependencies = [
 [[package]]
 name = "neuromorphic-types"
 version = "0.6.0"
+
+[[package]]
+name = "neuromorphic-types"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ba7c9f18cdc800a16d47977472c5c75e96965eef57dbf39d37e937f390d6fef"
 
 [[package]]
 name = "num-complex"
@@ -424,7 +446,7 @@ name = "python"
 version = "0.0.0"
 dependencies = [
  "cc",
- "neuromorphic-drivers",
+ "neuromorphic-drivers 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "numpy",
  "paste",
  "pyo3",
@@ -561,9 +583,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.140"
+version = "1.0.141"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20068b6e96dc6c9bd23e01df8827e6c7e1f2fddd43c21810382803c136b99373"
+checksum = "30b9eff21ebe718216c6ec64e1d9ac57087aad11efc64e32002bce4a0d4c03d3"
 dependencies = [
  "itoa",
  "memchr",
@@ -741,9 +763,9 @@ checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
 name = "winnow"
-version = "0.7.11"
+version = "0.7.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74c7b26e3480b707944fc872477815d29a8e429d2f93a1ce000f5fa84a15cbcd"
+checksum = "f3edebf492c8125044983378ecb5766203ad3b4c2f7a922bd7dd207f6d443e95"
 dependencies = [
  "memchr",
 ]

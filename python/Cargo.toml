@@ -8,7 +8,7 @@ name = "neuromorphic_drivers"
 crate-type = ["cdylib"]
 
 [dependencies]
-neuromorphic-drivers = {path = "../drivers"}
+neuromorphic-drivers = "0.15.0"
 numpy = "0.25.0"
 paste = "1.0"
 pyo3 = {version = "0.25.1", features = ["extension-module"]}
