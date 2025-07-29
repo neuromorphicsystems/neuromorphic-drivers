@@ -7,6 +7,37 @@ use crate::usb;
 
 use device::Usb;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ApsOrientation {
+    invert_xy: bool,
+    flip_x: bool,
+    flip_y: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ImuOrientation {
+    flip_x: bool,
+    flip_y: bool,
+    flip_z: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImuType {
+    None,
+    InvenSense6050Or6150,
+    InvenSense9250,
+}
+
+impl ImuType {
+    pub fn temperature_celsius(&self, value: i16) -> f32 {
+        match self {
+            ImuType::None => value as f32,
+            ImuType::InvenSense6050Or6150 => (value as f32 / 340.0) + 35.0,
+            ImuType::InvenSense9250 => (value as f32 / 333.87) + 21.0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct Biases {
     localbufbn: u16,    // in [0, 2040]
@@ -75,6 +106,10 @@ pub struct Device {
     configuration_updater: configuration::Updater<Configuration>,
     vendor_and_product_id: (u16, u16),
     serial: String,
+    dvs_invert_xy: bool,
+    aps_orientation: ApsOrientation,
+    imu_orientation: ImuOrientation,
+    imu_type: ImuType,
 }
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -91,24 +126,21 @@ pub enum Error {
     #[error("Logic patch not supported (the software expects version 1, the camera uses {0})")]
     LogicPatch(u32),
 
-    #[error("Short SPI read to {module_address:#04X}:{parameter_address:#04X} (expected {expected} bytes, read {read} bytes)")]
+    #[error("Short SPI read to {module_address:#04X}:{parameter_address:#04X} (expected {expected} bytes, read {count} bytes)")]
     ShortRead {
         module_address: u16,
         parameter_address: u16,
         expected: usize,
-        read: usize,
+        count: usize,
     },
 
-    #[error("Short SPI write to {module_address:#04X}:{parameter_address:#04X} (expected {expected} bytes, wrote {wrote} bytes)")]
+    #[error("Short SPI write to {module_address:#04X}:{parameter_address:#04X} (expected {expected} bytes, wrote {count} bytes)")]
     ShortWrite {
         module_address: u16,
         parameter_address: u16,
         expected: usize,
-        wrote: usize,
+        count: usize,
     },
-
-    #[error("{0} is not implemented for the DAVIS 346")]
-    NotImplemented(String),
 }
 
 impl From<rusb::Error> for Error {
@@ -278,51 +310,46 @@ impl device::Usb for Device {
         let has_skip_filter = DVS_HAS_SKIP_FILTER.get(&handle)? == 1;
         let has_polarity_filter = DVS_HAS_POLARITY_FILTER.get(&handle)? == 1;
         let has_global_shutter = APS_HAS_GLOBAL_SHUTTER.get(&handle)? == 1;
-
-        // @DEV {
-        println!("DVS_SIZE_COLUMNS={}", DVS_SIZE_COLUMNS.get(&handle)?);
-        println!("DVS_SIZE_ROWS={}", DVS_SIZE_ROWS.get(&handle)?);
-        println!("DVS_ORIENTATION={}", DVS_ORIENTATION.get(&handle)?);
-        println!(
-            "DVS_HAS_PIXEL_FILTER={}",
-            DVS_HAS_PIXEL_FILTER.get(&handle)?
-        );
-        println!(
-            "DVS_HAS_BACKGROUND_ACTIVITY_FILTER={}",
-            DVS_HAS_BACKGROUND_ACTIVITY_FILTER.get(&handle)?
-        );
-        println!("DVS_HAS_ROI_FILTER={}", DVS_HAS_ROI_FILTER.get(&handle)?);
-        println!("DVS_HAS_SKIP_FILTER={}", DVS_HAS_SKIP_FILTER.get(&handle)?);
-        println!(
-            "DVS_HAS_POLARITY_FILTER={}",
-            DVS_HAS_POLARITY_FILTER.get(&handle)?
-        );
-        println!("APS_SIZE_COLUMNS={}", APS_SIZE_COLUMNS.get(&handle)?);
-        println!("APS_SIZE_ROWS={}", APS_SIZE_ROWS.get(&handle)?);
-        println!("APS_ORIENTATION={}", APS_ORIENTATION.get(&handle)?);
-        println!(
-            "APS_HAS_GLOBAL_SHUTTER={}",
-            APS_HAS_GLOBAL_SHUTTER.get(&handle)?
-        );
-        println!("IMU_TYPE={}", IMU_TYPE.get(&handle)?);
-        println!("IMU_ORIENTATION={}", IMU_ORIENTATION.get(&handle)?);
-        println!("LOGIC_CLOCK={}", LOGIC_CLOCK.get(&handle)?);
-        println!("ADC_CLOCK={}", ADC_CLOCK.get(&handle)?);
-        println!("USB_CLOCK={}", USB_CLOCK.get(&handle)?);
-        println!("CLOCK_DEVIATION={}", CLOCK_DEVIATION.get(&handle)?);
-        // }
-
-        // reset + start sequence
+        let dvs_invert_xy = ((DVS_ORIENTATION.get(&handle)? >> 2) & 1) == 1;
+        let aps_orientation = {
+            let aps_orientation = APS_ORIENTATION.get(&handle)?;
+            ApsOrientation {
+                invert_xy: ((aps_orientation >> 2) & 1) == 1,
+                flip_x: ((aps_orientation >> 1) & 1) == 1,
+                flip_y: (aps_orientation & 1) == 1,
+            }
+        };
+        let imu_orientation = {
+            let imu_orientation = IMU_ORIENTATION.get(&handle)?;
+            ImuOrientation {
+                flip_x: ((imu_orientation >> 2) & 1) == 1,
+                flip_y: ((imu_orientation >> 1) & 1) == 1,
+                flip_z: (imu_orientation & 1) == 1,
+            }
+        };
+        let imu_type = match IMU_TYPE.get(&handle)? {
+            1 => ImuType::InvenSense6050Or6150,
+            2 => ImuType::InvenSense9250,
+            _ => ImuType::None,
+        };
         DVS_RUN.set(&handle, 0)?;
         APS_RUN.set(&handle, 0)?;
         IMU_ACCELEROMETER_RUN.set(&handle, 0)?;
         IMU_GYROSCOPE_RUN.set(&handle, 0)?;
         IMU_TEMPERATURE_RUN.set(&handle, 0)?;
         EXTERNAL_INPUT_DETECTOR_RUN.set(&handle, 0)?;
+        EXTERNAL_INPUT_RUN_GENERATOR.set(&handle, 0)?;
         MULTIPLEXER_RUN.set(&handle, 0)?;
         MULTIPLEXER_TIMESTAMP_RUN.set(&handle, 0)?;
         USB_RUN.set(&handle, 0)?;
         MULTIPLEXER_CHIP_RUN.set(&handle, 0)?;
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        handle.clear_halt(0x82)?;
+        CHIP_BIAS_APSOVERFLOWLEVEL.set(&handle, 27 | (6 << 6))?;
+        CHIP_BIAS_APSCAS.set(&handle, 21 | (6 << 6))?;
+        CHIP_BIAS_ADCREFHIGH.set(&handle, 32 | (7 << 6))?;
+        CHIP_BIAS_ADCREFLOW.set(&handle, 1 | (7 << 6))?;
+        CHIP_BIAS_ADCTESTVOLTAGE.set(&handle, 21 | (7 << 6))?;
 
         update_configuration(
             &handle,
@@ -333,11 +360,59 @@ impl device::Usb for Device {
             has_roi_filter,
             has_skip_filter,
             has_polarity_filter,
-            has_global_shutter,
-            logic_clock,
             adc_clock,
-            usb_clock,
         )?;
+
+        CHIP_BIAS_SSP.set(&handle, (1 << 4) | (33 << 10))?;
+        CHIP_BIAS_SSN.set(&handle, (1 << 4) | (33 << 10))?;
+        CHIP_DIGITALMUX0.set(&handle, 0)?;
+        CHIP_DIGITALMUX1.set(&handle, 0)?;
+        CHIP_DIGITALMUX2.set(&handle, 0)?;
+        CHIP_DIGITALMUX3.set(&handle, 0)?;
+        CHIP_ANALOGMUX0.set(&handle, 0)?;
+        CHIP_ANALOGMUX1.set(&handle, 0)?;
+        CHIP_ANALOGMUX2.set(&handle, 0)?;
+        CHIP_BIASMUX0.set(&handle, 0)?;
+        CHIP_RESETCALIBNEURON.set(&handle, 1)?;
+        CHIP_TYPENCALIBNEURON.set(&handle, 0)?;
+        CHIP_RESETTESTPIXEL.set(&handle, 1)?;
+        CHIP_AERNAROW.set(&handle, 0)?;
+        CHIP_USEAOUT.set(&handle, 0)?;
+        CHIP_SELECTGRAYCOUNTER.set(&handle, 1)?;
+        CHIP_TESTADC.set(&handle, 0)?;
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        MULTIPLEXER_CHIP_RUN.set(&handle, 1)?;
+        USB_EARLY_PACKET_DELAY.set(&handle, (1000.0 * usb_clock).round() as u32)?;
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        USB_RUN.set(&handle, 1)?;
+        MULTIPLEXER_DROP_DVS_ON_STALL.set(&handle, 1)?;
+        MULTIPLEXER_DROP_EXTERNAL_INPUT_ON_STALL.set(&handle, 1)?;
+        MULTIPLEXER_TIMESTAMP_RUN.set(&handle, 1)?;
+        MULTIPLEXER_RUN.set(&handle, 1)?;
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        DVS_WAIT_ON_STALL.set(&handle, 0)?;
+        DVS_EXTERNAL_AER_CONTROL.set(&handle, 0)?;
+        DVS_RUN.set(&handle, 1)?;
+        APS_WAIT_ON_STALL.set(&handle, 1)?;
+        APS_GLOBAL_SHUTTER.set(&handle, has_global_shutter as u32)?;
+        CHIP_GLOBAL_SHUTTER.set(&handle, has_global_shutter as u32)?;
+        APS_RUN.set(&handle, 1)?;
+        IMU_SAMPLE_RATE_DIVIDER.set(&handle, 0)?;
+        IMU_ACCELEROMETER_DIGITAL_LOW_PASS_FILTER.set(&handle, 1)?;
+        IMU_ACCELEROMETER_FULL_SCALE.set(&handle, 1)?;
+        if matches!(imu_type, ImuType::InvenSense9250) {
+            IMU_GYROSCOPE_DIGITAL_LOW_PASS_FILTER.set(&handle, 1)?;
+        }
+        IMU_GYROSCOPE_FULL_SCALE.set(&handle, 1)?;
+        IMU_ACCELEROMETER_RUN.set(&handle, 1)?;
+        IMU_GYROSCOPE_RUN.set(&handle, 1)?;
+        IMU_TEMPERATURE_RUN.set(&handle, 1)?;
+        EXTERNAL_INPUT_DETECT_RISING_EDGES.set(&handle, 0)?;
+        EXTERNAL_INPUT_DETECT_FALLING_EDGES.set(&handle, 0)?;
+        EXTERNAL_INPUT_DETECT_PULSES.set(&handle, 1)?;
+        EXTERNAL_INPUT_DETECT_PULSE_POLARITY.set(&handle, 1)?;
+        EXTERNAL_INPUT_DETECT_PULSE_LENGTH.set(&handle, (10.0 * logic_clock).round() as u32)?;
+        EXTERNAL_INPUT_DETECTOR_RUN.set(&handle, 0)?;
 
         let handle = std::sync::Arc::new(handle);
         let error_flag = flag.clone();
@@ -369,10 +444,7 @@ impl device::Usb for Device {
                     has_roi_filter,
                     has_skip_filter,
                     has_polarity_filter,
-                    has_global_shutter,
-                    logic_clock,
                     adc_clock,
-                    usb_clock,
                 },
                 |context, previous_configuration, configuration| {
                     let result = {
@@ -385,10 +457,7 @@ impl device::Usb for Device {
                             context.has_roi_filter,
                             context.has_skip_filter,
                             context.has_polarity_filter,
-                            context.has_global_shutter,
-                            context.logic_clock,
                             context.adc_clock,
-                            context.usb_clock,
                         )
                     };
                     if let Err(error) = result {
@@ -399,6 +468,10 @@ impl device::Usb for Device {
             ),
             vendor_and_product_id,
             serial,
+            dvs_invert_xy,
+            aps_orientation,
+            imu_orientation,
+            imu_type,
         })
     }
 
@@ -439,11 +512,30 @@ impl device::Usb for Device {
     }
 
     fn create_adapter(&self) -> Self::Adapter {
-        Self::Adapter::new()
+        Self::Adapter::new(
+            self.dvs_invert_xy,
+            self.aps_orientation,
+            self.imu_orientation,
+            self.imu_type,
+        )
+    }
+}
+
+impl Device {
+    pub fn dvs_invert_xy(&self) -> bool {
+        self.dvs_invert_xy
     }
 
-    fn temperature_celsius(&self) -> Result<device::TemperatureCelsius, Self::Error> {
-        Err(Error::NotImplemented("temperature_celsius".to_owned()))
+    pub fn aps_orientation(&self) -> ApsOrientation {
+        self.aps_orientation
+    }
+
+    pub fn imu_orientation(&self) -> ImuOrientation {
+        self.imu_orientation
+    }
+
+    pub fn imu_type(&self) -> ImuType {
+        self.imu_type
     }
 }
 
@@ -488,7 +580,6 @@ macro_rules! update_bias {
     };
 }
 
-// @TODO move non-parameters to the init function (and confirm that the change in order does not change the behaviour)
 fn update_configuration(
     handle: &rusb::DeviceHandle<rusb::Context>,
     previous_configuration: Option<&Configuration>,
@@ -498,20 +589,8 @@ fn update_configuration(
     has_roi_filter: bool,
     has_skip_filter: bool,
     has_polarity_filter: bool,
-    has_global_shutter: bool,
-    logic_clock: f64,
     adc_clock: f64,
-    usb_clock: f64,
 ) -> Result<(), Error> {
-    // voltage-current (VDAC) biases
-    if previous_configuration.is_none() {
-        CHIP_BIAS_APSOVERFLOWLEVEL.set(handle, 27 | (6 << 6))?;
-        CHIP_BIAS_APSCAS.set(handle, 21 | (6 << 6))?;
-        CHIP_BIAS_ADCREFHIGH.set(handle, 32 | (7 << 6))?;
-        CHIP_BIAS_ADCREFLOW.set(handle, 1 | (7 << 6))?;
-        CHIP_BIAS_ADCTESTVOLTAGE.set(handle, 21 | (7 << 6))?;
-    }
-
     // coarse / fine biases
     let previous_biases = previous_configuration.map(|configuration| &configuration.biases);
     update_bias!(
@@ -683,39 +762,6 @@ fn update_configuration(
         configuration.biases
     );
 
-    // shifted source biases and other init settings
-    if previous_configuration.is_none() {
-        CHIP_BIAS_SSP.set(handle, (1 << 4) | (33 << 10))?;
-        CHIP_BIAS_SSN.set(handle, (1 << 4) | (33 << 10))?;
-        CHIP_DIGITALMUX0.set(handle, 0)?;
-        CHIP_DIGITALMUX1.set(handle, 0)?;
-        CHIP_DIGITALMUX2.set(handle, 0)?;
-        CHIP_DIGITALMUX3.set(handle, 0)?;
-        CHIP_ANALOGMUX0.set(handle, 0)?;
-        CHIP_ANALOGMUX1.set(handle, 0)?;
-        CHIP_ANALOGMUX2.set(handle, 0)?;
-        CHIP_BIASMUX0.set(handle, 0)?;
-        CHIP_RESETCALIBNEURON.set(handle, 1)?;
-        CHIP_TYPENCALIBNEURON.set(handle, 0)?;
-        CHIP_RESETTESTPIXEL.set(handle, 1)?;
-        CHIP_AERNAROW.set(handle, 0)?;
-        CHIP_USEAOUT.set(handle, 0)?;
-        CHIP_SELECTGRAYCOUNTER.set(handle, 1)?;
-        CHIP_TESTADC.set(handle, 0)?;
-        std::thread::sleep(std::time::Duration::from_millis(10));
-        MULTIPLEXER_CHIP_RUN.set(&handle, 1)?;
-        USB_EARLY_PACKET_DELAY.set(handle, (1000.0 * usb_clock).round() as u32)?;
-        std::thread::sleep(std::time::Duration::from_millis(200));
-        USB_RUN.set(&handle, 1)?;
-        MULTIPLEXER_DROP_DVS_ON_STALL.set(&handle, 1)?;
-        MULTIPLEXER_DROP_EXTERNAL_INPUT_ON_STALL.set(&handle, 1)?;
-        MULTIPLEXER_TIMESTAMP_RUN.set(&handle, 1)?;
-        MULTIPLEXER_RUN.set(&handle, 1)?;
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        DVS_WAIT_ON_STALL.set(&handle, 0)?;
-        DVS_EXTERNAL_AER_CONTROL.set(&handle, 0)?;
-    }
-
     if has_pixel_filter {
         if match previous_configuration {
             Some(previous_configuration) => {
@@ -795,36 +841,36 @@ fn update_configuration(
     }
 
     if has_polarity_filter {
-        DVS_FILTER_POLARITY_FLATTEN.set(
-            handle,
-            match configuration.polarity_filter {
-                PolarityFilter::Flatten | PolarityFilter::MaskOffFlatten => 1,
-                _ => 0,
-            },
-        )?;
-        DVS_FILTER_POLARITY_SUPPRESS.set(
-            handle,
-            match configuration.polarity_filter {
-                PolarityFilter::MaskOn
-                | PolarityFilter::MaskOff
-                | PolarityFilter::MaskOffFlatten => 1,
-                _ => 0,
-            },
-        )?;
-        DVS_FILTER_POLARITY_SUPPRESS_TYPE.set(
-            handle,
-            match configuration.polarity_filter {
-                PolarityFilter::MaskOn => 1,
-                _ => 0,
-            },
-        )?;
-    }
-
-    if previous_configuration.is_none() {
-        DVS_RUN.set(&handle, 1)?;
-        APS_WAIT_ON_STALL.set(&handle, 1)?;
-        CHIP_GLOBAL_SHUTTER.set(&handle, has_global_shutter as u32)?;
-        APS_GLOBAL_SHUTTER.set(handle, has_global_shutter as u32)?;
+        if match previous_configuration {
+            Some(previous_configuration) => {
+                previous_configuration.polarity_filter != configuration.polarity_filter
+            }
+            None => true,
+        } {
+            DVS_FILTER_POLARITY_FLATTEN.set(
+                handle,
+                match configuration.polarity_filter {
+                    PolarityFilter::Flatten | PolarityFilter::MaskOffFlatten => 1,
+                    _ => 0,
+                },
+            )?;
+            DVS_FILTER_POLARITY_SUPPRESS.set(
+                handle,
+                match configuration.polarity_filter {
+                    PolarityFilter::MaskOn
+                    | PolarityFilter::MaskOff
+                    | PolarityFilter::MaskOffFlatten => 1,
+                    _ => 0,
+                },
+            )?;
+            DVS_FILTER_POLARITY_SUPPRESS_TYPE.set(
+                handle,
+                match configuration.polarity_filter {
+                    PolarityFilter::MaskOn => 1,
+                    _ => 0,
+                },
+            )?;
+        }
     }
 
     if has_roi_filter {
@@ -834,17 +880,34 @@ fn update_configuration(
             }
             None => true,
         } {
-            APS_START_COLUMN_0.set(handle, configuration.region_of_interest.left as u32)?;
-            APS_START_ROW_0.set(handle, configuration.region_of_interest.top as u32)?;
-            APS_END_COLUMN_0.set(
+            set_many(
                 handle,
-                (configuration.region_of_interest.left + configuration.region_of_interest.width - 1)
-                    .min(345) as u32,
-            )?;
-            APS_END_ROW_0.set(
-                handle,
-                (configuration.region_of_interest.top + configuration.region_of_interest.height - 1)
-                    .min(259) as u32,
+                &[
+                    (&APS_RUN, 0),
+                    (
+                        &APS_START_COLUMN_0,
+                        configuration.region_of_interest.left as u32,
+                    ),
+                    (
+                        &APS_START_ROW_0,
+                        configuration.region_of_interest.top as u32,
+                    ),
+                    (
+                        &APS_END_COLUMN_0,
+                        (configuration.region_of_interest.left
+                            + configuration.region_of_interest.width
+                            - 1)
+                        .min(345) as u32,
+                    ),
+                    (
+                        &APS_END_ROW_0,
+                        (configuration.region_of_interest.top
+                            + configuration.region_of_interest.height
+                            - 1)
+                        .min(259) as u32,
+                    ),
+                    (&APS_RUN, 0),
+                ],
             )?;
         }
     }
@@ -871,24 +934,6 @@ fn update_configuration(
             (configuration.frame_interval_us as f64 * adc_clock).round() as u32,
         )?;
     }
-
-    if previous_configuration.is_none() {
-        APS_RUN.set(&handle, 1)?;
-        IMU_SAMPLE_RATE_DIVIDER.set(handle, 0)?;
-        IMU_ACCELEROMETER_DIGITAL_LOW_PASS_FILTER.set(handle, 1)?;
-        IMU_ACCELEROMETER_FULL_SCALE.set(handle, 1)?;
-        IMU_GYROSCOPE_DIGITAL_LOW_PASS_FILTER.set(handle, 1)?;
-        IMU_GYROSCOPE_FULL_SCALE.set(handle, 1)?;
-        IMU_GYROSCOPE_RUN.set(&handle, 1)?;
-        IMU_TEMPERATURE_RUN.set(&handle, 1)?;
-        EXTERNAL_INPUT_DETECT_RISING_EDGES.set(handle, 0)?;
-        EXTERNAL_INPUT_DETECT_FALLING_EDGES.set(handle, 0)?;
-        EXTERNAL_INPUT_DETECT_PULSES.set(handle, 1)?;
-        EXTERNAL_INPUT_DETECT_PULSE_POLARITY.set(handle, 1)?;
-        EXTERNAL_INPUT_DETECT_PULSE_LENGTH.set(handle, (10.0 * logic_clock).round() as u32)?;
-        EXTERNAL_INPUT_DETECTOR_RUN.set(&handle, 0)?;
-    }
-
     Ok(())
 }
 
@@ -904,10 +949,7 @@ where
     has_roi_filter: bool,
     has_skip_filter: bool,
     has_polarity_filter: bool,
-    has_global_shutter: bool,
-    logic_clock: f64,
     adc_clock: f64,
-    usb_clock: f64,
 }
 
 struct SpiRegister {
@@ -933,14 +975,18 @@ const USB_MODULE_ADDRESS: u16 = 9;
 // multiplexer module registers
 const MULTIPLEXER_RUN: SpiRegister = SpiRegister::new(MULTIPLEXER_MODULE_ADDRESS, 0);
 const MULTIPLEXER_TIMESTAMP_RUN: SpiRegister = SpiRegister::new(MULTIPLEXER_MODULE_ADDRESS, 1);
+#[allow(dead_code)]
 const MULTIPLEXER_TIMESTAMP_RESET: SpiRegister = SpiRegister::new(MULTIPLEXER_MODULE_ADDRESS, 2);
 const MULTIPLEXER_CHIP_RUN: SpiRegister = SpiRegister::new(MULTIPLEXER_MODULE_ADDRESS, 3);
 const MULTIPLEXER_DROP_EXTERNAL_INPUT_ON_STALL: SpiRegister =
     SpiRegister::new(MULTIPLEXER_MODULE_ADDRESS, 4);
 const MULTIPLEXER_DROP_DVS_ON_STALL: SpiRegister = SpiRegister::new(MULTIPLEXER_MODULE_ADDRESS, 5);
+#[allow(dead_code)]
 const MULTIPLEXER_HAS_STATISTICS: SpiRegister = SpiRegister::new(MULTIPLEXER_MODULE_ADDRESS, 80);
+#[allow(dead_code)]
 const MULTIPLEXER_STATISTICS_EXTERNAL_INPUT_DROPPED: SpiRegister64 =
     SpiRegister64::new(MULTIPLEXER_MODULE_ADDRESS, 81);
+#[allow(dead_code)]
 const MULTIPLEXER_STATISTICS_DVS_DROPPED: SpiRegister64 =
     SpiRegister64::new(MULTIPLEXER_MODULE_ADDRESS, 83);
 
@@ -969,21 +1015,30 @@ const DVS_HAS_POLARITY_FILTER: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS
 const DVS_FILTER_POLARITY_FLATTEN: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 61);
 const DVS_FILTER_POLARITY_SUPPRESS: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 62);
 const DVS_FILTER_POLARITY_SUPPRESS_TYPE: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 63);
+#[allow(dead_code)]
 const DVS_HAS_STATISTICS: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 80);
+#[allow(dead_code)]
 const DVS_STATISTICS_EVENTS_ROW: SpiRegister64 = SpiRegister64::new(DVS_MODULE_ADDRESS, 81);
+#[allow(dead_code)]
 const DVS_STATISTICS_EVENTS_COLUMN: SpiRegister64 = SpiRegister64::new(DVS_MODULE_ADDRESS, 83);
+#[allow(dead_code)]
 const DVS_STATISTICS_EVENTS_DROPPED: SpiRegister64 = SpiRegister64::new(DVS_MODULE_ADDRESS, 85);
+#[allow(dead_code)]
 const DVS_STATISTICS_FILTERED_PIXELS: SpiRegister64 = SpiRegister64::new(DVS_MODULE_ADDRESS, 87);
+#[allow(dead_code)]
 const DVS_STATISTICS_FILTERED_BACKGROUND_ACTIVITY: SpiRegister64 =
     SpiRegister64::new(DVS_MODULE_ADDRESS, 89);
+#[allow(dead_code)]
 const DVS_STATISTICS_FILTERED_REFRACTORY_PERIOD: SpiRegister64 =
     SpiRegister64::new(DVS_MODULE_ADDRESS, 91);
+#[allow(dead_code)]
 const DVS_FILTER_PIXEL_AUTO_TRAIN: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 100);
 
 // aps module registers
 const APS_SIZE_COLUMNS: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 0);
 const APS_SIZE_ROWS: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 1);
 const APS_ORIENTATION: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 2);
+#[allow(dead_code)]
 const APS_COLOR_FILTER: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 3);
 const APS_RUN: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 4);
 const APS_WAIT_ON_STALL: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 5);
@@ -995,7 +1050,9 @@ const APS_END_COLUMN_0: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 10);
 const APS_END_ROW_0: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 11);
 const APS_EXPOSURE: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 12);
 const APS_FRAME_INTERVAL: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 13);
+#[allow(dead_code)]
 const APS_AUTOEXPOSURE: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 101);
+#[allow(dead_code)]
 const APS_FRAME_MODE: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 102);
 
 // imu module registers
@@ -1023,18 +1080,24 @@ const EXTERNAL_INPUT_DETECT_PULSE_POLARITY: SpiRegister =
     SpiRegister::new(EXTERNAL_INPUT_MODULE_ADDRESS, 4);
 const EXTERNAL_INPUT_DETECT_PULSE_LENGTH: SpiRegister =
     SpiRegister::new(EXTERNAL_INPUT_MODULE_ADDRESS, 5);
+#[allow(dead_code)]
 const EXTERNAL_INPUT_HAS_GENERATOR: SpiRegister =
     SpiRegister::new(EXTERNAL_INPUT_MODULE_ADDRESS, 10);
 const EXTERNAL_INPUT_RUN_GENERATOR: SpiRegister =
     SpiRegister::new(EXTERNAL_INPUT_MODULE_ADDRESS, 11);
+#[allow(dead_code)]
 const EXTERNAL_INPUT_GENERATE_PULSE_POLARITY: SpiRegister =
     SpiRegister::new(EXTERNAL_INPUT_MODULE_ADDRESS, 12);
+#[allow(dead_code)]
 const EXTERNAL_INPUT_GENERATE_PULSE_INTERVAL: SpiRegister =
     SpiRegister::new(EXTERNAL_INPUT_MODULE_ADDRESS, 13);
+#[allow(dead_code)]
 const EXTERNAL_INPUT_GENERATE_PULSE_LENGTH: SpiRegister =
     SpiRegister::new(EXTERNAL_INPUT_MODULE_ADDRESS, 14);
+#[allow(dead_code)]
 const EXTERNAL_INPUT_GENERATE_INJECT_ON_RISING_EDGE: SpiRegister =
     SpiRegister::new(EXTERNAL_INPUT_MODULE_ADDRESS, 15);
+#[allow(dead_code)]
 const EXTERNAL_INPUT_GENERATE_INJECT_ON_FALLING_EDGE: SpiRegister =
     SpiRegister::new(EXTERNAL_INPUT_MODULE_ADDRESS, 16);
 
@@ -1078,6 +1141,7 @@ const CHIP_BIASMUX0: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 135);
 const CHIP_RESETCALIBNEURON: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 136);
 const CHIP_TYPENCALIBNEURON: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 137);
 const CHIP_RESETTESTPIXEL: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 138);
+#[allow(dead_code)]
 const CHIP_SPECIALPIXELCONTROL: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 139);
 const CHIP_AERNAROW: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 140);
 const CHIP_USEAOUT: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 141);
@@ -1087,7 +1151,9 @@ const CHIP_TESTADC: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 144);
 
 // system information module registers
 const LOGIC_VERSION: SpiRegister = SpiRegister::new(SYSTEM_INFORMATION_MODULE_ADDRESS, 0);
+#[allow(dead_code)]
 const CHIP_IDENTIFIER: SpiRegister = SpiRegister::new(SYSTEM_INFORMATION_MODULE_ADDRESS, 1);
+#[allow(dead_code)]
 const CHIP_IS_PRIMARY: SpiRegister = SpiRegister::new(SYSTEM_INFORMATION_MODULE_ADDRESS, 2);
 const LOGIC_CLOCK: SpiRegister = SpiRegister::new(SYSTEM_INFORMATION_MODULE_ADDRESS, 3);
 const ADC_CLOCK: SpiRegister = SpiRegister::new(SYSTEM_INFORMATION_MODULE_ADDRESS, 4);
@@ -1102,7 +1168,7 @@ const USB_EARLY_PACKET_DELAY: SpiRegister = SpiRegister::new(USB_MODULE_ADDRESS,
 impl SpiRegister {
     fn get(&self, handle: &rusb::DeviceHandle<rusb::Context>) -> Result<u32, Error> {
         let mut buffer = [0; 4];
-        let read = handle.read_control(
+        let count = handle.read_control(
             0xC0,
             0xBF,
             self.module_address,
@@ -1110,12 +1176,12 @@ impl SpiRegister {
             &mut buffer,
             TIMEOUT,
         )?;
-        if read != 4 {
+        if count != 4 {
             return Err(Error::ShortRead {
                 module_address: self.module_address,
                 parameter_address: self.parameter_address,
                 expected: 4,
-                read,
+                count,
             });
         }
         Ok(u32::from_be_bytes(buffer))
@@ -1123,7 +1189,7 @@ impl SpiRegister {
 
     fn set(&self, handle: &rusb::DeviceHandle<rusb::Context>, value: u32) -> Result<(), Error> {
         let buffer = value.to_be_bytes();
-        let wrote = handle.write_control(
+        let count = handle.write_control(
             0x40,
             0xBF,
             self.module_address,
@@ -1131,12 +1197,12 @@ impl SpiRegister {
             &buffer,
             TIMEOUT,
         )?;
-        if wrote != 4 {
+        if count != 4 {
             return Err(Error::ShortWrite {
                 module_address: self.module_address,
                 parameter_address: self.parameter_address,
                 expected: 4,
-                wrote,
+                count,
             });
         }
         Ok(())
@@ -1151,6 +1217,7 @@ impl SpiRegister {
 }
 
 impl SpiRegister64 {
+    #[allow(dead_code)]
     fn get(&self, handle: &rusb::DeviceHandle<rusb::Context>) -> Result<u64, Error> {
         let msb = SpiRegister {
             module_address: self.module_address,
@@ -1171,6 +1238,28 @@ impl SpiRegister64 {
             parameter_address,
         }
     }
+}
+
+fn set_many(
+    handle: &rusb::DeviceHandle<rusb::Context>,
+    registers_and_values: &[(&SpiRegister, u32)],
+) -> Result<(), Error> {
+    let mut buffer = vec![0; 6 * registers_and_values.len()];
+    for (index, (register, value)) in registers_and_values.iter().enumerate() {
+        buffer[index * 6] = register.module_address as u8;
+        buffer[index * 6 + 1] = register.parameter_address as u8;
+        buffer[index * 6 + 2..index * 6 + 6].copy_from_slice(&value.to_be_bytes());
+    }
+    let count = handle.write_control(0x40, 0xC2, 0x0006, 0x0000, &buffer, TIMEOUT)?;
+    if count != buffer.len() {
+        return Err(Error::ShortWrite {
+            module_address: 0x0006,
+            parameter_address: 0x0000,
+            expected: buffer.len(),
+            count,
+        });
+    }
+    Ok(())
 }
 
 // The bias current i is given by

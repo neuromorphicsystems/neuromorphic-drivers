@@ -80,8 +80,6 @@ pub trait Usb: Sized {
 
     fn create_adapter(&self) -> Self::Adapter;
 
-    fn temperature_celsius(&self) -> Result<TemperatureCelsius, Self::Error>;
-
     fn list_devices(devices: &rusb::DeviceList<rusb::Context>) -> rusb::Result<Vec<ListedDevice>> {
         let mut result = Vec::new();
         for device in devices

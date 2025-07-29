@@ -194,15 +194,15 @@ if __name__ == "__main__":
                     RowLayout {{
                         spacing: 5
                         Label {{
-                            text: "Exposure (ms)"
+                            text: "Exposure (µs)"
                         }}
                         SpinBox {{
                             from: 1
-                            to: 1000
+                            to: 8000000
                             stepSize: 1
                             editable: true
-                            value: 4
-                            onValueChanged: to_python.exposure = value * 1000
+                            value: {configuration.exposure_us}
+                            onValueChanged: to_python.exposure = value
                         }}
                     }}
 
@@ -218,6 +218,21 @@ if __name__ == "__main__":
                             editable: true
                             value: {configuration.biases.onbn}
                             onValueChanged: to_python.diff_on = value
+                        }}
+                    }}
+
+                    RowLayout {{
+                        spacing: 5
+                        Label {{
+                            text: "Diff OFF"
+                        }}
+                        SpinBox {{
+                            from: 0
+                            to: 2040
+                            stepSize: 1
+                            editable: true
+                            value: {configuration.biases.offbn}
+                            onValueChanged: to_python.diff_off = value
                         }}
                     }}
                 }}

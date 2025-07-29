@@ -382,14 +382,25 @@ impl Device {
     }
 
     fn temperature_celsius(slf: pyo3::PyRef<Self>) -> pyo3::PyResult<f32> {
-        slf.device
+        match slf
+            .device
             .as_ref()
             .ok_or(pyo3::exceptions::PyRuntimeError::new_err(
                 "temperature_celsius called after __exit__",
-            ))?
-            .temperature_celsius()
-            .map(|temperature| temperature.0)
-            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(format!("{error}")))
+            ))? {
+            neuromorphic_drivers_rs::Device::InivationDavis346(_) => Err(
+                pyo3::exceptions::PyRuntimeError::new_err(format!("temperature_celsius is not implemented for the DAVIS346 (temperature samples are stored with IMU samples and can be accessed in the packet loop)")),
+            ),
+            neuromorphic_drivers_rs::Device::PropheseeEvk4(device) =>
+                device
+                .temperature_celsius()
+                .map(|temperature| temperature.0)
+                .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(format!("{error}"))),
+            device => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                "illuminance is not implemented for the {}",
+                device.name()
+            ))),
+        }
     }
 
     fn illuminance(slf: pyo3::PyRef<Self>) -> pyo3::PyResult<u32> {
@@ -402,6 +413,29 @@ impl Device {
             neuromorphic_drivers_rs::Device::PropheseeEvk4(device) => device
                 .illuminance()
                 .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(format!("{error}"))),
+            device => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                "illuminance is not implemented for the {}",
+                device.name()
+            ))),
+        }
+    }
+
+    fn imu_type(slf: pyo3::PyRef<Self>) -> pyo3::PyResult<Option<String>> {
+        match slf
+            .device
+            .as_ref()
+            .ok_or(pyo3::exceptions::PyRuntimeError::new_err(
+                "imu_type called after __exit__",
+            ))? {
+            neuromorphic_drivers_rs::Device::InivationDavis346(device) => match device.imu_type() {
+                neuromorphic_drivers_rs::inivation_davis346::ImuType::None => Ok(None),
+                neuromorphic_drivers_rs::inivation_davis346::ImuType::InvenSense6050Or6150 => {
+                    Ok(Some("InvenSense6050Or6150".to_owned()))
+                }
+                neuromorphic_drivers_rs::inivation_davis346::ImuType::InvenSense9250 => {
+                    Ok(Some("InvenSense9250".to_owned()))
+                }
+            },
             device => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
                 "illuminance is not implemented for the {}",
                 device.name()

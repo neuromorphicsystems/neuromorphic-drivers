@@ -1,8 +1,70 @@
+use crate::devices::inivation_davis346;
+
+const STANDARD_GRAVITY: f32 = 9.80665;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameDataRow {
     Idle,
     Reset(u16),
     Signal(u16),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AccelerometerScale {
+    TwoG,
+    FourG,
+    HeightG,
+    SixteenG,
+}
+
+impl AccelerometerScale {
+    pub fn acceleration_metres_per_second(&self, value: i16) -> f32 {
+        (match self {
+            AccelerometerScale::TwoG => 2.0,
+            AccelerometerScale::FourG => 4.0,
+            AccelerometerScale::HeightG => 8.0,
+            AccelerometerScale::SixteenG => 16.0,
+        }) * STANDARD_GRAVITY
+            / 32768.0
+            * value as f32
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GyroscopeScale {
+    TwoHundredAndFifty,
+    FiveHundred,
+    OneThousand,
+    TwoThousand,
+}
+
+impl GyroscopeScale {
+    pub fn rotation_radians_per_second(&self, value: i16) -> f32 {
+        (match self {
+            GyroscopeScale::TwoHundredAndFifty => 250.0,
+            GyroscopeScale::FiveHundred => 500.0,
+            GyroscopeScale::OneThousand => 1000.0,
+            GyroscopeScale::TwoThousand => 2000.0,
+        }) * (std::f32::consts::PI / 180.0)
+            / 32768.0
+            * value as f32
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImuState {
+    Default,
+    Started {
+        t: u64,
+    },
+    Typed {
+        t: u64,
+        accelerometer_scale: Option<AccelerometerScale>,
+        gyroscope_scale: Option<GyroscopeScale>,
+        has_temperature: bool,
+        bytes: [u8; 14],
+        index: usize,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -16,11 +78,16 @@ pub struct State {
     pub frame_reset_column: Option<u16>,
     pub frame_signal_column: Option<u16>,
     pub frame_data_row: FrameDataRow,
+    pub imu: ImuState,
 }
 
 pub struct Adapter {
+    dvs_invert_xy: bool,
+    aps_orientation: inivation_davis346::ApsOrientation,
+    imu_orientation: inivation_davis346::ImuOrientation,
+    imu_type: inivation_davis346::ImuType,
     pixels: Vec<u16>,
-    state: State, // @DEV move state props here
+    state: State,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -54,8 +121,17 @@ pub struct EventsLengths {
 }
 
 impl Adapter {
-    pub fn new() -> Self {
+    pub fn new(
+        dvs_invert_xy: bool,
+        aps_orientation: inivation_davis346::ApsOrientation,
+        imu_orientation: inivation_davis346::ImuOrientation,
+        imu_type: inivation_davis346::ImuType,
+    ) -> Self {
         Self {
+            dvs_invert_xy,
+            aps_orientation,
+            imu_orientation,
+            imu_type,
             pixels: vec![0u16; 346 * 260],
             state: State {
                 t: 0,
@@ -67,6 +143,7 @@ impl Adapter {
                 frame_reset_column: None,
                 frame_signal_column: None,
                 frame_data_row: FrameDataRow::Idle,
+                imu: ImuState::Default,
             },
         }
     }
@@ -150,10 +227,74 @@ impl Adapter {
                                 polarity: neuromorphic_types::TriggerPolarity::Pulse,
                             }),
                             5 => {
-                                // IMU start
+                                self.state.imu = ImuState::Started { t: self.state.t };
                             }
                             7 => {
-                                // IMU end
+                                if let ImuState::Typed {
+                                    t,
+                                    bytes,
+                                    index,
+                                    accelerometer_scale,
+                                    gyroscope_scale,
+                                    has_temperature,
+                                } = self.state.imu
+                                {
+                                    if index == bytes.len() {
+                                        handle_imu_event(ImuEvent {
+                                            t,
+                                            accelerometer_x: match accelerometer_scale {
+                                                Some(accelerometer_scale) => accelerometer_scale
+                                                    .acceleration_metres_per_second(
+                                                        i16::from_be_bytes([bytes[0], bytes[1]]),
+                                                    ),
+                                                None => std::f32::NAN,
+                                            },
+                                            accelerometer_y: match accelerometer_scale {
+                                                Some(accelerometer_scale) => accelerometer_scale
+                                                    .acceleration_metres_per_second(
+                                                        i16::from_be_bytes([bytes[2], bytes[3]]),
+                                                    ),
+                                                None => std::f32::NAN,
+                                            },
+                                            accelerometer_z: match accelerometer_scale {
+                                                Some(accelerometer_scale) => accelerometer_scale
+                                                    .acceleration_metres_per_second(
+                                                        i16::from_be_bytes([bytes[4], bytes[5]]),
+                                                    ),
+                                                None => std::f32::NAN,
+                                            },
+                                            gyroscope_x: match gyroscope_scale {
+                                                Some(gyroscope_scale) => gyroscope_scale
+                                                    .rotation_radians_per_second(
+                                                        i16::from_be_bytes([bytes[8], bytes[9]]),
+                                                    ),
+                                                None => std::f32::NAN,
+                                            },
+                                            gyroscope_y: match gyroscope_scale {
+                                                Some(gyroscope_scale) => gyroscope_scale
+                                                    .rotation_radians_per_second(
+                                                        i16::from_be_bytes([bytes[10], bytes[11]]),
+                                                    ),
+                                                None => std::f32::NAN,
+                                            },
+                                            gyroscope_z: match gyroscope_scale {
+                                                Some(gyroscope_scale) => gyroscope_scale
+                                                    .rotation_radians_per_second(
+                                                        i16::from_be_bytes([bytes[12], bytes[13]]),
+                                                    ),
+                                                None => std::f32::NAN,
+                                            },
+                                            temperature: if has_temperature {
+                                                self.imu_type.temperature_celsius(
+                                                    i16::from_be_bytes([bytes[6], bytes[7]]),
+                                                )
+                                            } else {
+                                                std::f32::NAN
+                                            },
+                                        })
+                                    }
+                                }
+                                self.state.imu = ImuState::Default;
                             }
                             8 | 9 => {
                                 self.state.start_t = Some(self.state.t);
@@ -306,10 +447,117 @@ impl Adapter {
                         }
                     }
                     5 => {
-                        // misc 8 bit (IMU data, APS ROI)
+                        match (word & 0x0F00) >> 8 {
+                            0 => {
+                                self.state.imu = match self.state.imu {
+                                    ImuState::Default => ImuState::Default,
+                                    ImuState::Started { t } => ImuState::Started { t },
+                                    ImuState::Typed {
+                                        t,
+                                        accelerometer_scale,
+                                        gyroscope_scale,
+                                        has_temperature,
+                                        mut bytes,
+                                        index,
+                                    } => {
+                                        if index < bytes.len() {
+                                            bytes[index] = (word & 0xFF) as u8;
+                                        }
+                                        ImuState::Typed {
+                                            t,
+                                            accelerometer_scale,
+                                            gyroscope_scale,
+                                            has_temperature,
+                                            bytes,
+                                            index: match index {
+                                                5 => {
+                                                    if has_temperature {
+                                                        index + 1
+                                                    } else {
+                                                        if gyroscope_scale.is_some() {
+                                                            index + 3
+                                                        } else {
+                                                            index + 9
+                                                        }
+                                                    }
+                                                }
+                                                7 => {
+                                                    if gyroscope_scale.is_some() {
+                                                        index + 1
+                                                    } else {
+                                                        index + 7
+                                                    }
+                                                }
+                                                _ => index + 1,
+                                            },
+                                        }
+                                    }
+                                };
+                            }
+                            1 => {}
+                            2 => {}
+                            3 => {
+                                self.state.imu = match self.state.imu {
+                                    ImuState::Default => ImuState::Default,
+                                    ImuState::Started { t } | ImuState::Typed { t, .. } => {
+                                        let has_temperature = ((word >> 5) & 1) == 1;
+                                        let has_gyroscope = ((word >> 6) & 1) == 1;
+                                        let has_accelerometer = ((word >> 7) & 1) == 1;
+                                        ImuState::Typed {
+                                            t,
+                                            accelerometer_scale: if has_accelerometer {
+                                                Some(match (word >> 2) & 0b11 {
+                                                    0 => AccelerometerScale::TwoG,
+                                                    1 => AccelerometerScale::FourG,
+                                                    2 => AccelerometerScale::HeightG,
+                                                    3 => AccelerometerScale::SixteenG,
+                                                    _ => unreachable!(),
+                                                })
+                                            } else {
+                                                None
+                                            },
+                                            gyroscope_scale: if has_gyroscope {
+                                                Some(match word & 0b11 {
+                                                    0 => GyroscopeScale::TwoHundredAndFifty,
+                                                    1 => GyroscopeScale::FiveHundred,
+                                                    2 => GyroscopeScale::OneThousand,
+                                                    3 => GyroscopeScale::TwoThousand,
+                                                    _ => unreachable!(),
+                                                })
+                                            } else {
+                                                None
+                                            },
+                                            has_temperature,
+                                            bytes: [0u8; 14],
+                                            index: if has_accelerometer {
+                                                0
+                                            } else if has_temperature {
+                                                6
+                                            } else if has_gyroscope {
+                                                8
+                                            } else {
+                                                14
+                                            },
+                                        }
+                                    }
+                                };
+                            }
+                            _ => {
+                                println!("unexpected MISC 8 code {}", (word & 0x0F00) >> 8);
+                                // @DEV
+                            }
+                        }
                     }
                     6 => {
-                        // misc 10  bit (frame exposure), related to auto exposure?
+                        match (word & 0x0C00) >> 10 {
+                            0 => {
+                                // @DEV @TODO auto-exposure feedback
+                            }
+                            _ => {
+                                println!("unexpected MISC 10 code {}", (word & 0x0C00) >> 10);
+                                // @DEV
+                            }
+                        }
                     }
                     7 => {
                         self.state.t_offset += 0x8000;

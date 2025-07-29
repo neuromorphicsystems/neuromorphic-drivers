@@ -558,8 +558,6 @@ macro_rules! generate {
                                 "\n",
                                 "    def speed(self) -> enums.Speed: ...\n",
                                 "\n",
-                                "    def temperature_celsius(self) -> float: ...\n",
-                                "\n",
                                 "    def update_configuration(self, configuration: Configuration): ...",
                             ),
                             class_name,
@@ -580,7 +578,17 @@ macro_rules! generate {
                                 writer,
                                 concat!(
                                     "\n",
+                                    "    def temperature_celsius(self) -> float: ...\n",
+                                    "\n",
                                     "    def illuminance(self) -> int: ...",
+                                )
+                            ).unwrap();
+                        } else if stringify!($module) == "inivation_davis346" {
+                            writeln!(
+                                writer,
+                                concat!(
+                                    "\n",
+                                    "    def imu_type(self) -> typing.Literal[None, \"InvenSense6050Or6150\", \"InvenSense9250\"]: ...\n",
                                 )
                             ).unwrap();
                         }
@@ -738,8 +746,6 @@ macro_rules! generate {
                             "    def chip_firmware_configuration(self) -> Configuration: ...\n",
                             "\n",
                             "    def speed(self) -> Speed: ...\n",
-                            "\n",
-                            "    def temperature_celsius(self) -> float: ...\n",
                             "\n",
                             "    def update_configuration(self, configuration: Configuration): ...\n",
                         ),

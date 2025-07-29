@@ -949,8 +949,19 @@ impl device::Usb for Device {
     fn create_adapter(&self) -> Self::Adapter {
         Self::Adapter::from_dimensions(Self::PROPERTIES.width, Self::PROPERTIES.height)
     }
+}
 
-    fn temperature_celsius(&self) -> Result<device::TemperatureCelsius, Self::Error> {
+impl Device {
+    pub fn illuminance(&self) -> Result<u32, Error> {
+        let lifo_status = LifoStatus::read(&self.handle)?;
+        if lifo_status.lifo_ton_valid == 1 {
+            Ok(lifo_status.lifo_ton)
+        } else {
+            Err(Error::Illuminance)
+        }
+    }
+
+    pub fn temperature_celsius(&self) -> Result<device::TemperatureCelsius, Error> {
         let _guard = self
             .register_mutex
             .lock()
@@ -969,17 +980,6 @@ impl device::Usb for Device {
             ))
         } else {
             Err(Error::Temperature)
-        }
-    }
-}
-
-impl Device {
-    pub fn illuminance(&self) -> Result<u32, Error> {
-        let lifo_status = LifoStatus::read(&self.handle)?;
-        if lifo_status.lifo_ton_valid == 1 {
-            Ok(lifo_status.lifo_ton)
-        } else {
-            Err(Error::Illuminance)
         }
     }
 }

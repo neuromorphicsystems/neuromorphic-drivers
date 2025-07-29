@@ -228,13 +228,15 @@ impl Adapter {
                     })?;
                 }
                 frames.clear();
-                Davis346Packet {
-                    polarity_events: packet_polarity_events,
-                    polarity_events_overflow_indices: packet_polarity_events_overflow_indices,
-                    frames: packet_frames.unbind(),
-                }
-                .into_pyobject(python)
-                .map(|object| object.unbind().into_any())
+                pyo3::Py::new(
+                    python,
+                    Davis346Packet {
+                        polarity_events: packet_polarity_events,
+                        polarity_events_overflow_indices: packet_polarity_events_overflow_indices,
+                        frames: packet_frames.unbind(),
+                    },
+                )
+                .map(|object| object.into_any())
             }
             Adapter::Evt3 {
                 inner: _,
@@ -319,9 +321,7 @@ impl Adapter {
                             Some(trigger_events_overflow_indices_array.unbind().into_any());
                     }
                 }
-                packet
-                    .into_pyobject(python)
-                    .map(|object| object.unbind().into_any())
+                pyo3::Py::new(python, packet).map(|object| object.into_any())
             }
         }
     }
