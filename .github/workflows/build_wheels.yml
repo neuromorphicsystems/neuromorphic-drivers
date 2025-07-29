@@ -38,12 +38,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: python -m pip install cibuildwheel==3.1.1
-      - run: cd python
-      - run: python -m cibuildwheel
+      - run: python -m cibuildwheel python
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}
-          path: wheelhouse
+          path: python/wheelhouse
   test_library:
     name: Test library on ${{ matrix.os }} with Python ${{ matrix.python }} and numpy ${{ matrix.numpy }}
     runs-on: ${{ matrix.os }}
