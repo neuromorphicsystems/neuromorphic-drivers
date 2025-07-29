@@ -82,11 +82,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: pipx run build --sdist
+      - run: pipx run build --sdist python
       - uses: actions/upload-artifact@v4
         with:
           name: dist
-          path: dist/*.tar.gz
+          path: python/dist/*.tar.gz
   upload_pypi:
     name: Upload wheels and sidst to PyPI
     runs-on: ubuntu-latest
