@@ -103,6 +103,6 @@ jobs:
           name: dist
           path: dist
       - run: mv wheelhouse/* dist/
-      - uses: pypa/gh-action-pypi-publish@v1.8.14
+      - uses: pypa/gh-action-pypi-publish@v1.12.4
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
