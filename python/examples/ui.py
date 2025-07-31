@@ -705,6 +705,11 @@ class EventDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
         colormap_texture: PySide6.QtOpenGL.QOpenGLTexture
         colormap_split: float
 
+        def cleanup(self):
+            self.vertices_buffer.destroy()
+            self.ts_and_ons_texture.destroy()
+            self.colormap_texture.destroy()
+
     def __init__(
         self,
         window: PySide6.QtQuick.QQuickWindow,
@@ -810,7 +815,6 @@ class EventDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
                 == PySide6.QtQuick.QSGRendererInterface.GraphicsApi.OpenGL
             )
             self.initializeOpenGLFunctions()
-
             program = PySide6.QtOpenGL.QOpenGLShaderProgram()
             assert program.addShaderFromSourceCode(
                 PySide6.QtOpenGL.QOpenGLShader.ShaderTypeBit.Vertex,
@@ -822,11 +826,9 @@ class EventDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
             )
             assert program.link()
             assert program.bind()
-
             vertex_array_object = PySide6.QtOpenGL.QOpenGLVertexArrayObject()
             assert vertex_array_object.create()
             vertex_array_object.bind()
-
             vertices_buffer = PySide6.QtOpenGL.QOpenGLBuffer()
             assert vertices_buffer.create()
             vertices_buffer.bind()
@@ -952,32 +954,6 @@ class EventDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
                 self.program.colormap_split,
             )
             self.program.colormap_texture.bind(1)
-
-            # @DEV {
-            colormap_data = numpy.zeros(
-                (len(self.on_colormap) + len(self.off_colormap)) * 4,
-                dtype=numpy.float32,
-            )
-            index = 0
-            for color in reversed(self.off_colormap):
-                colormap_data[index] = color.redF()
-                colormap_data[index + 1] = color.greenF()
-                colormap_data[index + 2] = color.blueF()
-                colormap_data[index + 3] = color.alphaF()
-                index += 4
-            for color in self.on_colormap:
-                colormap_data[index] = color.redF()
-                colormap_data[index + 1] = color.greenF()
-                colormap_data[index + 2] = color.blueF()
-                colormap_data[index + 3] = color.alphaF()
-                index += 4
-            self.program.colormap_texture.setData(
-                PySide6.QtOpenGL.QOpenGLTexture.PixelFormat.RGBA,
-                PySide6.QtOpenGL.QOpenGLTexture.PixelType.Float32,
-                colormap_data,  # type: ignore
-            )
-            # }
-
             self.program.vertex_array_object.bind()
             self.glDrawArrays(GL_TRIANGLE_STRIP, 0, 4)
             self.program.colormap_texture.release()
@@ -987,19 +963,10 @@ class EventDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
             self.window.endExternalCommands()
 
     def cleanup(self):
-        return
-        """
-        if self.vbo:
-            self.vbo.destroy()
-            self.vbo = None
-
-        if self.vao:
-            self.vao.destroy()
-            self.vao = None
-
-        if self.program:
-            self.program = None
-        """
+        with PySide6.QtCore.QMutexLocker(self.lock):
+            if self.program is not None:
+                self.program.cleanup()
+                self.program = None
 
 
 class EventDisplay(PySide6.QtQuick.QQuickItem):
@@ -1260,6 +1227,10 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
         vertex_array_object: PySide6.QtOpenGL.QOpenGLVertexArrayObject
         frame_texture: PySide6.QtOpenGL.QOpenGLTexture
 
+        def cleanup(self):
+            self.vertices_buffer.destroy()
+            self.frame_texture.destroy()
+
     def __init__(
         self,
         window: PySide6.QtQuick.QQuickWindow,
@@ -1485,19 +1456,10 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
             self.window.endExternalCommands()
 
     def cleanup(self):
-        return
-        """
-        if self.vbo:
-            self.vbo.destroy()
-            self.vbo = None
-
-        if self.vao:
-            self.vao.destroy()
-            self.vao = None
-
-        if self.program:
-            self.program = None
-        """
+        with PySide6.QtCore.QMutexLocker(self.lock):
+            if self.program is not None:
+                self.program.cleanup()
+                self.program = None
 
 
 class FrameDisplay(PySide6.QtQuick.QQuickItem):
@@ -1626,7 +1588,6 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
     def cleanup(self):
         if self._renderer is not None:
             self._renderer.cleanup()
-            del self._renderer
             self._renderer = None
 
     @PySide6.QtCore.Slot()

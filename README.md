@@ -25,7 +25,7 @@ neuromorphic_drivers is a library to interact with USB Neuromorphic devices. The
 | SilkyEvCam HD       | 1280 × 720 | polarity, trigger                     | ✓    | ✓           | ✓            | ✓           | ✓           |
 | IdS uEye XCP-E      | 1280 × 720 | polarity, trigger                     | ✓    | ✓           | ✓            | ✓           | ✓           |
 | Prophesee EVK3 HD   | 1280 × 720 | polarity, trigger                     | ✓    | -           | ✓            | -           | -           |
-| IniVation Davis 346 | 1280 × 720 | polarity, frame, temperature, trigger | -    | -           | -            | -           | -           |
+| IniVation Davis 346 | 346 × 260  | polarity, frame, temperature, trigger | -    | -           | -            | -           | -           |
 
 This table lists fratures supported by this library. Some devices support unlisted features or features marked as "no" that have yet to be added to neuromorphic_drivers.
 
@@ -67,7 +67,7 @@ with nd.open() as device:
             pass
 ```
 
-The keys in a packet depend on the device and are only present if the associated array is not empty. Packets contain variable numbers of events (typically a few thousand to a few hundred thousand) covering a variable amount of time (typically a few dozen microseconds to a few milliseconds).
+Packets contain a variable number of events (typically a few thousand to a few hundred thousand) covering a variable amount of time (typically a tens of microseconds to a few milliseconds).
 
 ## Device configuration
 
@@ -222,10 +222,10 @@ See https://docs.rs/neuromorphic-drivers/latest/neuromorphic_drivers/ for docume
 1. Write the following content to _/etc/udev/rules.d/65-neuromorphic-drivers.rules_.
 
     ```txt
-    SUBSYSTEM=="usb", ATTRS{idVendor}=="152a",ATTRS{idProduct}=="84[0-1]?", MODE="0666"
-    SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4",ATTRS{idProduct}=="00f[4-5]", MODE="0666"
-    SUBSYSTEM=="usb", ATTRS{idVendor}=="31f7",ATTRS{idProduct}=="0003", MODE="0666"
-    SUBSYSTEM=="usb", ATTRS{idVendor}=="1409",ATTRS{idProduct}=="8E00", MODE="0666"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="152a", ATTRS{idProduct}=="84[0-1]?", MODE="0666"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f[4-5]", MODE="0666"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="31f7", ATTRS{idProduct}=="0003", MODE="0666"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="1409", ATTRS{idProduct}=="8E00", MODE="0666"
     ```
 
 2. Run the following commands (or reboot the machine).
