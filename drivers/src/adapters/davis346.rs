@@ -71,7 +71,7 @@ pub enum ImuState {
 pub struct State {
     pub t: u64,
     pub t_offset: u64,
-    pub column: Option<u16>,
+    pub row: Option<u16>,
     pub start_t: Option<u64>,
     pub exposure_start_t: Option<u64>,
     pub exposure_end_t: Option<u64>,
@@ -83,7 +83,11 @@ pub struct State {
 
 pub struct Adapter {
     dvs_invert_xy: bool,
+    dvs_rows: u16,
+    dvs_columns: u16,
     aps_orientation: inivation_davis346::ApsOrientation,
+    aps_rows: u16,
+    aps_columns: u16,
     imu_orientation: inivation_davis346::ImuOrientation,
     imu_type: inivation_davis346::ImuType,
     pixels: Vec<u16>,
@@ -112,6 +116,64 @@ pub struct ImuEvent {
     pub temperature: f32,
 }
 
+impl ImuEvent {
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            std::slice::from_raw_parts(
+                (self as *const Self) as *const u8,
+                std::mem::size_of::<Self>(),
+            )
+        }
+    }
+}
+
+fn acceleration(
+    accelerometer_scale: Option<AccelerometerScale>,
+    byte0: u8,
+    byte1: u8,
+    flip: bool,
+) -> f32 {
+    match accelerometer_scale {
+        Some(accelerometer_scale) => accelerometer_scale.acceleration_metres_per_second(
+            i16::from_be_bytes([byte0, byte1]) * (if flip { -1 } else { 1 }),
+        ),
+        None => std::f32::NAN,
+    }
+}
+
+fn rotation(gyroscope_scale: Option<GyroscopeScale>, byte0: u8, byte1: u8, flip: bool) -> f32 {
+    match gyroscope_scale {
+        Some(gyroscope_scale) => gyroscope_scale.rotation_radians_per_second(
+            i16::from_be_bytes([byte0, byte1]) * (if flip { -1 } else { 1 }),
+        ),
+        None => std::f32::NAN,
+    }
+}
+
+fn pixel_index(
+    row: u16,
+    aps_rows: u16,
+    column: u16,
+    aps_columns: u16,
+    aps_orientation: inivation_davis346::ApsOrientation,
+) -> usize {
+    let row = if aps_orientation.flip_y {
+        aps_rows - 1 - row
+    } else {
+        row
+    };
+    let column = if aps_orientation.flip_x {
+        aps_columns - 1 - column
+    } else {
+        column
+    };
+    if aps_orientation.invert_xy {
+        row as usize + column as usize * aps_rows as usize
+    } else {
+        column as usize + row as usize * aps_columns as usize
+    }
+}
+
 #[derive(Default)]
 pub struct EventsLengths {
     pub on: usize,
@@ -127,16 +189,46 @@ impl Adapter {
         imu_orientation: inivation_davis346::ImuOrientation,
         imu_type: inivation_davis346::ImuType,
     ) -> Self {
+        let (dvs_rows, dvs_columns) = if dvs_invert_xy {
+            (
+                inivation_davis346::PROPERTIES.width,
+                inivation_davis346::PROPERTIES.height,
+            )
+        } else {
+            (
+                inivation_davis346::PROPERTIES.height,
+                inivation_davis346::PROPERTIES.width,
+            )
+        };
+        let (aps_rows, aps_columns) = if aps_orientation.invert_xy {
+            (
+                inivation_davis346::PROPERTIES.width,
+                inivation_davis346::PROPERTIES.height,
+            )
+        } else {
+            (
+                inivation_davis346::PROPERTIES.height,
+                inivation_davis346::PROPERTIES.width,
+            )
+        };
         Self {
             dvs_invert_xy,
+            dvs_rows,
+            dvs_columns,
             aps_orientation,
+            aps_rows,
+            aps_columns,
             imu_orientation,
             imu_type,
-            pixels: vec![0u16; 346 * 260],
+            pixels: vec![
+                0u16;
+                inivation_davis346::PROPERTIES.width as usize
+                    * inivation_davis346::PROPERTIES.height as usize
+            ],
             state: State {
                 t: 0,
                 t_offset: 0,
-                column: None,
+                row: None,
                 start_t: None,
                 exposure_start_t: None,
                 exposure_end_t: None,
@@ -183,15 +275,15 @@ impl Adapter {
         )
     }
 
-    pub fn convert<HandleDvsEvent, HandleImuEvent, HandleTriggerEvent, HandleFrameEvent>(
+    pub fn convert<HandlePolarityEvent, HandleImuEvent, HandleTriggerEvent, HandleFrameEvent>(
         &mut self,
         slice: &[u8],
-        mut handle_dvs_event: HandleDvsEvent,
+        mut handle_polarity_event: HandlePolarityEvent,
         mut handle_imu_event: HandleImuEvent,
         mut handle_trigger_event: HandleTriggerEvent,
         mut handle_frame_event: HandleFrameEvent,
     ) where
-        HandleDvsEvent: FnMut(neuromorphic_types::PolarityEvent<u64, u16, u16>),
+        HandlePolarityEvent: FnMut(neuromorphic_types::PolarityEvent<u64, u16, u16>),
         HandleImuEvent: FnMut(ImuEvent),
         HandleTriggerEvent: FnMut(neuromorphic_types::TriggerEvent<u64, u8>),
         HandleFrameEvent: FnMut(FrameEvent),
@@ -215,7 +307,6 @@ impl Adapter {
                                 id: 0,
                                 polarity: neuromorphic_types::TriggerPolarity::Falling,
                             }),
-
                             3 => handle_trigger_event(neuromorphic_types::TriggerEvent {
                                 t: self.state.t,
                                 id: 0,
@@ -242,48 +333,42 @@ impl Adapter {
                                     if index == bytes.len() {
                                         handle_imu_event(ImuEvent {
                                             t,
-                                            accelerometer_x: match accelerometer_scale {
-                                                Some(accelerometer_scale) => accelerometer_scale
-                                                    .acceleration_metres_per_second(
-                                                        i16::from_be_bytes([bytes[0], bytes[1]]),
-                                                    ),
-                                                None => std::f32::NAN,
-                                            },
-                                            accelerometer_y: match accelerometer_scale {
-                                                Some(accelerometer_scale) => accelerometer_scale
-                                                    .acceleration_metres_per_second(
-                                                        i16::from_be_bytes([bytes[2], bytes[3]]),
-                                                    ),
-                                                None => std::f32::NAN,
-                                            },
-                                            accelerometer_z: match accelerometer_scale {
-                                                Some(accelerometer_scale) => accelerometer_scale
-                                                    .acceleration_metres_per_second(
-                                                        i16::from_be_bytes([bytes[4], bytes[5]]),
-                                                    ),
-                                                None => std::f32::NAN,
-                                            },
-                                            gyroscope_x: match gyroscope_scale {
-                                                Some(gyroscope_scale) => gyroscope_scale
-                                                    .rotation_radians_per_second(
-                                                        i16::from_be_bytes([bytes[8], bytes[9]]),
-                                                    ),
-                                                None => std::f32::NAN,
-                                            },
-                                            gyroscope_y: match gyroscope_scale {
-                                                Some(gyroscope_scale) => gyroscope_scale
-                                                    .rotation_radians_per_second(
-                                                        i16::from_be_bytes([bytes[10], bytes[11]]),
-                                                    ),
-                                                None => std::f32::NAN,
-                                            },
-                                            gyroscope_z: match gyroscope_scale {
-                                                Some(gyroscope_scale) => gyroscope_scale
-                                                    .rotation_radians_per_second(
-                                                        i16::from_be_bytes([bytes[12], bytes[13]]),
-                                                    ),
-                                                None => std::f32::NAN,
-                                            },
+                                            accelerometer_x: acceleration(
+                                                accelerometer_scale,
+                                                bytes[0],
+                                                bytes[1],
+                                                self.imu_orientation.flip_x,
+                                            ),
+                                            accelerometer_y: acceleration(
+                                                accelerometer_scale,
+                                                bytes[2],
+                                                bytes[3],
+                                                self.imu_orientation.flip_y,
+                                            ),
+                                            accelerometer_z: acceleration(
+                                                accelerometer_scale,
+                                                bytes[4],
+                                                bytes[5],
+                                                self.imu_orientation.flip_z,
+                                            ),
+                                            gyroscope_x: rotation(
+                                                gyroscope_scale,
+                                                bytes[8],
+                                                bytes[9],
+                                                self.imu_orientation.flip_x,
+                                            ),
+                                            gyroscope_y: rotation(
+                                                gyroscope_scale,
+                                                bytes[10],
+                                                bytes[11],
+                                                self.imu_orientation.flip_y,
+                                            ),
+                                            gyroscope_z: rotation(
+                                                gyroscope_scale,
+                                                bytes[12],
+                                                bytes[13],
+                                                self.imu_orientation.flip_z,
+                                            ),
                                             temperature: if has_temperature {
                                                 self.imu_type.temperature_celsius(
                                                     i16::from_be_bytes([bytes[6], bytes[7]]),
@@ -328,7 +413,7 @@ impl Adapter {
                             }
                             11 => {
                                 if let Some(frame_reset_column) = self.state.frame_reset_column {
-                                    if frame_reset_column < 260 {
+                                    if frame_reset_column < self.aps_columns {
                                         self.state.frame_reset_column =
                                             Some(frame_reset_column + 1);
                                         self.state.frame_data_row = FrameDataRow::Reset(0);
@@ -340,7 +425,7 @@ impl Adapter {
                             }
                             12 => {
                                 if let Some(frame_signal_column) = self.state.frame_signal_column {
-                                    if frame_signal_column < 260 {
+                                    if frame_signal_column < self.aps_columns {
                                         self.state.frame_signal_column =
                                             Some(frame_signal_column + 1);
                                         self.state.frame_data_row = FrameDataRow::Signal(0);
@@ -369,21 +454,21 @@ impl Adapter {
                         }
                     }
                     1 => {
-                        let candidate_column = word & 0x0FFF;
-                        if candidate_column < 346 {
-                            self.state.column = Some(candidate_column);
+                        let candidate_row = word & 0x0FFF;
+                        if candidate_row < self.dvs_rows {
+                            self.state.row = Some(candidate_row);
                         } else {
-                            self.state.column = None;
+                            self.state.row = None;
                         }
                     }
                     2 | 3 => {
-                        if let Some(column) = self.state.column {
-                            let row = word & 0x0FFF;
-                            if row < 260 {
-                                handle_dvs_event(neuromorphic_types::PolarityEvent {
+                        if let Some(row) = self.state.row {
+                            let column = word & 0x0FFF;
+                            if column < self.dvs_columns {
+                                handle_polarity_event(neuromorphic_types::PolarityEvent {
                                     t: self.state.t,
-                                    x: column,
-                                    y: row,
+                                    x: if self.dvs_invert_xy { row } else { column },
+                                    y: if self.dvs_invert_xy { column } else { row },
                                     polarity: if message_type == 2 {
                                         neuromorphic_types::Polarity::Off
                                     } else {
@@ -399,10 +484,14 @@ impl Adapter {
                             FrameDataRow::Reset(row) => {
                                 if let Some(column) = self.state.frame_reset_column {
                                     if column > 0 {
-                                        let x = 345 - row;
-                                        let y = column - 1;
-                                        self.pixels[x as usize + y as usize * 346] = word & 0x0FFF;
-                                        if row < 345 {
+                                        self.pixels[pixel_index(
+                                            row,
+                                            self.aps_rows,
+                                            column - 1,
+                                            self.aps_columns,
+                                            self.aps_orientation,
+                                        )] = word & 0x0FFF;
+                                        if row < self.aps_rows - 1 {
                                             FrameDataRow::Reset(row + 1)
                                         } else {
                                             FrameDataRow::Idle
@@ -417,22 +506,25 @@ impl Adapter {
                             FrameDataRow::Signal(row) => {
                                 if let Some(column) = self.state.frame_signal_column {
                                     if column > 0 {
-                                        let x = 345 - row;
-                                        let y = column - 1;
-                                        let reset_value =
-                                            self.pixels[x as usize + y as usize * 346];
+                                        let index = pixel_index(
+                                            row,
+                                            self.aps_rows,
+                                            column - 1,
+                                            self.aps_columns,
+                                            self.aps_orientation,
+                                        );
+                                        let reset_value = self.pixels[index];
                                         let signal_value = word & 0x0FFF;
-                                        self.pixels[x as usize + y as usize * 346] =
-                                            if reset_value == u16::MAX {
-                                                u16::MAX
-                                            } else if reset_value < 384 || signal_value == 0 {
-                                                1023 << 6
-                                            } else if reset_value < signal_value {
-                                                0
-                                            } else {
-                                                (reset_value - signal_value).min(1023) << 6
-                                            };
-                                        if row < 345 {
+                                        self.pixels[index] = if reset_value == u16::MAX {
+                                            u16::MAX
+                                        } else if reset_value < 384 || signal_value == 0 {
+                                            1023 << 6
+                                        } else if reset_value < signal_value {
+                                            0
+                                        } else {
+                                            (reset_value - signal_value).min(1023) << 6
+                                        };
+                                        if row < self.aps_rows - 1 {
                                             FrameDataRow::Signal(row + 1)
                                         } else {
                                             FrameDataRow::Idle

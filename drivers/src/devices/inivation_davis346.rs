@@ -9,16 +9,16 @@ use device::Usb;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ApsOrientation {
-    invert_xy: bool,
-    flip_x: bool,
-    flip_y: bool,
+    pub flip_x: bool,
+    pub flip_y: bool,
+    pub invert_xy: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ImuOrientation {
-    flip_x: bool,
-    flip_y: bool,
-    flip_z: bool,
+    pub flip_x: bool,
+    pub flip_y: bool,
+    pub flip_z: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -314,9 +314,9 @@ impl device::Usb for Device {
         let aps_orientation = {
             let aps_orientation = APS_ORIENTATION.get(&handle)?;
             ApsOrientation {
-                invert_xy: ((aps_orientation >> 2) & 1) == 1,
                 flip_x: ((aps_orientation >> 1) & 1) == 1,
                 flip_y: (aps_orientation & 1) == 1,
+                invert_xy: ((aps_orientation >> 2) & 1) == 1,
             }
         };
         let imu_orientation = {

@@ -28,6 +28,77 @@ fn list_devices() -> pyo3::PyResult<Vec<ListedDevice>> {
         .collect())
 }
 
+#[pyo3::pyclass]
+struct Davis346Orientation {
+    #[pyo3(get)]
+    dvs_invert_xy: bool,
+    #[pyo3(get)]
+    aps_flip_x: bool,
+    #[pyo3(get)]
+    aps_flip_y: bool,
+    #[pyo3(get)]
+    aps_invert_xy: bool,
+    #[pyo3(get)]
+    imu_flip_x: bool,
+    #[pyo3(get)]
+    imu_flip_y: bool,
+    #[pyo3(get)]
+    imu_flip_z: bool,
+}
+
+#[pymethods]
+impl Davis346Orientation {
+    fn __repr__(&self) -> String {
+        format!(
+            "neuromorphic_drivers.Davis346Orientation(dvs_invert_xy={}, aps_flip_x={}, aps_flip_y={}, aps_invert_xy={}, imu_flip_x={}, imu_flip_y={}, imu_flip_z={})",
+            if self.dvs_invert_xy { "True" } else { "False" },
+            if self.aps_flip_x { "True" } else { "False" },
+            if self.aps_flip_y { "True" } else { "False" },
+            if self.aps_invert_xy { "True" } else { "False" },
+            if self.imu_flip_x { "True" } else { "False" },
+            if self.imu_flip_y { "True" } else { "False" },
+            if self.imu_flip_z { "True" } else { "False" },
+        )
+    }
+}
+
+#[pyo3::pyclass]
+struct DVXplorerOrientation {
+    #[pyo3(get)]
+    dvs_flip_x: bool,
+    #[pyo3(get)]
+    dvs_flip_y: bool,
+    #[pyo3(get)]
+    dvs_invert_xy: bool,
+    #[pyo3(get)]
+    imu_flip_x: bool,
+    #[pyo3(get)]
+    imu_flip_y: bool,
+    #[pyo3(get)]
+    imu_flip_z: bool,
+}
+
+#[pymethods]
+impl DVXplorerOrientation {
+    fn __repr__(&self) -> String {
+        format!(
+            "neuromorphic_drivers.DVXplorerOrientation(dvs_flip_x={}, dvs_flip_y={}, dvs_invert_xy={}, imu_flip_x={}, imu_flip_y={}, imu_flip_z={})",
+            if self.dvs_flip_x { "True" } else { "False" },
+            if self.dvs_flip_y { "True" } else { "False" },
+            if self.dvs_invert_xy { "True" } else { "False" },
+            if self.imu_flip_x { "True" } else { "False" },
+            if self.imu_flip_y { "True" } else { "False" },
+            if self.imu_flip_z { "True" } else { "False" },
+        )
+    }
+}
+
+#[derive(IntoPyObject)]
+enum Orientation {
+    Davis346Orientation(Davis346Orientation),
+    DVXplorerOrientation(DVXplorerOrientation),
+}
+
 #[pyo3::pyclass(subclass)]
 struct Device {
     device: Option<neuromorphic_drivers_rs::Device>,
@@ -397,7 +468,7 @@ impl Device {
                 .map(|temperature| temperature.0)
                 .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(format!("{error}"))),
             device => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
-                "illuminance is not implemented for the {}",
+                "temperature_celsius is not implemented for the {}",
                 device.name()
             ))),
         }
@@ -420,6 +491,33 @@ impl Device {
         }
     }
 
+    fn orientation(slf: pyo3::PyRef<Self>) -> pyo3::PyResult<Orientation> {
+        match slf
+            .device
+            .as_ref()
+            .ok_or(pyo3::exceptions::PyRuntimeError::new_err(
+                "orientation called after __exit__",
+            ))? {
+            neuromorphic_drivers_rs::Device::InivationDavis346(device) => {
+                let aps_orientation = device.aps_orientation();
+                let imu_orientation = device.imu_orientation();
+                Ok(Orientation::Davis346Orientation(Davis346Orientation {
+                    dvs_invert_xy: device.dvs_invert_xy(),
+                    aps_flip_x: aps_orientation.flip_x,
+                    aps_flip_y: aps_orientation.flip_y,
+                    aps_invert_xy: aps_orientation.invert_xy,
+                    imu_flip_x: imu_orientation.flip_x,
+                    imu_flip_y: imu_orientation.flip_y,
+                    imu_flip_z: imu_orientation.flip_z,
+                }))
+            }
+            device => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                "orientation is not implemented for the {}",
+                device.name()
+            ))),
+        }
+    }
+
     fn imu_type(slf: pyo3::PyRef<Self>) -> pyo3::PyResult<Option<String>> {
         match slf
             .device
@@ -437,7 +535,7 @@ impl Device {
                 }
             },
             device => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
-                "illuminance is not implemented for the {}",
+                "imu_type is not implemented for the {}",
                 device.name()
             ))),
         }

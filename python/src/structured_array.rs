@@ -115,15 +115,32 @@ impl<const N: usize> Dtype<N> {
     }
 }
 
-pub const DVS_EVENTS_DTYPE: Dtype<4> = Dtype([
+pub const POLARITY_EVENTS_DTYPE: Dtype<4> = Dtype([
     DtypeField::new("t", DtypeBase::U64),
     DtypeField::new("x", DtypeBase::U16),
     DtypeField::new("y", DtypeBase::U16),
     DtypeField::new("on", DtypeBase::Bool),
 ]);
 
-pub const TRIGGER_EVENTS_DTYPE: Dtype<3> = Dtype([
+pub const EVT3_TRIGGER_EVENTS_DTYPE: Dtype<3> = Dtype([
     DtypeField::new("t", DtypeBase::U64),
     DtypeField::new("id", DtypeBase::U8),
     DtypeField::new("rising", DtypeBase::Bool),
+]);
+
+pub const DAVIS346_IMU_EVENTS_DTYPE: Dtype<8> = Dtype([
+    DtypeField::new("t", DtypeBase::U64),
+    DtypeField::new("accelerometer_x", DtypeBase::F32),
+    DtypeField::new("accelerometer_y", DtypeBase::F32),
+    DtypeField::new("accelerometer_z", DtypeBase::F32),
+    DtypeField::new("gyroscope_x", DtypeBase::F32),
+    DtypeField::new("gyroscope_y", DtypeBase::F32),
+    DtypeField::new("gyroscope_z", DtypeBase::F32),
+    DtypeField::new("temperature", DtypeBase::F32),
+]);
+
+pub const DAVIS346_TRIGGER_EVENTS_DTYPE: Dtype<3> = Dtype([
+    DtypeField::new("t", DtypeBase::U64),
+    DtypeField::new("id", DtypeBase::U8),
+    DtypeField::new("polarity", DtypeBase::U8),
 ]);

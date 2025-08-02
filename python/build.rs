@@ -470,6 +470,7 @@ macro_rules! generate {
                     "import numpy\n",
                     "\n",
                     "from .. import enums\n",
+                    "from ... import orientation\n",
                     "from ... import packet\n",
                     "from ... import serde\n",
                     "from ... import status",
@@ -588,7 +589,9 @@ macro_rules! generate {
                                 writer,
                                 concat!(
                                     "\n",
-                                    "    def imu_type(self) -> typing.Literal[None, \"InvenSense6050Or6150\", \"InvenSense9250\"]: ...\n",
+                                    "    def orientation(self) -> orientation.Davis346Orientation: ...\n",
+                                    "\n",
+                                    "    def imu_type(self) -> typing.Literal[None, \"InvenSense6050Or6150\", \"InvenSense9250\"]: ...",
                                 )
                             ).unwrap();
                         }

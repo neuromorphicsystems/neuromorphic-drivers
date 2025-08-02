@@ -286,13 +286,13 @@ impl Adapter {
         (lengths, index * 2)
     }
 
-    pub fn convert<HandleDvsEvent, HandleTriggerEvent>(
+    pub fn convert<HandlePolarityEvent, HandleTriggerEvent>(
         &mut self,
         slice: &[u8],
-        mut handle_dvs_event: HandleDvsEvent,
+        mut handle_polarity_event: HandlePolarityEvent,
         mut handle_trigger_event: HandleTriggerEvent,
     ) where
-        HandleDvsEvent: FnMut(neuromorphic_types::PolarityEvent<u64, u16, u16>),
+        HandlePolarityEvent: FnMut(neuromorphic_types::PolarityEvent<u64, u16, u16>),
         HandleTriggerEvent: FnMut(neuromorphic_types::TriggerEvent<u64, u8>),
     {
         for index in 0..slice.len() / 2 {
@@ -310,7 +310,7 @@ impl Adapter {
                         neuromorphic_types::Polarity::Off
                     };
                     if self.state.x < self.width && self.state.y < self.height {
-                        handle_dvs_event(neuromorphic_types::PolarityEvent {
+                        handle_polarity_event(neuromorphic_types::PolarityEvent {
                             t: self.state.t,
                             x: self.state.x,
                             y: self.state.y,
@@ -331,7 +331,7 @@ impl Adapter {
                         let set = word & ((1 << std::cmp::min(12, self.width - self.state.x)) - 1);
                         for bit in 0..12 {
                             if (set & (1 << bit)) > 0 {
-                                handle_dvs_event(neuromorphic_types::PolarityEvent {
+                                handle_polarity_event(neuromorphic_types::PolarityEvent {
                                     t: self.state.t,
                                     x: self.state.x + bit,
                                     y: self.state.y,
@@ -347,7 +347,7 @@ impl Adapter {
                         let set = word & ((1 << std::cmp::min(8, self.width - self.state.x)) - 1);
                         for bit in 0..8 {
                             if (set & (1 << bit)) > 0 {
-                                handle_dvs_event(neuromorphic_types::PolarityEvent {
+                                handle_polarity_event(neuromorphic_types::PolarityEvent {
                                     t: self.state.t,
                                     x: self.state.x + bit,
                                     y: self.state.y,

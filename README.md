@@ -138,7 +138,7 @@ def open(
     # If iterator_timeout is not None, packet may be None.
     iterator_timeout: typing.Optional[float] = None,
 
-    # whether to skip data parsing
+    # whether to skip USB data parsing
     raw: bool = False,
 
     # device serial number, None selects the first available device.
