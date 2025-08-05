@@ -19,7 +19,7 @@
 
 # Overview
 
-_Neuromorphic drivers_ is a library to interact with USB event cameras in real-time. It is compatible with all major operating systems (Linux x86 and ARM, macOS x86 and ARM, and Windows x86) and it aims to support as many commercial devices as possible.
+_Neuromorphic drivers_ is a library to interact with USB event cameras in real-time. It is compatible with all major operating systems (Linux x64 and ARM, macOS x64 and ARM, and Windows x64) and it aims to support as many commercial devices as possible.
 
 The library can be used in [Python](#python) and [Rust](#rust).
 
