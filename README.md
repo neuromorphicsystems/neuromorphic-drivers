@@ -31,16 +31,16 @@ neuromorphic_drivers is a library to interact with USB Neuromorphic devices. The
 
 # Supported features
 
-The features listed below are device features – they are implemented in the cameras, not the software. Ticked boxes indicate supported features, minus signs indicate non-existent features, and unticked boxes indicate features that exist in the camera but are not yet supported by neuromorphic-drivers.
+The features listed below are device features – they are implemented in the cameras, not the software. Tick marks indicate supported features, minus signs indicate non-existent features, and empty boxes indicate features that exist in the camera but are not yet supported by neuromorphic-drivers.
 
 Tick marks indicate supported features, minus signs indicate that the camera does not provide
 
-| Interface           | Stream data types                                   | Region of interest | External sync. | Rate limiter | Noise filter | Anti-flicker | Temperature | Illuminance | IMU sampling rate | Auto-exposure |
-| ------------------- | --------------------------------------------------- | ------------------ | -------------- | ------------ | ------------ | ------------ | ----------- | ----------- | ----------------- | ------------- |
-| prophesee_evk4      | polarity_events, trigger_events                     | [x]                | [x]            | [x]          | [ ]          | [ ]          | [x]¹        | [x]³        | -                 | -             |
-| prophesee_evk3_hd   | polarity_events, trigger_events                     | [x]                | [ ]            | [ ]          | [ ]          | [ ]          | -           | -           | -                 | -             |
-| inivation_dvxplorer | polarity_events, imu_events, trigger_events         | [ ]                | [ ]            | -            | [ ]          | -            | [x]²        | -           | [ ]               | -             |
-| inivation_davis346  | polarity_events, imu_events, trigger_events, frames | [ ]                | [ ]            | -            | [ ]          | -            | [x]²        | -           | [ ]               | [ ]           |
+| Interface           | Stream data types                                        | Region of interest | External sync. | Rate limiter | Noise filter | Anti-flicker | Temperature | Illuminance | IMU sampling rate | Auto-exposure |
+| ------------------- | -------------------------------------------------------- | ------------------ | -------------- | ------------ | ------------ | ------------ | ----------- | ----------- | ----------------- | ------------- |
+| prophesee_evk4      | `polarity_events` `trigger_events`                       | ✓                  | ✓              | ✓            | ▢            | ▢            | ✓¹          | ✓³          | -                 | -             |
+| prophesee_evk3_hd   | `polarity_events` `trigger_events`                       | ✓                  | ▢              | ▢            | ▢            | ▢            | -           | -           | -                 | -             |
+| inivation_dvxplorer | `polarity_events` `imu_events` `trigger_events`          | ▢                  | ▢              | -            | ▢            | -            | ✓²          | -           | ▢                 | -             |
+| inivation_davis346  | `polarity_events` `imu_events` `trigger_events` `frames` | ▢                  | ▢              | -            | ▢            | -            | ✓²          | -           | ▢                 | ▢             |
 
 ¹Temperature can be sampled at arbitrary times by calling a function
 
