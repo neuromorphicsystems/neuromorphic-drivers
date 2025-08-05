@@ -35,8 +35,8 @@ _Neuromorphic drivers_ does not depend on Metavision, libcaer, or dv-processing.
 | SilkyEvCam HD       | 1280 × 720 | [prophesee_evk4.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk4.py)           | <img src="photos/silkyev.png" alt="silkyev" width="200"/>     |
 | Prophesee EVK4      | 1280 × 720 | [prophesee_evk4.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk4.py)           | <img src="photos/evk4.png" alt="evk4" width="200"/>           |
 | Prophesee EVK3 HD   | 1280 × 720 | [prophesee_evk3_hd.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk3_hd.py)     | <img src="photos/evk3hd.png" alt="evk3hd" width="200"/>       |
-| iniVation DVXplorer | 640 × 480  | [inivation_dvxplorer.py](python/python/neuromorphic_drivers/generated/devices/inivation_dvxplorer.py) | <img src="photos/davis346.png" alt="davis346" width="200"/>   |
-| iniVation Davis 346 | 346 × 260  | [inivation_davis346.py](python/python/neuromorphic_drivers/generated/devices/inivation_davis346.py)   | <img src="photos/dvxplorer.png" alt="dvxplorer" width="200"/> |
+| iniVation DVXplorer | 640 × 480  | [inivation_dvxplorer.py](python/python/neuromorphic_drivers/generated/devices/inivation_dvxplorer.py) | <img src="photos/dvxplorer.png" alt="dvxplorer" width="200"/>   |
+| iniVation Davis 346 | 346 × 260  | [inivation_davis346.py](python/python/neuromorphic_drivers/generated/devices/inivation_davis346.py)   | <img src="photos/davis346.png" alt="davis346" width="200"/> |
 
 # Supported features
 
