@@ -1,3 +1,7 @@
+![pypi](https://img.shields.io/pypi/v/neuromorphic-drivers)
+![crates.io](https://img.shields.io/crates/v/neuromorphic-drivers)
+![mit-badge](https://img.shields.io/badge/license-MIT-blue)
+
 - [Overview](#overview)
 - [Supported devices](#supported-devices)
 - [Supported features](#supported-features)
@@ -47,7 +51,7 @@ Tick marks indicate supported features, minus signs indicate that the camera doe
 | Interface           | Stream data types                                        | Region of interest | External sync. | Rate limiter | Noise filter | Anti-flicker | Temperature | Illuminance | IMU sampling rate | Auto-exposure |
 | ------------------- | -------------------------------------------------------- | ------------------ | -------------- | ------------ | ------------ | ------------ | ----------- | ----------- | ----------------- | ------------- |
 | prophesee_evk4      | `polarity_events` `trigger_events`                       | ✓                  | ✓              | ✓            | ▢            | ▢            | ✓¹          | ✓³          | -                 | -             |
-| prophesee_evk3_hd   | `polarity_events` `trigger_events`                       | ✓                  | ▢              | ▢            | ▢            | ▢            | -           | -           | -                 | -             |
+| prophesee_evk3_hd   | `polarity_events` `trigger_events`                       | ✓                  | ▢              | ▢            | ▢            | ▢            | ▢           | ▢           | -                 | -             |
 | inivation_dvxplorer | `polarity_events` `imu_events` `trigger_events`          | ▢                  | ▢              | -            | ▢            | -            | ✓²          | -           | ▢                 | -             |
 | inivation_davis346  | `polarity_events` `imu_events` `trigger_events` `frames` | ▢                  | ▢              | -            | ▢            | -            | ✓²          | -           | ▢                 | ▢             |
 
