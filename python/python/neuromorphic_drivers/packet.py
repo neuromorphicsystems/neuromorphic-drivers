@@ -107,6 +107,53 @@ class Davis346Packet:
     For each overflow, the array entry is the index (in frames) of the first event after the overflow
     """
 
+class DvxplorerPacket:
+    polarity_events: typing.Optional[numpy.ndarray]
+    """
+    Polarity events (also known as change detection events and ON/OFF events)
+
+    Timestamps are in microseconds, the origin (x = 0 and y = 0) is a the top-left corner
+    """
+
+    imu_events: typing.Optional[numpy.ndarray]
+    """
+    Inertial Measurement Unit events (or samples)
+
+    Each sample contains the acceleration (in m/s), the rotation (in rad/s), and the temperature (in ºC)
+
+    The IMU's X axis is parallel to the camera's horizontal direction and oriented left-to-right when looking in the same direction as the camera
+
+    The IMU's Y axis is parallel to the camera's vertical direction and oriented bottom-to-top
+
+    The IMU's Z axis is aligned with the camera's optical axis and oriented in the same direction as the camera (sensor-to-lens)
+    """
+
+    trigger_events: typing.Optional[numpy.ndarray]
+    """
+    External trigger events (rising and falling edges), timestamped with the same clock as the polarity events
+    """
+
+    polarity_events_overflow_indices: typing.Optional[numpy.ndarray]
+    """
+    Each entry in this list indicates an overflow (USB packets dropped by the computer because the queue was full)
+
+    For each overflow, the array entry is the index (in polarity_events) of the first event after the overflow
+    """
+
+    imu_events_overflow_indices: typing.Optional[numpy.ndarray]
+    """
+    Each entry in this list indicates an overflow (USB packets dropped by the computer because the queue was full)
+
+    For each overflow, the array entry is the index (in imu_events) of the first event after the overflow
+    """
+
+    trigger_events_overflow_indices: typing.Optional[numpy.ndarray]
+    """
+    Each entry in this list indicates an overflow (USB packets dropped by the computer because the queue was full)
+
+    For each overflow, the array entry is the index (in trigger_events) of the first event after the overflow
+    """
+
 
 class Evt3Packet:
     polarity_events: typing.Optional[numpy.ndarray]

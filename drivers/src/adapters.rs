@@ -83,4 +83,4 @@ macro_rules! register {
     }
 }
 
-register! { davis346, evt3 }
+register! { davis346, dvxplorer, evt3 }

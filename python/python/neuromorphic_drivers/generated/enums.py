@@ -12,5 +12,6 @@ class Speed(enum.Enum):
 
 class Name(enum.Enum):
     INIVATION_DAVIS346 = "iniVation DAVIS 346"
+    INIVATION_DVXPLORER = "iniVation DVXplorer"
     PROPHESEE_EVK3_HD = "Prophesee EVK3 HD"
     PROPHESEE_EVK4 = "Prophesee EVK4"

@@ -8,7 +8,7 @@ class Davis346Orientation:
     imu_flip_z: bool
 
 
-class DVXplorerOrientation:
+class DvxplorerOrientation:
     dvs_flip_x: bool
     dvs_flip_y: bool
     dvs_invert_xy: bool

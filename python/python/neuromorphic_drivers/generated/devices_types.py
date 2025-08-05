@@ -9,6 +9,7 @@ from .. import device
 from .. import packet
 from .. import status
 from .devices import inivation_davis346 as inivation_davis346
+from .devices import inivation_dvxplorer as inivation_dvxplorer
 from .devices import prophesee_evk3_hd as prophesee_evk3_hd
 from .devices import prophesee_evk4 as prophesee_evk4
 from .enums import *
@@ -29,7 +30,7 @@ class GenericDevice(typing.Protocol):
 
     def __iter__(self) -> "GenericDevice": ...
 
-    def __next__(self) -> tuple[status.StatusNonOptional, typing.Union[packet.Davis346Packet, packet.Evt3Packet]]: ...
+    def __next__(self) -> tuple[status.StatusNonOptional, typing.Union[packet.Davis346Packet, packet.DvxplorerPacket, packet.Evt3Packet]]: ...
 
     def backlog(self) -> int: ...
 
@@ -64,7 +65,7 @@ class GenericDeviceOptional(typing.Protocol):
 
     def __iter__(self) -> "GenericDeviceOptional": ...
 
-    def __next__(self) -> tuple[status.Status, typing.Optional[typing.Union[packet.Davis346Packet, packet.Evt3Packet]]]: ...
+    def __next__(self) -> tuple[status.Status, typing.Optional[typing.Union[packet.Davis346Packet, packet.DvxplorerPacket, packet.Evt3Packet]]]: ...
 
     def backlog(self) -> int: ...
 
@@ -201,6 +202,54 @@ def open(
     usb_configuration: typing.Optional[UsbConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> inivation_davis346.InivationDavis346DeviceRawOptional:
+    ...
+
+
+@typing.overload
+def open(
+    configuration: inivation_dvxplorer.Configuration,
+    iterator_timeout: typing.Literal[None] = None,
+    raw: typing.Literal[False] = False,
+    serial: typing.Optional[str] = None,
+    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> inivation_dvxplorer.InivationDvxplorerDevice:
+    ...
+
+
+@typing.overload
+def open(
+    configuration: inivation_dvxplorer.Configuration,
+    iterator_timeout: float,
+    raw: typing.Literal[False] = False,
+    serial: typing.Optional[str] = None,
+    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> inivation_dvxplorer.InivationDvxplorerDeviceOptional:
+    ...
+
+
+@typing.overload
+def open(
+    configuration: inivation_dvxplorer.Configuration,
+    iterator_timeout: typing.Literal[None] = None,
+    raw: typing.Literal[True] = True,
+    serial: typing.Optional[str] = None,
+    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> inivation_dvxplorer.InivationDvxplorerDeviceRaw:
+    ...
+
+
+@typing.overload
+def open(
+    configuration: inivation_dvxplorer.Configuration,
+    iterator_timeout: float,
+    raw: typing.Literal[True] = True,
+    serial: typing.Optional[str] = None,
+    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> inivation_dvxplorer.InivationDvxplorerDeviceRawOptional:
     ...
 
 

@@ -442,4 +442,4 @@ macro_rules! register {
     };
 }
 
-register! { inivation_davis346, prophesee_evk3_hd, prophesee_evk4 }
+register! { inivation_davis346, inivation_dvxplorer, prophesee_evk3_hd, prophesee_evk4 }

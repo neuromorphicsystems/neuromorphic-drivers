@@ -1,6 +1,7 @@
 neuromorphic_drivers is a library to interact with USB Neuromorphic devices. The drivers were written from scratch with portability and performance in mind.
 
-- [Supported devices and features](#supported-devices-and-features)
+- [Supported devices](#supported-devices)
+- [Supported features](#supported-features)
 - [Python](#python)
   - [Get started](#get-started)
   - [Device configuration](#device-configuration)
@@ -17,22 +18,35 @@ neuromorphic_drivers is a library to interact with USB Neuromorphic devices. The
   - [Event rate](#event-rate)
   - [Direct Memory Access](#direct-memory-access)
 
-# Supported devices and features
+# Supported devices
 
-| Name                | Resolution | Stream data types                     | Mask | Synchronize | Rate limiter | Temperature | Illuminance |
-| ------------------- | ---------- | ------------------------------------- | ---- | ----------- | ------------ | ----------- | ----------- |
-| Prophesee EVK4      | 1280 × 720 | polarity, trigger                     | ✓    | ✓           | ✓            | ✓           | ✓           |
-| SilkyEvCam HD       | 1280 × 720 | polarity, trigger                     | ✓    | ✓           | ✓            | ✓           | ✓           |
-| IdS uEye XCP-E      | 1280 × 720 | polarity, trigger                     | ✓    | ✓           | ✓            | ✓           | ✓           |
-| Prophesee EVK3 HD   | 1280 × 720 | polarity, trigger                     | ✓    | -           | ✓            | -           | -           |
-| IniVation Davis 346 | 346 × 260  | polarity, frame, temperature, trigger | -    | -           | -            | -           | -           |
+| Device              | Resolution | Default configuration                                                                                 | Photo                                                         |
+| ------------------- | ---------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| IDS uEye XCP-E      | 1280 × 720 | [prophesee_evk4.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk4.py)           | <img src="photos/ueyexcpe.png" alt="ueyexcpe" width="200"/>   |
+| SilkyEvCam HD       | 1280 × 720 | [prophesee_evk4.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk4.py)           | <img src="photos/silkyev.png" alt="silkyev" width="200"/>     |
+| Prophesee EVK4      | 1280 × 720 | [prophesee_evk4.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk4.py)           | <img src="photos/evk4.png" alt="evk4" width="200"/>           |
+| Prophesee EVK3 HD   | 1280 × 720 | [prophesee_evk3_hd.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk3_hd.py)     | <img src="photos/evk3hd.png" alt="evk3hd" width="200"/>       |
+| iniVation DVXplorer | 640 × 480  | [inivation_dvxplorer.py](python/python/neuromorphic_drivers/generated/devices/inivation_dvxplorer.py) | <img src="photos/davis346.png" alt="davis346" width="200"/>   |
+| iniVation Davis 346 | 346 × 260  | [inivation_davis346.py](python/python/neuromorphic_drivers/generated/devices/inivation_davis346.py)   | <img src="photos/dvxplorer.png" alt="dvxplorer" width="200"/> |
 
-This table lists fratures supported by this library. Some devices support unlisted features or features marked as "no" that have yet to be added to neuromorphic_drivers.
+# Supported features
 
-| Name              | Links                                       |
-| ----------------- | ------------------------------------------- |
-| Prophesee EVK4    | https://www.prophesee.ai/event-camera-evk4/ |
-| Prophesee EVK3 HD | https://www.prophesee.ai/event-based-evk-3/ |
+The features listed below are device features – they are implemented in the cameras, not the software. Ticked boxes indicate supported features, minus signs indicate non-existent features, and unticked boxes indicate features that exist in the camera but are not yet supported by neuromorphic-drivers.
+
+Tick marks indicate supported features, minus signs indicate that the camera does not provide
+
+| Interface           | Stream data types                                   | Region of interest | External sync. | Rate limiter | Noise filter | Anti-flicker | Temperature | Illuminance | IMU sampling rate | Auto-exposure |
+| ------------------- | --------------------------------------------------- | ------------------ | -------------- | ------------ | ------------ | ------------ | ----------- | ----------- | ----------------- | ------------- |
+| prophesee_evk4      | polarity_events, trigger_events                     | [x]                | [x]            | [x]          | [ ]          | [ ]          | [x]¹        | [x]³        | -                 | -             |
+| prophesee_evk3_hd   | polarity_events, trigger_events                     | [x]                | [ ]            | [ ]          | [ ]          | [ ]          | -           | -           | -                 | -             |
+| inivation_dvxplorer | polarity_events, imu_events, trigger_events         | [ ]                | [ ]            | -            | [ ]          | -            | [x]²        | -           | [ ]               | -             |
+| inivation_davis346  | polarity_events, imu_events, trigger_events, frames | [ ]                | [ ]            | -            | [ ]          | -            | [x]²        | -           | [ ]               | [ ]           |
+
+¹Temperature can be sampled at arbitrary times by calling a function
+
+²Temperature is included in IMU packets
+
+³Illuminance can be sampled at arbitrary times by calling a function
 
 # Python
 
@@ -177,7 +191,10 @@ See _python/examples_ for different usage examples.
 
 _python/examples/any_display.py_ implements a live event viewer with exponential decays caculated by the GPU. It requires PySide6 (`pip install PySide6`).
 
-_python/examples/evk4_plot_hot_pixels_ generates plots and require Plotly (`pip install plotly pandas kaleido`).
+> [!WARNING]
+> The Python version that comes from Microsoft's Windows Store does not work with PySide6 (specifically, PySide6 complains that it cannot find qtquick2plugin.dll even though the file exists). Make sure to install Python from the official website https://www.python.org.
+
+_python/examples/evk4_plot_hot_pixels_ generates plots and require Plotly (`pip install plotly pandas kaleido nbformat`).
 
 ## Contribute
 

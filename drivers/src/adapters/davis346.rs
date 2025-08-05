@@ -54,11 +54,8 @@ impl GyroscopeScale {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImuState {
     Default,
-    Started {
-        t: u64,
-    },
+    Started,
     Typed {
-        t: u64,
         accelerometer_scale: Option<AccelerometerScale>,
         gyroscope_scale: Option<GyroscopeScale>,
         has_temperature: bool,
@@ -179,7 +176,10 @@ pub struct EventsLengths {
     pub on: usize,
     pub off: usize,
     pub imu: usize,
-    pub trigger: usize,
+    pub trigger_rising: usize,
+    pub trigger_falling: usize,
+    pub trigger_pulse: usize,
+    pub frame: usize,
 }
 
 impl Adapter {
@@ -254,7 +254,10 @@ impl Adapter {
             on: 0,
             off: 0,
             imu: 0,
-            trigger: 0,
+            trigger_rising: 0,
+            trigger_falling: 0,
+            trigger_pulse: 0,
+            frame: 0,
         }
     }
 
@@ -269,7 +272,10 @@ impl Adapter {
                 on: 0,
                 off: 0,
                 imu: 0,
-                trigger: 0,
+                trigger_rising: 0,
+                trigger_falling: 0,
+                trigger_pulse: 0,
+                frame: 0,
             },
             0,
         )
@@ -290,11 +296,11 @@ impl Adapter {
     {
         for index in 0..slice.len() / 2 {
             let word = u16::from_le_bytes([slice[index * 2], slice[index * 2 + 1]]);
-            if (word & 0x8000) > 0 {
-                let candidate_t = self.state.t_offset + (word & 0x7FFF) as u64;
-                if candidate_t >= self.state.t {
-                    self.state.t = candidate_t;
-                }
+            if (word >> 15) & 1 == 1 {
+                self.state.t = self
+                    .state
+                    .t
+                    .max(self.state.t_offset + (word & 0x7FFF) as u64);
             } else {
                 let message_type = (word & 0x7000) >> 12;
                 match message_type {
@@ -318,11 +324,10 @@ impl Adapter {
                                 polarity: neuromorphic_types::TriggerPolarity::Pulse,
                             }),
                             5 => {
-                                self.state.imu = ImuState::Started { t: self.state.t };
+                                self.state.imu = ImuState::Started;
                             }
                             7 => {
                                 if let ImuState::Typed {
-                                    t,
                                     bytes,
                                     index,
                                     accelerometer_scale,
@@ -332,7 +337,7 @@ impl Adapter {
                                 {
                                     if index == bytes.len() {
                                         handle_imu_event(ImuEvent {
-                                            t,
+                                            t: self.state.t,
                                             accelerometer_x: acceleration(
                                                 accelerometer_scale,
                                                 bytes[0],
@@ -538,121 +543,111 @@ impl Adapter {
                             }
                         }
                     }
-                    5 => {
-                        match (word & 0x0F00) >> 8 {
-                            0 => {
-                                self.state.imu = match self.state.imu {
-                                    ImuState::Default => ImuState::Default,
-                                    ImuState::Started { t } => ImuState::Started { t },
+                    5 => match (word & 0x0F00) >> 8 {
+                        0 => {
+                            self.state.imu = match self.state.imu {
+                                ImuState::Default => ImuState::Default,
+                                ImuState::Started => ImuState::Started,
+                                ImuState::Typed {
+                                    accelerometer_scale,
+                                    gyroscope_scale,
+                                    has_temperature,
+                                    mut bytes,
+                                    index,
+                                } => {
+                                    if index < bytes.len() {
+                                        bytes[index] = (word & 0xFF) as u8;
+                                    }
                                     ImuState::Typed {
-                                        t,
                                         accelerometer_scale,
                                         gyroscope_scale,
                                         has_temperature,
-                                        mut bytes,
-                                        index,
-                                    } => {
-                                        if index < bytes.len() {
-                                            bytes[index] = (word & 0xFF) as u8;
-                                        }
-                                        ImuState::Typed {
-                                            t,
-                                            accelerometer_scale,
-                                            gyroscope_scale,
-                                            has_temperature,
-                                            bytes,
-                                            index: match index {
-                                                5 => {
-                                                    if has_temperature {
-                                                        index + 1
-                                                    } else {
-                                                        if gyroscope_scale.is_some() {
-                                                            index + 3
-                                                        } else {
-                                                            index + 9
-                                                        }
-                                                    }
-                                                }
-                                                7 => {
+                                        bytes,
+                                        index: match index {
+                                            5 => {
+                                                if has_temperature {
+                                                    index + 1
+                                                } else {
                                                     if gyroscope_scale.is_some() {
-                                                        index + 1
+                                                        index + 3
                                                     } else {
-                                                        index + 7
+                                                        index + 9
                                                     }
                                                 }
-                                                _ => index + 1,
-                                            },
-                                        }
+                                            }
+                                            7 => {
+                                                if gyroscope_scale.is_some() {
+                                                    index + 1
+                                                } else {
+                                                    index + 7
+                                                }
+                                            }
+                                            _ => index + 1,
+                                        },
                                     }
-                                };
-                            }
-                            1 => {}
-                            2 => {}
-                            3 => {
-                                self.state.imu = match self.state.imu {
-                                    ImuState::Default => ImuState::Default,
-                                    ImuState::Started { t } | ImuState::Typed { t, .. } => {
-                                        let has_temperature = ((word >> 5) & 1) == 1;
-                                        let has_gyroscope = ((word >> 6) & 1) == 1;
-                                        let has_accelerometer = ((word >> 7) & 1) == 1;
-                                        ImuState::Typed {
-                                            t,
-                                            accelerometer_scale: if has_accelerometer {
-                                                Some(match (word >> 2) & 0b11 {
-                                                    0 => AccelerometerScale::TwoG,
-                                                    1 => AccelerometerScale::FourG,
-                                                    2 => AccelerometerScale::HeightG,
-                                                    3 => AccelerometerScale::SixteenG,
-                                                    _ => unreachable!(),
-                                                })
-                                            } else {
-                                                None
-                                            },
-                                            gyroscope_scale: if has_gyroscope {
-                                                Some(match word & 0b11 {
-                                                    0 => GyroscopeScale::TwoHundredAndFifty,
-                                                    1 => GyroscopeScale::FiveHundred,
-                                                    2 => GyroscopeScale::OneThousand,
-                                                    3 => GyroscopeScale::TwoThousand,
-                                                    _ => unreachable!(),
-                                                })
-                                            } else {
-                                                None
-                                            },
-                                            has_temperature,
-                                            bytes: [0u8; 14],
-                                            index: if has_accelerometer {
-                                                0
-                                            } else if has_temperature {
-                                                6
-                                            } else if has_gyroscope {
-                                                8
-                                            } else {
-                                                14
-                                            },
-                                        }
-                                    }
-                                };
-                            }
-                            _ => {
-                                println!("unexpected MISC 8 code {}", (word & 0x0F00) >> 8);
-                                // @DEV
-                            }
+                                }
+                            };
                         }
-                    }
+                        1 => {}
+                        2 => {}
+                        3 => {
+                            self.state.imu = match self.state.imu {
+                                ImuState::Default => ImuState::Default,
+                                ImuState::Started | ImuState::Typed { .. } => {
+                                    let has_temperature = ((word >> 5) & 1) == 1;
+                                    let has_gyroscope = ((word >> 6) & 1) == 1;
+                                    let has_accelerometer = ((word >> 7) & 1) == 1;
+                                    ImuState::Typed {
+                                        accelerometer_scale: if has_accelerometer {
+                                            Some(match (word >> 2) & 0b11 {
+                                                0 => AccelerometerScale::TwoG,
+                                                1 => AccelerometerScale::FourG,
+                                                2 => AccelerometerScale::HeightG,
+                                                3 => AccelerometerScale::SixteenG,
+                                                _ => unreachable!(),
+                                            })
+                                        } else {
+                                            None
+                                        },
+                                        gyroscope_scale: if has_gyroscope {
+                                            Some(match word & 0b11 {
+                                                0 => GyroscopeScale::TwoHundredAndFifty,
+                                                1 => GyroscopeScale::FiveHundred,
+                                                2 => GyroscopeScale::OneThousand,
+                                                3 => GyroscopeScale::TwoThousand,
+                                                _ => unreachable!(),
+                                            })
+                                        } else {
+                                            None
+                                        },
+                                        has_temperature,
+                                        bytes: [0u8; 14],
+                                        index: if has_accelerometer {
+                                            0
+                                        } else if has_temperature {
+                                            6
+                                        } else if has_gyroscope {
+                                            8
+                                        } else {
+                                            14
+                                        },
+                                    }
+                                }
+                            };
+                        }
+                        _ => {}
+                    },
                     6 => {
                         match (word & 0x0C00) >> 10 {
                             0 => {
                                 // @DEV @TODO auto-exposure feedback
                             }
-                            _ => {
-                                println!("unexpected MISC 10 code {}", (word & 0x0C00) >> 10);
-                                // @DEV
-                            }
+                            _ => {}
                         }
                     }
                     7 => {
                         self.state.t_offset += 0x8000;
+                        self.state.t = self.state.t.max(self.state.t_offset);
                     }
                     _ => unreachable!(),
                 }

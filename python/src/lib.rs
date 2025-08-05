@@ -511,6 +511,18 @@ impl Device {
                     imu_flip_z: imu_orientation.flip_z,
                 }))
             }
+            neuromorphic_drivers_rs::Device::InivationDvxplorer(device) => {
+                let dvs_orientation = device.dvs_orientation();
+                let imu_orientation = device.imu_orientation();
+                Ok(Orientation::DVXplorerOrientation(DVXplorerOrientation {
+                    dvs_flip_x: dvs_orientation.flip_x,
+                    dvs_flip_y: dvs_orientation.flip_y,
+                    dvs_invert_xy: dvs_orientation.invert_xy,
+                    imu_flip_x: imu_orientation.flip_x,
+                    imu_flip_y: imu_orientation.flip_y,
+                    imu_flip_z: imu_orientation.flip_z,
+                }))
+            }
             device => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
                 "orientation is not implemented for the {}",
                 device.name()

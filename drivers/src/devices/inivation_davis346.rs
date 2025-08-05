@@ -117,13 +117,13 @@ pub enum Error {
     #[error(transparent)]
     Usb(#[from] usb::Error),
 
-    #[error("Firmware version not supported (the software expects version 0.6 or later, the camera uses {minor}.{subminor})")]
+    #[error("Firmware version not supported (neuromorphic-drivers expects version 0.6 or later, the camera runs on version {minor}.{subminor})")]
     FirmwareVersion { minor: u8, subminor: u8 },
 
-    #[error("Logic version not supported (the software expects version 18, the camera uses {0})")]
+    #[error("Logic version not supported (neuromorphic-drivers expects version 18, the camera runs on version {0})")]
     LogicVersion(u32),
 
-    #[error("Logic patch not supported (the software expects version 1, the camera uses {0})")]
+    #[error("Logic patch not supported (neuromorphic-drivers expects version 1, the camera runs on version {0})")]
     LogicPatch(u32),
 
     #[error("Short SPI read to {module_address:#04X}:{parameter_address:#04X} (expected {expected} bytes, read {count} bytes)")]
@@ -338,12 +338,12 @@ impl device::Usb for Device {
         IMU_GYROSCOPE_RUN.set(&handle, 0)?;
         IMU_TEMPERATURE_RUN.set(&handle, 0)?;
         EXTERNAL_INPUT_DETECTOR_RUN.set(&handle, 0)?;
-        EXTERNAL_INPUT_RUN_GENERATOR.set(&handle, 0)?;
+        EXTERNAL_INPUT_GENERATOR_RUN.set(&handle, 0)?;
         MULTIPLEXER_RUN.set(&handle, 0)?;
         MULTIPLEXER_TIMESTAMP_RUN.set(&handle, 0)?;
         USB_RUN.set(&handle, 0)?;
         MULTIPLEXER_CHIP_RUN.set(&handle, 0)?;
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        std::thread::sleep(std::time::Duration::from_millis(100));
         handle.clear_halt(0x82)?;
         CHIP_BIAS_APSOVERFLOWLEVEL.set(&handle, 27 | (6 << 6))?;
         CHIP_BIAS_APSCAS.set(&handle, 21 | (6 << 6))?;
@@ -409,7 +409,11 @@ impl device::Usb for Device {
         IMU_TEMPERATURE_RUN.set(&handle, 1)?;
         EXTERNAL_INPUT_DETECT_RISING_EDGES.set(&handle, 0)?;
         EXTERNAL_INPUT_DETECT_FALLING_EDGES.set(&handle, 0)?;
-        EXTERNAL_INPUT_DETECT_PULSES.set(&handle, 1)?;
+        EXTERNAL_INPUT_GENERATE_PULSE_LENGTH.set(&handle, (5.0 * logic_clock).round() as u32)?;
+        EXTERNAL_INPUT_GENERATE_PULSE_INTERVAL.set(&handle, (5.0 * logic_clock).round() as u32)?;
+        EXTERNAL_INPUT_GENERATE_INJECT_ON_RISING_EDGE.set(&handle, 0)?;
+        EXTERNAL_INPUT_GENERATE_INJECT_ON_FALLING_EDGE.set(&handle, 0)?;
+        EXTERNAL_INPUT_DETECT_PULSES.set(&handle, 0)?;
         EXTERNAL_INPUT_DETECT_PULSE_POLARITY.set(&handle, 1)?;
         EXTERNAL_INPUT_DETECT_PULSE_LENGTH.set(&handle, (10.0 * logic_clock).round() as u32)?;
         EXTERNAL_INPUT_DETECTOR_RUN.set(&handle, 0)?;
@@ -771,13 +775,16 @@ fn update_configuration(
         } {
             for (index, code) in configuration.pixel_mask.iter().enumerate() {
                 let (x_value, y_value) = if *code == 0 {
-                    (346, 260)
+                    (PROPERTIES.width as u32, PROPERTIES.height as u32)
                 } else {
-                    ((code - 1) % 346, (code - 1) / 346)
+                    (
+                        (code - 1) % PROPERTIES.width as u32,
+                        (code - 1) / PROPERTIES.width as u32,
+                    )
                 };
-                SpiRegister::new(DVS_MODULE_ADDRESS, (11 + 2 * index) as u16)
+                SpiRegister::new(ModuleAddress::Dvs, (11 + 2 * index) as u16)
                     .set(handle, y_value)?;
-                SpiRegister::new(DVS_MODULE_ADDRESS, (12 + 2 * index) as u16)
+                SpiRegister::new(ModuleAddress::Dvs, (12 + 2 * index) as u16)
                     .set(handle, x_value)?;
             }
         }
@@ -818,12 +825,12 @@ fn update_configuration(
             DVS_FILTER_ROI_END_COLUMN.set(
                 handle,
                 (configuration.region_of_interest.left + configuration.region_of_interest.width)
-                    .min(345) as u32,
+                    .min(PROPERTIES.width - 1) as u32,
             )?;
             DVS_FILTER_ROI_END_ROW.set(
                 handle,
                 (configuration.region_of_interest.top + configuration.region_of_interest.height)
-                    .min(259) as u32,
+                    .min(PROPERTIES.height - 1) as u32,
             )?;
         }
     }
@@ -952,218 +959,216 @@ where
     adc_clock: f64,
 }
 
+#[repr(u16)]
+#[derive(Clone, Copy)]
+enum ModuleAddress {
+    Multiplexer = 0,
+    Dvs = 1,
+    Aps = 2,
+    Imu = 3,
+    ExternalInput = 4,
+    Chip = 5,
+    SystemInformation = 6,
+    Usb = 9,
+}
+
 struct SpiRegister {
-    module_address: u16,
+    module_address: ModuleAddress,
     parameter_address: u16,
 }
 
 struct SpiRegister64 {
-    module_address: u16,
+    module_address: ModuleAddress,
     parameter_address: u16,
 }
 
-// module addresses
-const MULTIPLEXER_MODULE_ADDRESS: u16 = 0;
-const DVS_MODULE_ADDRESS: u16 = 1;
-const APS_MODULE_ADDRESS: u16 = 2;
-const IMU_MODULE_ADDRESS: u16 = 3;
-const EXTERNAL_INPUT_MODULE_ADDRESS: u16 = 4;
-const CHIP_MODULE_ADDRESS: u16 = 5;
-const SYSTEM_INFORMATION_MODULE_ADDRESS: u16 = 6;
-const USB_MODULE_ADDRESS: u16 = 9;
-
 // multiplexer module registers
-const MULTIPLEXER_RUN: SpiRegister = SpiRegister::new(MULTIPLEXER_MODULE_ADDRESS, 0);
-const MULTIPLEXER_TIMESTAMP_RUN: SpiRegister = SpiRegister::new(MULTIPLEXER_MODULE_ADDRESS, 1);
+const MULTIPLEXER_RUN: SpiRegister = SpiRegister::new(ModuleAddress::Multiplexer, 0);
+const MULTIPLEXER_TIMESTAMP_RUN: SpiRegister = SpiRegister::new(ModuleAddress::Multiplexer, 1);
 #[allow(dead_code)]
-const MULTIPLEXER_TIMESTAMP_RESET: SpiRegister = SpiRegister::new(MULTIPLEXER_MODULE_ADDRESS, 2);
-const MULTIPLEXER_CHIP_RUN: SpiRegister = SpiRegister::new(MULTIPLEXER_MODULE_ADDRESS, 3);
+const MULTIPLEXER_TIMESTAMP_RESET: SpiRegister = SpiRegister::new(ModuleAddress::Multiplexer, 2);
+const MULTIPLEXER_CHIP_RUN: SpiRegister = SpiRegister::new(ModuleAddress::Multiplexer, 3);
 const MULTIPLEXER_DROP_EXTERNAL_INPUT_ON_STALL: SpiRegister =
-    SpiRegister::new(MULTIPLEXER_MODULE_ADDRESS, 4);
-const MULTIPLEXER_DROP_DVS_ON_STALL: SpiRegister = SpiRegister::new(MULTIPLEXER_MODULE_ADDRESS, 5);
+    SpiRegister::new(ModuleAddress::Multiplexer, 4);
+const MULTIPLEXER_DROP_DVS_ON_STALL: SpiRegister = SpiRegister::new(ModuleAddress::Multiplexer, 5);
 #[allow(dead_code)]
-const MULTIPLEXER_HAS_STATISTICS: SpiRegister = SpiRegister::new(MULTIPLEXER_MODULE_ADDRESS, 80);
+const MULTIPLEXER_HAS_STATISTICS: SpiRegister = SpiRegister::new(ModuleAddress::Multiplexer, 80);
 #[allow(dead_code)]
 const MULTIPLEXER_STATISTICS_EXTERNAL_INPUT_DROPPED: SpiRegister64 =
-    SpiRegister64::new(MULTIPLEXER_MODULE_ADDRESS, 81);
+    SpiRegister64::new(ModuleAddress::Multiplexer, 81);
 #[allow(dead_code)]
 const MULTIPLEXER_STATISTICS_DVS_DROPPED: SpiRegister64 =
-    SpiRegister64::new(MULTIPLEXER_MODULE_ADDRESS, 83);
+    SpiRegister64::new(ModuleAddress::Multiplexer, 83);
 
 // dvs module registers
-const DVS_SIZE_COLUMNS: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 0);
-const DVS_SIZE_ROWS: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 1);
-const DVS_ORIENTATION: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 2);
-const DVS_RUN: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 3);
-const DVS_WAIT_ON_STALL: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 4);
-const DVS_EXTERNAL_AER_CONTROL: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 5);
-const DVS_HAS_PIXEL_FILTER: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 10);
-const DVS_HAS_BACKGROUND_ACTIVITY_FILTER: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 30);
-const DVS_FILTER_BACKGROUND_ACTIVITY: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 31);
-const DVS_FILTER_BACKGROUND_ACTIVITY_TIME: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 32);
-const DVS_FILTER_REFRACTORY_PERIOD: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 33);
-const DVS_FILTER_REFRACTORY_PERIOD_TIME: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 34);
-const DVS_HAS_ROI_FILTER: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 40);
-const DVS_FILTER_ROI_START_COLUMN: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 41);
-const DVS_FILTER_ROI_START_ROW: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 42);
-const DVS_FILTER_ROI_END_COLUMN: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 43);
-const DVS_FILTER_ROI_END_ROW: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 44);
-const DVS_HAS_SKIP_FILTER: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 50);
-const DVS_FILTER_SKIP_EVENTS: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 51);
-const DVS_FILTER_SKIP_EVENTS_EVERY: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 52);
-const DVS_HAS_POLARITY_FILTER: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 60);
-const DVS_FILTER_POLARITY_FLATTEN: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 61);
-const DVS_FILTER_POLARITY_SUPPRESS: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 62);
-const DVS_FILTER_POLARITY_SUPPRESS_TYPE: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 63);
+const DVS_SIZE_COLUMNS: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 0);
+const DVS_SIZE_ROWS: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 1);
+const DVS_ORIENTATION: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 2);
+const DVS_RUN: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 3);
+const DVS_WAIT_ON_STALL: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 4);
+const DVS_EXTERNAL_AER_CONTROL: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 5);
+const DVS_HAS_PIXEL_FILTER: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 10);
+const DVS_HAS_BACKGROUND_ACTIVITY_FILTER: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 30);
+const DVS_FILTER_BACKGROUND_ACTIVITY: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 31);
+const DVS_FILTER_BACKGROUND_ACTIVITY_TIME: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 32);
+const DVS_FILTER_REFRACTORY_PERIOD: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 33);
+const DVS_FILTER_REFRACTORY_PERIOD_TIME: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 34);
+const DVS_HAS_ROI_FILTER: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 40);
+const DVS_FILTER_ROI_START_COLUMN: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 41);
+const DVS_FILTER_ROI_START_ROW: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 42);
+const DVS_FILTER_ROI_END_COLUMN: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 43);
+const DVS_FILTER_ROI_END_ROW: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 44);
+const DVS_HAS_SKIP_FILTER: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 50);
+const DVS_FILTER_SKIP_EVENTS: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 51);
+const DVS_FILTER_SKIP_EVENTS_EVERY: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 52);
+const DVS_HAS_POLARITY_FILTER: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 60);
+const DVS_FILTER_POLARITY_FLATTEN: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 61);
+const DVS_FILTER_POLARITY_SUPPRESS: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 62);
+const DVS_FILTER_POLARITY_SUPPRESS_TYPE: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 63);
 #[allow(dead_code)]
-const DVS_HAS_STATISTICS: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 80);
+const DVS_HAS_STATISTICS: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 80);
 #[allow(dead_code)]
-const DVS_STATISTICS_EVENTS_ROW: SpiRegister64 = SpiRegister64::new(DVS_MODULE_ADDRESS, 81);
+const DVS_STATISTICS_EVENTS_ROW: SpiRegister64 = SpiRegister64::new(ModuleAddress::Dvs, 81);
 #[allow(dead_code)]
-const DVS_STATISTICS_EVENTS_COLUMN: SpiRegister64 = SpiRegister64::new(DVS_MODULE_ADDRESS, 83);
+const DVS_STATISTICS_EVENTS_COLUMN: SpiRegister64 = SpiRegister64::new(ModuleAddress::Dvs, 83);
 #[allow(dead_code)]
-const DVS_STATISTICS_EVENTS_DROPPED: SpiRegister64 = SpiRegister64::new(DVS_MODULE_ADDRESS, 85);
+const DVS_STATISTICS_EVENTS_DROPPED: SpiRegister64 = SpiRegister64::new(ModuleAddress::Dvs, 85);
 #[allow(dead_code)]
-const DVS_STATISTICS_FILTERED_PIXELS: SpiRegister64 = SpiRegister64::new(DVS_MODULE_ADDRESS, 87);
+const DVS_STATISTICS_FILTERED_PIXELS: SpiRegister64 = SpiRegister64::new(ModuleAddress::Dvs, 87);
 #[allow(dead_code)]
 const DVS_STATISTICS_FILTERED_BACKGROUND_ACTIVITY: SpiRegister64 =
-    SpiRegister64::new(DVS_MODULE_ADDRESS, 89);
+    SpiRegister64::new(ModuleAddress::Dvs, 89);
 #[allow(dead_code)]
 const DVS_STATISTICS_FILTERED_REFRACTORY_PERIOD: SpiRegister64 =
-    SpiRegister64::new(DVS_MODULE_ADDRESS, 91);
+    SpiRegister64::new(ModuleAddress::Dvs, 91);
 #[allow(dead_code)]
-const DVS_FILTER_PIXEL_AUTO_TRAIN: SpiRegister = SpiRegister::new(DVS_MODULE_ADDRESS, 100);
+const DVS_FILTER_PIXEL_AUTO_TRAIN: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 100);
 
 // aps module registers
-const APS_SIZE_COLUMNS: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 0);
-const APS_SIZE_ROWS: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 1);
-const APS_ORIENTATION: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 2);
+const APS_SIZE_COLUMNS: SpiRegister = SpiRegister::new(ModuleAddress::Aps, 0);
+const APS_SIZE_ROWS: SpiRegister = SpiRegister::new(ModuleAddress::Aps, 1);
+const APS_ORIENTATION: SpiRegister = SpiRegister::new(ModuleAddress::Aps, 2);
 #[allow(dead_code)]
-const APS_COLOR_FILTER: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 3);
-const APS_RUN: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 4);
-const APS_WAIT_ON_STALL: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 5);
-const APS_HAS_GLOBAL_SHUTTER: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 6);
-const APS_GLOBAL_SHUTTER: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 7);
-const APS_START_COLUMN_0: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 8);
-const APS_START_ROW_0: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 9);
-const APS_END_COLUMN_0: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 10);
-const APS_END_ROW_0: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 11);
-const APS_EXPOSURE: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 12);
-const APS_FRAME_INTERVAL: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 13);
+const APS_COLOR_FILTER: SpiRegister = SpiRegister::new(ModuleAddress::Aps, 3);
+const APS_RUN: SpiRegister = SpiRegister::new(ModuleAddress::Aps, 4);
+const APS_WAIT_ON_STALL: SpiRegister = SpiRegister::new(ModuleAddress::Aps, 5);
+const APS_HAS_GLOBAL_SHUTTER: SpiRegister = SpiRegister::new(ModuleAddress::Aps, 6);
+const APS_GLOBAL_SHUTTER: SpiRegister = SpiRegister::new(ModuleAddress::Aps, 7);
+const APS_START_COLUMN_0: SpiRegister = SpiRegister::new(ModuleAddress::Aps, 8);
+const APS_START_ROW_0: SpiRegister = SpiRegister::new(ModuleAddress::Aps, 9);
+const APS_END_COLUMN_0: SpiRegister = SpiRegister::new(ModuleAddress::Aps, 10);
+const APS_END_ROW_0: SpiRegister = SpiRegister::new(ModuleAddress::Aps, 11);
+const APS_EXPOSURE: SpiRegister = SpiRegister::new(ModuleAddress::Aps, 12);
+const APS_FRAME_INTERVAL: SpiRegister = SpiRegister::new(ModuleAddress::Aps, 13);
 #[allow(dead_code)]
-const APS_AUTOEXPOSURE: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 101);
+const APS_AUTOEXPOSURE: SpiRegister = SpiRegister::new(ModuleAddress::Aps, 101);
 #[allow(dead_code)]
-const APS_FRAME_MODE: SpiRegister = SpiRegister::new(APS_MODULE_ADDRESS, 102);
+const APS_FRAME_MODE: SpiRegister = SpiRegister::new(ModuleAddress::Aps, 102);
 
 // imu module registers
-const IMU_TYPE: SpiRegister = SpiRegister::new(IMU_MODULE_ADDRESS, 0);
-const IMU_ORIENTATION: SpiRegister = SpiRegister::new(IMU_MODULE_ADDRESS, 1);
-const IMU_ACCELEROMETER_RUN: SpiRegister = SpiRegister::new(IMU_MODULE_ADDRESS, 2);
-const IMU_GYROSCOPE_RUN: SpiRegister = SpiRegister::new(IMU_MODULE_ADDRESS, 3);
-const IMU_TEMPERATURE_RUN: SpiRegister = SpiRegister::new(IMU_MODULE_ADDRESS, 4);
-const IMU_SAMPLE_RATE_DIVIDER: SpiRegister = SpiRegister::new(IMU_MODULE_ADDRESS, 5);
+const IMU_TYPE: SpiRegister = SpiRegister::new(ModuleAddress::Imu, 0);
+const IMU_ORIENTATION: SpiRegister = SpiRegister::new(ModuleAddress::Imu, 1);
+const IMU_ACCELEROMETER_RUN: SpiRegister = SpiRegister::new(ModuleAddress::Imu, 2);
+const IMU_GYROSCOPE_RUN: SpiRegister = SpiRegister::new(ModuleAddress::Imu, 3);
+const IMU_TEMPERATURE_RUN: SpiRegister = SpiRegister::new(ModuleAddress::Imu, 4);
+const IMU_SAMPLE_RATE_DIVIDER: SpiRegister = SpiRegister::new(ModuleAddress::Imu, 5);
 const IMU_ACCELEROMETER_DIGITAL_LOW_PASS_FILTER: SpiRegister =
-    SpiRegister::new(IMU_MODULE_ADDRESS, 6);
-const IMU_ACCELEROMETER_FULL_SCALE: SpiRegister = SpiRegister::new(IMU_MODULE_ADDRESS, 7);
-const IMU_GYROSCOPE_DIGITAL_LOW_PASS_FILTER: SpiRegister = SpiRegister::new(IMU_MODULE_ADDRESS, 9);
-const IMU_GYROSCOPE_FULL_SCALE: SpiRegister = SpiRegister::new(IMU_MODULE_ADDRESS, 10);
+    SpiRegister::new(ModuleAddress::Imu, 6);
+const IMU_ACCELEROMETER_FULL_SCALE: SpiRegister = SpiRegister::new(ModuleAddress::Imu, 7);
+const IMU_GYROSCOPE_DIGITAL_LOW_PASS_FILTER: SpiRegister = SpiRegister::new(ModuleAddress::Imu, 9);
+const IMU_GYROSCOPE_FULL_SCALE: SpiRegister = SpiRegister::new(ModuleAddress::Imu, 10);
 
 // external input module registers
-const EXTERNAL_INPUT_DETECTOR_RUN: SpiRegister = SpiRegister::new(EXTERNAL_INPUT_MODULE_ADDRESS, 0);
+const EXTERNAL_INPUT_DETECTOR_RUN: SpiRegister = SpiRegister::new(ModuleAddress::ExternalInput, 0);
 const EXTERNAL_INPUT_DETECT_RISING_EDGES: SpiRegister =
-    SpiRegister::new(EXTERNAL_INPUT_MODULE_ADDRESS, 1);
+    SpiRegister::new(ModuleAddress::ExternalInput, 1);
 const EXTERNAL_INPUT_DETECT_FALLING_EDGES: SpiRegister =
-    SpiRegister::new(EXTERNAL_INPUT_MODULE_ADDRESS, 2);
-const EXTERNAL_INPUT_DETECT_PULSES: SpiRegister =
-    SpiRegister::new(EXTERNAL_INPUT_MODULE_ADDRESS, 3);
+    SpiRegister::new(ModuleAddress::ExternalInput, 2);
+const EXTERNAL_INPUT_DETECT_PULSES: SpiRegister = SpiRegister::new(ModuleAddress::ExternalInput, 3);
 const EXTERNAL_INPUT_DETECT_PULSE_POLARITY: SpiRegister =
-    SpiRegister::new(EXTERNAL_INPUT_MODULE_ADDRESS, 4);
+    SpiRegister::new(ModuleAddress::ExternalInput, 4);
 const EXTERNAL_INPUT_DETECT_PULSE_LENGTH: SpiRegister =
-    SpiRegister::new(EXTERNAL_INPUT_MODULE_ADDRESS, 5);
+    SpiRegister::new(ModuleAddress::ExternalInput, 5);
 #[allow(dead_code)]
 const EXTERNAL_INPUT_HAS_GENERATOR: SpiRegister =
-    SpiRegister::new(EXTERNAL_INPUT_MODULE_ADDRESS, 10);
-const EXTERNAL_INPUT_RUN_GENERATOR: SpiRegister =
-    SpiRegister::new(EXTERNAL_INPUT_MODULE_ADDRESS, 11);
+    SpiRegister::new(ModuleAddress::ExternalInput, 10);
+const EXTERNAL_INPUT_GENERATOR_RUN: SpiRegister =
+    SpiRegister::new(ModuleAddress::ExternalInput, 11);
 #[allow(dead_code)]
 const EXTERNAL_INPUT_GENERATE_PULSE_POLARITY: SpiRegister =
-    SpiRegister::new(EXTERNAL_INPUT_MODULE_ADDRESS, 12);
-#[allow(dead_code)]
+    SpiRegister::new(ModuleAddress::ExternalInput, 12);
 const EXTERNAL_INPUT_GENERATE_PULSE_INTERVAL: SpiRegister =
-    SpiRegister::new(EXTERNAL_INPUT_MODULE_ADDRESS, 13);
-#[allow(dead_code)]
+    SpiRegister::new(ModuleAddress::ExternalInput, 13);
 const EXTERNAL_INPUT_GENERATE_PULSE_LENGTH: SpiRegister =
-    SpiRegister::new(EXTERNAL_INPUT_MODULE_ADDRESS, 14);
-#[allow(dead_code)]
+    SpiRegister::new(ModuleAddress::ExternalInput, 14);
 const EXTERNAL_INPUT_GENERATE_INJECT_ON_RISING_EDGE: SpiRegister =
-    SpiRegister::new(EXTERNAL_INPUT_MODULE_ADDRESS, 15);
-#[allow(dead_code)]
+    SpiRegister::new(ModuleAddress::ExternalInput, 15);
 const EXTERNAL_INPUT_GENERATE_INJECT_ON_FALLING_EDGE: SpiRegister =
-    SpiRegister::new(EXTERNAL_INPUT_MODULE_ADDRESS, 16);
+    SpiRegister::new(ModuleAddress::ExternalInput, 16);
 
 // chip module registers
-const CHIP_BIAS_APSOVERFLOWLEVEL: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 0);
-const CHIP_BIAS_APSCAS: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 1);
-const CHIP_BIAS_ADCREFHIGH: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 2);
-const CHIP_BIAS_ADCREFLOW: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 3);
-const CHIP_BIAS_ADCTESTVOLTAGE: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 4);
-const CHIP_BIAS_LOCALBUFBN: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 8);
-const CHIP_BIAS_PADFOLLBN: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 9);
-const CHIP_BIAS_DIFFBN: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 10);
-const CHIP_BIAS_ONBN: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 11);
-const CHIP_BIAS_OFFBN: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 12);
-const CHIP_BIAS_PIXINVBN: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 13);
-const CHIP_BIAS_PRBP: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 14);
-const CHIP_BIAS_PRSFBP: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 15);
-const CHIP_BIAS_REFRBP: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 16);
-const CHIP_BIAS_READOUTBUFBP: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 17);
-const CHIP_BIAS_APSROSFBN: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 18);
-const CHIP_BIAS_ADCCOMPBP: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 19);
-const CHIP_BIAS_COLSELLOWBN: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 20);
-const CHIP_BIAS_DACBUFBP: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 21);
-const CHIP_BIAS_LCOLTIMEOUTBN: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 22);
-const CHIP_BIAS_AEPDBN: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 23);
-const CHIP_BIAS_AEPUXBP: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 24);
-const CHIP_BIAS_AEPUYBP: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 25);
-const CHIP_BIAS_IFREFRBN: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 26);
-const CHIP_BIAS_IFTHRBN: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 27);
-const CHIP_BIAS_BUFFER: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 34);
-const CHIP_BIAS_SSP: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 35);
-const CHIP_BIAS_SSN: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 36);
-const CHIP_DIGITALMUX0: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 128);
-const CHIP_DIGITALMUX1: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 129);
-const CHIP_DIGITALMUX2: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 130);
-const CHIP_DIGITALMUX3: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 131);
-const CHIP_ANALOGMUX0: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 132);
-const CHIP_ANALOGMUX1: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 133);
-const CHIP_ANALOGMUX2: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 134);
-const CHIP_BIASMUX0: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 135);
-const CHIP_RESETCALIBNEURON: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 136);
-const CHIP_TYPENCALIBNEURON: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 137);
-const CHIP_RESETTESTPIXEL: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 138);
+const CHIP_BIAS_APSOVERFLOWLEVEL: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 0);
+const CHIP_BIAS_APSCAS: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 1);
+const CHIP_BIAS_ADCREFHIGH: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 2);
+const CHIP_BIAS_ADCREFLOW: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 3);
+const CHIP_BIAS_ADCTESTVOLTAGE: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 4);
+const CHIP_BIAS_LOCALBUFBN: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 8);
+const CHIP_BIAS_PADFOLLBN: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 9);
+const CHIP_BIAS_DIFFBN: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 10);
+const CHIP_BIAS_ONBN: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 11);
+const CHIP_BIAS_OFFBN: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 12);
+const CHIP_BIAS_PIXINVBN: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 13);
+const CHIP_BIAS_PRBP: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 14);
+const CHIP_BIAS_PRSFBP: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 15);
+const CHIP_BIAS_REFRBP: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 16);
+const CHIP_BIAS_READOUTBUFBP: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 17);
+const CHIP_BIAS_APSROSFBN: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 18);
+const CHIP_BIAS_ADCCOMPBP: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 19);
+const CHIP_BIAS_COLSELLOWBN: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 20);
+const CHIP_BIAS_DACBUFBP: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 21);
+const CHIP_BIAS_LCOLTIMEOUTBN: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 22);
+const CHIP_BIAS_AEPDBN: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 23);
+const CHIP_BIAS_AEPUXBP: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 24);
+const CHIP_BIAS_AEPUYBP: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 25);
+const CHIP_BIAS_IFREFRBN: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 26);
+const CHIP_BIAS_IFTHRBN: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 27);
+const CHIP_BIAS_BUFFER: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 34);
+const CHIP_BIAS_SSP: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 35);
+const CHIP_BIAS_SSN: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 36);
+const CHIP_DIGITALMUX0: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 128);
+const CHIP_DIGITALMUX1: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 129);
+const CHIP_DIGITALMUX2: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 130);
+const CHIP_DIGITALMUX3: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 131);
+const CHIP_ANALOGMUX0: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 132);
+const CHIP_ANALOGMUX1: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 133);
+const CHIP_ANALOGMUX2: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 134);
+const CHIP_BIASMUX0: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 135);
+const CHIP_RESETCALIBNEURON: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 136);
+const CHIP_TYPENCALIBNEURON: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 137);
+const CHIP_RESETTESTPIXEL: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 138);
 #[allow(dead_code)]
-const CHIP_SPECIALPIXELCONTROL: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 139);
-const CHIP_AERNAROW: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 140);
-const CHIP_USEAOUT: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 141);
-const CHIP_GLOBAL_SHUTTER: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 142);
-const CHIP_SELECTGRAYCOUNTER: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 143);
-const CHIP_TESTADC: SpiRegister = SpiRegister::new(CHIP_MODULE_ADDRESS, 144);
+const CHIP_SPECIALPIXELCONTROL: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 139);
+const CHIP_AERNAROW: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 140);
+const CHIP_USEAOUT: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 141);
+const CHIP_GLOBAL_SHUTTER: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 142);
+const CHIP_SELECTGRAYCOUNTER: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 143);
+const CHIP_TESTADC: SpiRegister = SpiRegister::new(ModuleAddress::Chip, 144);
 
 // system information module registers
-const LOGIC_VERSION: SpiRegister = SpiRegister::new(SYSTEM_INFORMATION_MODULE_ADDRESS, 0);
+const LOGIC_VERSION: SpiRegister = SpiRegister::new(ModuleAddress::SystemInformation, 0);
 #[allow(dead_code)]
-const CHIP_IDENTIFIER: SpiRegister = SpiRegister::new(SYSTEM_INFORMATION_MODULE_ADDRESS, 1);
+const CHIP_IDENTIFIER: SpiRegister = SpiRegister::new(ModuleAddress::SystemInformation, 1);
 #[allow(dead_code)]
-const CHIP_IS_PRIMARY: SpiRegister = SpiRegister::new(SYSTEM_INFORMATION_MODULE_ADDRESS, 2);
-const LOGIC_CLOCK: SpiRegister = SpiRegister::new(SYSTEM_INFORMATION_MODULE_ADDRESS, 3);
-const ADC_CLOCK: SpiRegister = SpiRegister::new(SYSTEM_INFORMATION_MODULE_ADDRESS, 4);
-const USB_CLOCK: SpiRegister = SpiRegister::new(SYSTEM_INFORMATION_MODULE_ADDRESS, 5);
-const CLOCK_DEVIATION: SpiRegister = SpiRegister::new(SYSTEM_INFORMATION_MODULE_ADDRESS, 6);
-const LOGIC_PATCH: SpiRegister = SpiRegister::new(SYSTEM_INFORMATION_MODULE_ADDRESS, 7);
+const CHIP_IS_PRIMARY: SpiRegister = SpiRegister::new(ModuleAddress::SystemInformation, 2);
+const LOGIC_CLOCK: SpiRegister = SpiRegister::new(ModuleAddress::SystemInformation, 3);
+const ADC_CLOCK: SpiRegister = SpiRegister::new(ModuleAddress::SystemInformation, 4);
+const USB_CLOCK: SpiRegister = SpiRegister::new(ModuleAddress::SystemInformation, 5);
+const CLOCK_DEVIATION: SpiRegister = SpiRegister::new(ModuleAddress::SystemInformation, 6);
+const LOGIC_PATCH: SpiRegister = SpiRegister::new(ModuleAddress::SystemInformation, 7);
 
 // usb module registers
-const USB_RUN: SpiRegister = SpiRegister::new(USB_MODULE_ADDRESS, 0);
-const USB_EARLY_PACKET_DELAY: SpiRegister = SpiRegister::new(USB_MODULE_ADDRESS, 1);
+const USB_RUN: SpiRegister = SpiRegister::new(ModuleAddress::Usb, 0);
+const USB_EARLY_PACKET_DELAY: SpiRegister = SpiRegister::new(ModuleAddress::Usb, 1);
 
 impl SpiRegister {
     fn get(&self, handle: &rusb::DeviceHandle<rusb::Context>) -> Result<u32, Error> {
@@ -1171,14 +1176,14 @@ impl SpiRegister {
         let count = handle.read_control(
             0xC0,
             0xBF,
-            self.module_address,
+            self.module_address as u16,
             self.parameter_address,
             &mut buffer,
             TIMEOUT,
         )?;
         if count != 4 {
             return Err(Error::ShortRead {
-                module_address: self.module_address,
+                module_address: self.module_address as u16,
                 parameter_address: self.parameter_address,
                 expected: 4,
                 count,
@@ -1192,14 +1197,14 @@ impl SpiRegister {
         let count = handle.write_control(
             0x40,
             0xBF,
-            self.module_address,
+            self.module_address as u16,
             self.parameter_address,
             &buffer,
             TIMEOUT,
         )?;
         if count != 4 {
             return Err(Error::ShortWrite {
-                module_address: self.module_address,
+                module_address: self.module_address as u16,
                 parameter_address: self.parameter_address,
                 expected: 4,
                 count,
@@ -1208,7 +1213,7 @@ impl SpiRegister {
         Ok(())
     }
 
-    const fn new(module_address: u16, parameter_address: u16) -> Self {
+    const fn new(module_address: ModuleAddress, parameter_address: u16) -> Self {
         Self {
             module_address,
             parameter_address,
@@ -1232,7 +1237,7 @@ impl SpiRegister64 {
         Ok(((msb as u64) << 32) | (lsb as u64))
     }
 
-    const fn new(module_address: u16, parameter_address: u16) -> Self {
+    const fn new(module_address: ModuleAddress, parameter_address: u16) -> Self {
         Self {
             module_address,
             parameter_address,

@@ -574,17 +574,7 @@ macro_rules! generate {
                             iter_data_right_suffix,
                             stringify!([<$module:upper>]),
                         ).unwrap();
-                        if stringify!($module) == "prophesee_evk4" {
-                            writeln!(
-                                writer,
-                                concat!(
-                                    "\n",
-                                    "    def temperature_celsius(self) -> float: ...\n",
-                                    "\n",
-                                    "    def illuminance(self) -> int: ...",
-                                )
-                            ).unwrap();
-                        } else if stringify!($module) == "inivation_davis346" {
+                        if stringify!($module) == "inivation_davis346" {
                             writeln!(
                                 writer,
                                 concat!(
@@ -592,6 +582,24 @@ macro_rules! generate {
                                     "    def orientation(self) -> orientation.Davis346Orientation: ...\n",
                                     "\n",
                                     "    def imu_type(self) -> typing.Literal[None, \"InvenSense6050Or6150\", \"InvenSense9250\"]: ...",
+                                )
+                            ).unwrap();
+                        } else if stringify!($module) == "inivation_dvxplorer" {
+                            writeln!(
+                                writer,
+                                concat!(
+                                    "\n",
+                                    "    def orientation(self) -> orientation.DvxplorerOrientation: ...\n",
+                                )
+                            ).unwrap();
+                        } else if stringify!($module) == "prophesee_evk4" {
+                            writeln!(
+                                writer,
+                                concat!(
+                                    "\n",
+                                    "    def temperature_celsius(self) -> float: ...\n",
+                                    "\n",
+                                    "    def illuminance(self) -> int: ...",
                                 )
                             ).unwrap();
                         }
@@ -707,7 +715,7 @@ macro_rules! generate {
                 ),
             ).unwrap();
             for (class_name, iter_data_left_prefix, iter_data_right) in [
-                ("GenericDevice", "status.", "typing.Union[packet.Davis346Packet, packet.Evt3Packet]"),
+                ("GenericDevice", "status.", "typing.Union[packet.Davis346Packet, packet.DvxplorerPacket, packet.Evt3Packet]"),
                 ("GenericDeviceRaw", "status.Raw", "bytes"),
             ] {
                 for (class_suffix, iter_data_left, iter_data_right_prefix, iter_data_right_suffix) in [
@@ -891,6 +899,7 @@ fn main() {
     }
     generate!(
         (inivation_davis346, Davis346Packet),
+        (inivation_dvxplorer, DvxplorerPacket),
         (prophesee_evk3_hd, Evt3Packet),
         (prophesee_evk4, Evt3Packet)
     );

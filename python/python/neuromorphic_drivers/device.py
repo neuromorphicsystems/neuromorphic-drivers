@@ -22,6 +22,9 @@ class Device(ExtensionDevice):
     def properties(self):
         return unions.name_to_properties(self.name())
 
+    def close(self):
+        self.__exit__(None, None, None)
+
     def __iter__(self):
         return self
 
