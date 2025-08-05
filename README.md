@@ -1,5 +1,4 @@
-neuromorphic_drivers is a library to interact with USB Neuromorphic devices. The drivers were written from scratch with portability and performance in mind.
-
+- [Overview](#overview)
 - [Supported devices](#supported-devices)
 - [Supported features](#supported-features)
 - [Python](#python)
@@ -17,6 +16,16 @@ neuromorphic_drivers is a library to interact with USB Neuromorphic devices. The
 - [Performance](#performance)
   - [Event rate](#event-rate)
   - [Direct Memory Access](#direct-memory-access)
+
+# Overview
+
+_Neuromorphic drivers_ is a library to interact with USB event cameras in real-time. It is compatible with all major operating systems (Linux x86 and ARM, macOS x86 and ARM, and Windows x86) and it aims to support as many commercial devices as possible.
+
+The library can be used in [Python](#python) and [Rust](#rust).
+
+By design, _Neuromorphic drivers_ provides no processing algorithms. It may instead be combined with other libraries (for instance https://github.com/neuromorphs/tonic or https://github.com/aestream/faery) to build real-time processing pipelines.
+
+_Neuromorphic drivers_ does not depend on Metavision, libcaer, or dv-processing. It instead uses its own implementation of the cameras' USB protocols (the implementation can be found in [drivers/src/devices](drivers/src/devices)). This approach facilitates cross-platform support and lets us ship lightweight pre-compiled Python wheels ([https://pypi.org/project/neuromorphic-drivers/#files](https://pypi.org/project/neuromorphic-drivers/#files)), which means that Python users do not need specific shared libraries or a compiler toolchain on their machine.
 
 # Supported devices
 
