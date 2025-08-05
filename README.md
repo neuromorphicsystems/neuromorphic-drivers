@@ -25,7 +25,7 @@ The library can be used in [Python](#python) and [Rust](#rust).
 
 By design, _Neuromorphic drivers_ provides no processing algorithms. It may instead be combined with other libraries (for instance https://github.com/neuromorphs/tonic or https://github.com/aestream/faery) to build real-time processing pipelines.
 
-_Neuromorphic drivers_ does not depend on Metavision, libcaer, or dv-processing. It instead uses its own implementation of the cameras' USB protocols (the implementation can be found in [drivers/src/devices](drivers/src/devices)). This approach facilitates cross-platform support and lets us ship lightweight pre-compiled Python wheels ([https://pypi.org/project/neuromorphic-drivers/#files](https://pypi.org/project/neuromorphic-drivers/#files)), which means that Python users do not need specific shared libraries or a compiler toolchain on their machine.
+_Neuromorphic drivers_ does not depend on Metavision, libcaer, or dv-processing. It instead uses its own implementation of the cameras' USB protocols ([drivers/src/devices](drivers/src/devices)). This approach facilitates cross-platform support and lets us ship lightweight pre-compiled Python wheels ([https://pypi.org/project/neuromorphic-drivers/#files](https://pypi.org/project/neuromorphic-drivers/#files)), which means that Python users do not need specific shared libraries or a compiler toolchain on their machine.
 
 # Supported devices
 
