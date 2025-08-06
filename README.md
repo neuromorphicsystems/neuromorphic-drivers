@@ -5,6 +5,7 @@
 - [Overview](#overview)
 - [Supported devices](#supported-devices)
 - [Supported features](#supported-features)
+- [Projects that use Neuromorphic drivers](#projects-that-use-neuromorphic-drivers)
 - [Python](#python)
   - [Get started](#get-started)
   - [Device configuration](#device-configuration)
@@ -60,6 +61,11 @@ Tick marks indicate supported features, minus signs indicate that the camera doe
 ²Temperature is included in IMU packets
 
 ³Illuminance can be sampled at arbitrary times by calling a function
+
+# Projects that use Neuromorphic drivers
+
+-   https://github.com/neuromorphicsystems/kairos
+-   https://github.com/neuromorphicsystems/davis346-recorder
 
 # Python
 
