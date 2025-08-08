@@ -1250,14 +1250,17 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
             self.pixel_type = PySide6.QtOpenGL.QOpenGLTexture.PixelType.UInt8
             pixel_format_suffix = "_Integer"
             texture_format = "8U"
+            byte_width = 1
         elif dtype == "u2":
             self.pixel_type = PySide6.QtOpenGL.QOpenGLTexture.PixelType.UInt16
             pixel_format_suffix = "_Integer"
             texture_format = "16U"
+            byte_width = 2
         elif dtype == "f4":
             self.pixel_type = PySide6.QtOpenGL.QOpenGLTexture.PixelType.Float32
             pixel_format_suffix = ""
             texture_format = "32F"
+            byte_width = 4
         else:
             raise Exception(f"unsupported dtype {self.dtype}")
         if mode == "L":
@@ -1268,6 +1271,7 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
             self.texture_format = PySide6.QtOpenGL.QOpenGLTexture.TextureFormat[
                 f"R{texture_format}"
             ]
+            byte_width *= 1
         elif mode == "RGB":
             self.depth = 3
             self.pixel_format = PySide6.QtOpenGL.QOpenGLTexture.PixelFormat[
@@ -1276,6 +1280,7 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
             self.texture_format = PySide6.QtOpenGL.QOpenGLTexture.TextureFormat[
                 f"RGB{texture_format}"
             ]
+            byte_width *= 3
         elif mode == "RGBA":
             self.depth = 4
             self.pixel_format = PySide6.QtOpenGL.QOpenGLTexture.PixelFormat[
@@ -1284,8 +1289,17 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
             self.texture_format = PySide6.QtOpenGL.QOpenGLTexture.TextureFormat[
                 f"RGBA{texture_format}"
             ]
+            byte_width *= 4
         else:
             raise Exception(f"unsupported mode {mode}")
+        byte_width *= sensor_size.width()
+        self.transfer_options = PySide6.QtOpenGL.QOpenGLPixelTransferOptions()
+        if byte_width % 4 == 0:
+            self.transfer_options.setAlignment(4)
+        elif byte_width % 2 == 0:
+            self.transfer_options.setAlignment(2)
+        else:
+            self.transfer_options.setAlignment(0)
         self.dtype: FrameDtype = dtype
         self.padding_color = padding_color
         self.clear_background = clear_background
@@ -1384,10 +1398,12 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
                 depth=self.depth,
             )
             frame_texture.allocateStorage()
+
             frame_texture.setData(
                 self.pixel_format,
                 self.pixel_type,
                 self.frame,  # type: ignore
+                self.transfer_options,
             )
             vertices_location = program.attributeLocation("vertices")
             program.enableAttributeArray(vertices_location)
@@ -1448,6 +1464,7 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
                 self.pixel_format,
                 self.pixel_type,
                 self.frame,  # type: ignore
+                self.transfer_options,
             )
             self.program.vertex_array_object.bind()
             self.glDrawArrays(GL_TRIANGLE_STRIP, 0, 4)

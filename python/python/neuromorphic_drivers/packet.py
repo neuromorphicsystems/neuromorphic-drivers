@@ -51,7 +51,7 @@ class Davis346Packet:
     """
     Polarity events (also known as change detection events and ON/OFF events)
 
-    Timestamps are in microseconds, the origin (x = 0 and y = 0) is a the top-left corner
+    Timestamps are in microseconds, the origin (x = 0 and y = 0) is at the top-left corner
     """
 
     imu_events: typing.Optional[numpy.ndarray]
@@ -112,7 +112,7 @@ class DvxplorerPacket:
     """
     Polarity events (also known as change detection events and ON/OFF events)
 
-    Timestamps are in microseconds, the origin (x = 0 and y = 0) is a the top-left corner
+    Timestamps are in microseconds, the origin (x = 0 and y = 0) is at the top-left corner
     """
 
     imu_events: typing.Optional[numpy.ndarray]
@@ -160,7 +160,7 @@ class Evt3Packet:
     """
     Polarity events (also known as change detection events and ON/OFF events)
 
-    Timestamps are in microseconds, the origin (x = 0 and y = 0) is a the top-left corner
+    Timestamps are in microseconds, the origin (x = 0 and y = 0) is at the top-left corner
     """
 
     trigger_events: typing.Optional[numpy.ndarray]
