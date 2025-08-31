@@ -11,7 +11,7 @@ import PySide6.QtQml
 import PySide6.QtQuick
 
 EventStyle = typing.Literal["exponential", "linear", "window"]
-FrameMode = typing.Literal["L", "RGB", "RGBA"]
+FrameMode = typing.Literal["L", "RGB", "RGBA", "P"]
 FrameDtype = typing.Literal["u1", "u2", "f4"]
 
 VERTEX_SHADER = """
@@ -58,8 +58,8 @@ void main() {
 frame_display_mode_and_dtype_to_fragment_shader: dict[
     tuple[FrameMode, FrameDtype], str
 ] = {}
-for mode in ("L", "RGB", "RGBA"):
-    if mode == "L":
+for mode in ("L", "RGB", "RGBA", "P"):
+    if mode == "L" or mode == "P":
         r = "r"
         g = "r"
         b = "r"
@@ -100,6 +100,12 @@ for mode in ("L", "RGB", "RGBA"):
             a_value = "1.0f" if a is None else f"sample.{a}"
         else:
             raise Exception(f"unknown dtype {dtype}")
+        if mode == "P":
+            extra_sampler = "uniform sampler1D colormap_sampler;"
+            color = f"texture(colormap_sampler, {r_value})"
+        else:
+            extra_sampler = ""
+            color = f"vec4({r_value}, {g_value}, {b_value}, {a_value})"
         frame_display_mode_and_dtype_to_fragment_shader[
             (mode, dtype)
         ] = f"""
@@ -108,10 +114,11 @@ for mode in ("L", "RGB", "RGBA"):
 in vec2 coordinates;
 out vec4 color;
 uniform {sampler} frame_sampler;
+{extra_sampler}
 
 void main() {{
     {sample_type} sample = texture(frame_sampler, coordinates);
-    color = vec4({r_value}, {g_value}, {b_value}, {a_value});
+    color = {color};
 }}
 """
 
@@ -642,6 +649,522 @@ DEFAULT_OFF_COLORMAP: list[PySide6.QtGui.QColor] = [
     PySide6.QtGui.QColor(0, 129, 169, a=255),
     PySide6.QtGui.QColor(0, 130, 169, a=255),
 ]
+DEFAULT_FRAME_COLORMAP: list[PySide6.QtGui.QColor] = [
+    PySide6.QtGui.QColor(1, 25, 89, a=255),
+    PySide6.QtGui.QColor(2, 27, 89, a=255),
+    PySide6.QtGui.QColor(3, 28, 90, a=255),
+    PySide6.QtGui.QColor(4, 30, 90, a=255),
+    PySide6.QtGui.QColor(5, 31, 90, a=255),
+    PySide6.QtGui.QColor(6, 33, 91, a=255),
+    PySide6.QtGui.QColor(7, 34, 91, a=255),
+    PySide6.QtGui.QColor(7, 36, 91, a=255),
+    PySide6.QtGui.QColor(8, 37, 91, a=255),
+    PySide6.QtGui.QColor(9, 39, 92, a=255),
+    PySide6.QtGui.QColor(10, 40, 92, a=255),
+    PySide6.QtGui.QColor(10, 42, 92, a=255),
+    PySide6.QtGui.QColor(11, 43, 92, a=255),
+    PySide6.QtGui.QColor(11, 45, 93, a=255),
+    PySide6.QtGui.QColor(12, 46, 93, a=255),
+    PySide6.QtGui.QColor(12, 47, 93, a=255),
+    PySide6.QtGui.QColor(13, 49, 93, a=255),
+    PySide6.QtGui.QColor(13, 50, 94, a=255),
+    PySide6.QtGui.QColor(13, 51, 94, a=255),
+    PySide6.QtGui.QColor(14, 53, 94, a=255),
+    PySide6.QtGui.QColor(14, 54, 94, a=255),
+    PySide6.QtGui.QColor(14, 55, 94, a=255),
+    PySide6.QtGui.QColor(15, 56, 95, a=255),
+    PySide6.QtGui.QColor(15, 57, 95, a=255),
+    PySide6.QtGui.QColor(15, 59, 95, a=255),
+    PySide6.QtGui.QColor(15, 60, 95, a=255),
+    PySide6.QtGui.QColor(16, 61, 95, a=255),
+    PySide6.QtGui.QColor(16, 62, 95, a=255),
+    PySide6.QtGui.QColor(16, 63, 96, a=255),
+    PySide6.QtGui.QColor(16, 64, 96, a=255),
+    PySide6.QtGui.QColor(17, 65, 96, a=255),
+    PySide6.QtGui.QColor(17, 66, 96, a=255),
+    PySide6.QtGui.QColor(17, 67, 96, a=255),
+    PySide6.QtGui.QColor(17, 68, 96, a=255),
+    PySide6.QtGui.QColor(18, 69, 97, a=255),
+    PySide6.QtGui.QColor(18, 70, 97, a=255),
+    PySide6.QtGui.QColor(18, 71, 97, a=255),
+    PySide6.QtGui.QColor(18, 72, 97, a=255),
+    PySide6.QtGui.QColor(19, 73, 97, a=255),
+    PySide6.QtGui.QColor(19, 74, 97, a=255),
+    PySide6.QtGui.QColor(19, 75, 97, a=255),
+    PySide6.QtGui.QColor(20, 76, 98, a=255),
+    PySide6.QtGui.QColor(20, 77, 98, a=255),
+    PySide6.QtGui.QColor(20, 78, 98, a=255),
+    PySide6.QtGui.QColor(21, 79, 98, a=255),
+    PySide6.QtGui.QColor(21, 79, 98, a=255),
+    PySide6.QtGui.QColor(22, 80, 98, a=255),
+    PySide6.QtGui.QColor(22, 81, 98, a=255),
+    PySide6.QtGui.QColor(23, 82, 98, a=255),
+    PySide6.QtGui.QColor(23, 83, 98, a=255),
+    PySide6.QtGui.QColor(24, 84, 98, a=255),
+    PySide6.QtGui.QColor(24, 85, 98, a=255),
+    PySide6.QtGui.QColor(25, 86, 98, a=255),
+    PySide6.QtGui.QColor(25, 87, 98, a=255),
+    PySide6.QtGui.QColor(26, 87, 98, a=255),
+    PySide6.QtGui.QColor(27, 88, 98, a=255),
+    PySide6.QtGui.QColor(27, 89, 98, a=255),
+    PySide6.QtGui.QColor(28, 90, 98, a=255),
+    PySide6.QtGui.QColor(29, 91, 98, a=255),
+    PySide6.QtGui.QColor(30, 92, 98, a=255),
+    PySide6.QtGui.QColor(30, 93, 98, a=255),
+    PySide6.QtGui.QColor(31, 93, 97, a=255),
+    PySide6.QtGui.QColor(32, 94, 97, a=255),
+    PySide6.QtGui.QColor(33, 95, 97, a=255),
+    PySide6.QtGui.QColor(34, 96, 97, a=255),
+    PySide6.QtGui.QColor(35, 96, 96, a=255),
+    PySide6.QtGui.QColor(36, 97, 96, a=255),
+    PySide6.QtGui.QColor(37, 98, 96, a=255),
+    PySide6.QtGui.QColor(38, 99, 95, a=255),
+    PySide6.QtGui.QColor(39, 99, 95, a=255),
+    PySide6.QtGui.QColor(40, 100, 95, a=255),
+    PySide6.QtGui.QColor(42, 101, 94, a=255),
+    PySide6.QtGui.QColor(43, 101, 94, a=255),
+    PySide6.QtGui.QColor(44, 102, 93, a=255),
+    PySide6.QtGui.QColor(45, 103, 93, a=255),
+    PySide6.QtGui.QColor(47, 103, 92, a=255),
+    PySide6.QtGui.QColor(48, 104, 92, a=255),
+    PySide6.QtGui.QColor(49, 105, 91, a=255),
+    PySide6.QtGui.QColor(51, 105, 90, a=255),
+    PySide6.QtGui.QColor(52, 106, 90, a=255),
+    PySide6.QtGui.QColor(53, 106, 89, a=255),
+    PySide6.QtGui.QColor(55, 107, 88, a=255),
+    PySide6.QtGui.QColor(56, 108, 88, a=255),
+    PySide6.QtGui.QColor(58, 108, 87, a=255),
+    PySide6.QtGui.QColor(59, 109, 86, a=255),
+    PySide6.QtGui.QColor(60, 109, 86, a=255),
+    PySide6.QtGui.QColor(62, 110, 85, a=255),
+    PySide6.QtGui.QColor(63, 110, 84, a=255),
+    PySide6.QtGui.QColor(65, 111, 83, a=255),
+    PySide6.QtGui.QColor(66, 111, 82, a=255),
+    PySide6.QtGui.QColor(68, 112, 82, a=255),
+    PySide6.QtGui.QColor(69, 112, 81, a=255),
+    PySide6.QtGui.QColor(71, 113, 80, a=255),
+    PySide6.QtGui.QColor(72, 113, 79, a=255),
+    PySide6.QtGui.QColor(74, 114, 78, a=255),
+    PySide6.QtGui.QColor(76, 114, 77, a=255),
+    PySide6.QtGui.QColor(77, 115, 77, a=255),
+    PySide6.QtGui.QColor(79, 115, 76, a=255),
+    PySide6.QtGui.QColor(80, 116, 75, a=255),
+    PySide6.QtGui.QColor(82, 116, 74, a=255),
+    PySide6.QtGui.QColor(83, 117, 73, a=255),
+    PySide6.QtGui.QColor(85, 117, 72, a=255),
+    PySide6.QtGui.QColor(87, 118, 71, a=255),
+    PySide6.QtGui.QColor(88, 118, 70, a=255),
+    PySide6.QtGui.QColor(90, 119, 69, a=255),
+    PySide6.QtGui.QColor(91, 119, 69, a=255),
+    PySide6.QtGui.QColor(93, 120, 68, a=255),
+    PySide6.QtGui.QColor(95, 120, 67, a=255),
+    PySide6.QtGui.QColor(96, 121, 66, a=255),
+    PySide6.QtGui.QColor(98, 121, 65, a=255),
+    PySide6.QtGui.QColor(99, 122, 64, a=255),
+    PySide6.QtGui.QColor(101, 122, 63, a=255),
+    PySide6.QtGui.QColor(103, 123, 62, a=255),
+    PySide6.QtGui.QColor(104, 123, 62, a=255),
+    PySide6.QtGui.QColor(106, 123, 61, a=255),
+    PySide6.QtGui.QColor(108, 124, 60, a=255),
+    PySide6.QtGui.QColor(109, 124, 59, a=255),
+    PySide6.QtGui.QColor(111, 125, 58, a=255),
+    PySide6.QtGui.QColor(113, 125, 57, a=255),
+    PySide6.QtGui.QColor(115, 126, 56, a=255),
+    PySide6.QtGui.QColor(116, 126, 56, a=255),
+    PySide6.QtGui.QColor(118, 127, 55, a=255),
+    PySide6.QtGui.QColor(120, 127, 54, a=255),
+    PySide6.QtGui.QColor(121, 128, 53, a=255),
+    PySide6.QtGui.QColor(123, 128, 52, a=255),
+    PySide6.QtGui.QColor(125, 129, 52, a=255),
+    PySide6.QtGui.QColor(127, 129, 51, a=255),
+    PySide6.QtGui.QColor(129, 130, 50, a=255),
+    PySide6.QtGui.QColor(130, 130, 49, a=255),
+    PySide6.QtGui.QColor(132, 131, 49, a=255),
+    PySide6.QtGui.QColor(134, 131, 48, a=255),
+    PySide6.QtGui.QColor(136, 132, 47, a=255),
+    PySide6.QtGui.QColor(138, 132, 47, a=255),
+    PySide6.QtGui.QColor(140, 133, 46, a=255),
+    PySide6.QtGui.QColor(142, 133, 46, a=255),
+    PySide6.QtGui.QColor(143, 134, 45, a=255),
+    PySide6.QtGui.QColor(145, 134, 45, a=255),
+    PySide6.QtGui.QColor(147, 135, 44, a=255),
+    PySide6.QtGui.QColor(149, 135, 44, a=255),
+    PySide6.QtGui.QColor(151, 136, 44, a=255),
+    PySide6.QtGui.QColor(153, 136, 44, a=255),
+    PySide6.QtGui.QColor(155, 137, 43, a=255),
+    PySide6.QtGui.QColor(157, 137, 43, a=255),
+    PySide6.QtGui.QColor(159, 137, 43, a=255),
+    PySide6.QtGui.QColor(161, 138, 43, a=255),
+    PySide6.QtGui.QColor(163, 138, 44, a=255),
+    PySide6.QtGui.QColor(165, 139, 44, a=255),
+    PySide6.QtGui.QColor(167, 139, 44, a=255),
+    PySide6.QtGui.QColor(169, 140, 44, a=255),
+    PySide6.QtGui.QColor(171, 140, 45, a=255),
+    PySide6.QtGui.QColor(173, 140, 45, a=255),
+    PySide6.QtGui.QColor(175, 141, 46, a=255),
+    PySide6.QtGui.QColor(177, 141, 47, a=255),
+    PySide6.QtGui.QColor(179, 142, 47, a=255),
+    PySide6.QtGui.QColor(181, 142, 48, a=255),
+    PySide6.QtGui.QColor(183, 142, 49, a=255),
+    PySide6.QtGui.QColor(185, 143, 50, a=255),
+    PySide6.QtGui.QColor(187, 143, 51, a=255),
+    PySide6.QtGui.QColor(189, 143, 52, a=255),
+    PySide6.QtGui.QColor(190, 144, 53, a=255),
+    PySide6.QtGui.QColor(192, 144, 54, a=255),
+    PySide6.QtGui.QColor(194, 144, 55, a=255),
+    PySide6.QtGui.QColor(196, 145, 56, a=255),
+    PySide6.QtGui.QColor(198, 145, 58, a=255),
+    PySide6.QtGui.QColor(200, 145, 59, a=255),
+    PySide6.QtGui.QColor(202, 146, 60, a=255),
+    PySide6.QtGui.QColor(203, 146, 62, a=255),
+    PySide6.QtGui.QColor(205, 146, 63, a=255),
+    PySide6.QtGui.QColor(207, 147, 64, a=255),
+    PySide6.QtGui.QColor(209, 147, 66, a=255),
+    PySide6.QtGui.QColor(210, 147, 67, a=255),
+    PySide6.QtGui.QColor(212, 148, 69, a=255),
+    PySide6.QtGui.QColor(214, 148, 70, a=255),
+    PySide6.QtGui.QColor(216, 148, 72, a=255),
+    PySide6.QtGui.QColor(217, 149, 74, a=255),
+    PySide6.QtGui.QColor(219, 149, 75, a=255),
+    PySide6.QtGui.QColor(221, 149, 77, a=255),
+    PySide6.QtGui.QColor(222, 150, 79, a=255),
+    PySide6.QtGui.QColor(224, 150, 81, a=255),
+    PySide6.QtGui.QColor(225, 151, 82, a=255),
+    PySide6.QtGui.QColor(227, 151, 84, a=255),
+    PySide6.QtGui.QColor(228, 151, 86, a=255),
+    PySide6.QtGui.QColor(230, 152, 88, a=255),
+    PySide6.QtGui.QColor(231, 152, 90, a=255),
+    PySide6.QtGui.QColor(233, 153, 92, a=255),
+    PySide6.QtGui.QColor(234, 153, 94, a=255),
+    PySide6.QtGui.QColor(235, 154, 96, a=255),
+    PySide6.QtGui.QColor(237, 154, 98, a=255),
+    PySide6.QtGui.QColor(238, 155, 100, a=255),
+    PySide6.QtGui.QColor(239, 155, 103, a=255),
+    PySide6.QtGui.QColor(240, 156, 105, a=255),
+    PySide6.QtGui.QColor(241, 157, 107, a=255),
+    PySide6.QtGui.QColor(242, 157, 109, a=255),
+    PySide6.QtGui.QColor(243, 158, 112, a=255),
+    PySide6.QtGui.QColor(244, 159, 114, a=255),
+    PySide6.QtGui.QColor(245, 159, 116, a=255),
+    PySide6.QtGui.QColor(246, 160, 119, a=255),
+    PySide6.QtGui.QColor(247, 161, 121, a=255),
+    PySide6.QtGui.QColor(248, 161, 123, a=255),
+    PySide6.QtGui.QColor(248, 162, 126, a=255),
+    PySide6.QtGui.QColor(249, 163, 128, a=255),
+    PySide6.QtGui.QColor(249, 163, 130, a=255),
+    PySide6.QtGui.QColor(250, 164, 133, a=255),
+    PySide6.QtGui.QColor(250, 165, 135, a=255),
+    PySide6.QtGui.QColor(251, 166, 137, a=255),
+    PySide6.QtGui.QColor(251, 166, 140, a=255),
+    PySide6.QtGui.QColor(252, 167, 142, a=255),
+    PySide6.QtGui.QColor(252, 168, 144, a=255),
+    PySide6.QtGui.QColor(252, 169, 147, a=255),
+    PySide6.QtGui.QColor(252, 169, 149, a=255),
+    PySide6.QtGui.QColor(253, 170, 151, a=255),
+    PySide6.QtGui.QColor(253, 171, 154, a=255),
+    PySide6.QtGui.QColor(253, 172, 156, a=255),
+    PySide6.QtGui.QColor(253, 172, 158, a=255),
+    PySide6.QtGui.QColor(253, 173, 160, a=255),
+    PySide6.QtGui.QColor(253, 174, 162, a=255),
+    PySide6.QtGui.QColor(253, 175, 165, a=255),
+    PySide6.QtGui.QColor(253, 175, 167, a=255),
+    PySide6.QtGui.QColor(253, 176, 169, a=255),
+    PySide6.QtGui.QColor(253, 177, 171, a=255),
+    PySide6.QtGui.QColor(253, 178, 173, a=255),
+    PySide6.QtGui.QColor(253, 178, 175, a=255),
+    PySide6.QtGui.QColor(253, 179, 177, a=255),
+    PySide6.QtGui.QColor(253, 180, 180, a=255),
+    PySide6.QtGui.QColor(253, 180, 182, a=255),
+    PySide6.QtGui.QColor(253, 181, 184, a=255),
+    PySide6.QtGui.QColor(253, 182, 186, a=255),
+    PySide6.QtGui.QColor(253, 183, 188, a=255),
+    PySide6.QtGui.QColor(253, 183, 190, a=255),
+    PySide6.QtGui.QColor(253, 184, 192, a=255),
+    PySide6.QtGui.QColor(253, 185, 194, a=255),
+    PySide6.QtGui.QColor(253, 186, 196, a=255),
+    PySide6.QtGui.QColor(253, 186, 199, a=255),
+    PySide6.QtGui.QColor(253, 187, 201, a=255),
+    PySide6.QtGui.QColor(253, 188, 203, a=255),
+    PySide6.QtGui.QColor(253, 188, 205, a=255),
+    PySide6.QtGui.QColor(252, 189, 207, a=255),
+    PySide6.QtGui.QColor(252, 190, 209, a=255),
+    PySide6.QtGui.QColor(252, 191, 211, a=255),
+    PySide6.QtGui.QColor(252, 191, 214, a=255),
+    PySide6.QtGui.QColor(252, 192, 216, a=255),
+    PySide6.QtGui.QColor(252, 193, 218, a=255),
+    PySide6.QtGui.QColor(252, 194, 220, a=255),
+    PySide6.QtGui.QColor(252, 195, 223, a=255),
+    PySide6.QtGui.QColor(252, 195, 225, a=255),
+    PySide6.QtGui.QColor(252, 196, 227, a=255),
+    PySide6.QtGui.QColor(252, 197, 229, a=255),
+    PySide6.QtGui.QColor(251, 198, 232, a=255),
+    PySide6.QtGui.QColor(251, 198, 234, a=255),
+    PySide6.QtGui.QColor(251, 199, 236, a=255),
+    PySide6.QtGui.QColor(251, 200, 239, a=255),
+    PySide6.QtGui.QColor(251, 201, 241, a=255),
+    PySide6.QtGui.QColor(251, 202, 243, a=255),
+    PySide6.QtGui.QColor(251, 202, 246, a=255),
+    PySide6.QtGui.QColor(250, 203, 248, a=255),
+    PySide6.QtGui.QColor(250, 204, 250, a=255),
+]
+CYCLIC_COLORMAP: list[PySide6.QtGui.QColor] = [
+    PySide6.QtGui.QColor(115, 57, 87, a=255),
+    PySide6.QtGui.QColor(116, 57, 86, a=255),
+    PySide6.QtGui.QColor(117, 57, 84, a=255),
+    PySide6.QtGui.QColor(117, 56, 83, a=255),
+    PySide6.QtGui.QColor(118, 56, 81, a=255),
+    PySide6.QtGui.QColor(119, 56, 80, a=255),
+    PySide6.QtGui.QColor(119, 56, 79, a=255),
+    PySide6.QtGui.QColor(120, 56, 77, a=255),
+    PySide6.QtGui.QColor(121, 56, 76, a=255),
+    PySide6.QtGui.QColor(121, 56, 75, a=255),
+    PySide6.QtGui.QColor(122, 56, 73, a=255),
+    PySide6.QtGui.QColor(123, 56, 72, a=255),
+    PySide6.QtGui.QColor(124, 56, 71, a=255),
+    PySide6.QtGui.QColor(124, 57, 70, a=255),
+    PySide6.QtGui.QColor(125, 57, 69, a=255),
+    PySide6.QtGui.QColor(126, 57, 67, a=255),
+    PySide6.QtGui.QColor(126, 57, 66, a=255),
+    PySide6.QtGui.QColor(127, 58, 65, a=255),
+    PySide6.QtGui.QColor(128, 58, 64, a=255),
+    PySide6.QtGui.QColor(129, 59, 63, a=255),
+    PySide6.QtGui.QColor(129, 59, 62, a=255),
+    PySide6.QtGui.QColor(130, 60, 61, a=255),
+    PySide6.QtGui.QColor(131, 60, 60, a=255),
+    PySide6.QtGui.QColor(132, 61, 59, a=255),
+    PySide6.QtGui.QColor(132, 61, 58, a=255),
+    PySide6.QtGui.QColor(133, 62, 57, a=255),
+    PySide6.QtGui.QColor(134, 63, 56, a=255),
+    PySide6.QtGui.QColor(135, 64, 55, a=255),
+    PySide6.QtGui.QColor(135, 64, 55, a=255),
+    PySide6.QtGui.QColor(136, 65, 54, a=255),
+    PySide6.QtGui.QColor(137, 66, 53, a=255),
+    PySide6.QtGui.QColor(138, 67, 52, a=255),
+    PySide6.QtGui.QColor(139, 68, 51, a=255),
+    PySide6.QtGui.QColor(140, 69, 51, a=255),
+    PySide6.QtGui.QColor(140, 70, 50, a=255),
+    PySide6.QtGui.QColor(141, 71, 49, a=255),
+    PySide6.QtGui.QColor(142, 72, 49, a=255),
+    PySide6.QtGui.QColor(143, 73, 48, a=255),
+    PySide6.QtGui.QColor(144, 74, 48, a=255),
+    PySide6.QtGui.QColor(145, 76, 47, a=255),
+    PySide6.QtGui.QColor(146, 77, 47, a=255),
+    PySide6.QtGui.QColor(147, 78, 46, a=255),
+    PySide6.QtGui.QColor(148, 80, 46, a=255),
+    PySide6.QtGui.QColor(148, 81, 45, a=255),
+    PySide6.QtGui.QColor(149, 82, 45, a=255),
+    PySide6.QtGui.QColor(150, 84, 45, a=255),
+    PySide6.QtGui.QColor(151, 85, 44, a=255),
+    PySide6.QtGui.QColor(152, 87, 44, a=255),
+    PySide6.QtGui.QColor(153, 88, 44, a=255),
+    PySide6.QtGui.QColor(154, 90, 44, a=255),
+    PySide6.QtGui.QColor(155, 91, 44, a=255),
+    PySide6.QtGui.QColor(156, 93, 43, a=255),
+    PySide6.QtGui.QColor(157, 95, 43, a=255),
+    PySide6.QtGui.QColor(158, 96, 43, a=255),
+    PySide6.QtGui.QColor(159, 98, 43, a=255),
+    PySide6.QtGui.QColor(160, 100, 44, a=255),
+    PySide6.QtGui.QColor(162, 102, 44, a=255),
+    PySide6.QtGui.QColor(163, 103, 44, a=255),
+    PySide6.QtGui.QColor(164, 105, 44, a=255),
+    PySide6.QtGui.QColor(165, 107, 45, a=255),
+    PySide6.QtGui.QColor(166, 109, 45, a=255),
+    PySide6.QtGui.QColor(167, 111, 45, a=255),
+    PySide6.QtGui.QColor(168, 113, 46, a=255),
+    PySide6.QtGui.QColor(169, 115, 46, a=255),
+    PySide6.QtGui.QColor(170, 117, 47, a=255),
+    PySide6.QtGui.QColor(171, 119, 48, a=255),
+    PySide6.QtGui.QColor(173, 121, 48, a=255),
+    PySide6.QtGui.QColor(174, 123, 49, a=255),
+    PySide6.QtGui.QColor(175, 125, 50, a=255),
+    PySide6.QtGui.QColor(176, 127, 51, a=255),
+    PySide6.QtGui.QColor(177, 129, 52, a=255),
+    PySide6.QtGui.QColor(178, 131, 53, a=255),
+    PySide6.QtGui.QColor(180, 134, 54, a=255),
+    PySide6.QtGui.QColor(181, 136, 55, a=255),
+    PySide6.QtGui.QColor(182, 138, 57, a=255),
+    PySide6.QtGui.QColor(183, 140, 58, a=255),
+    PySide6.QtGui.QColor(184, 142, 59, a=255),
+    PySide6.QtGui.QColor(185, 145, 61, a=255),
+    PySide6.QtGui.QColor(187, 147, 63, a=255),
+    PySide6.QtGui.QColor(188, 149, 64, a=255),
+    PySide6.QtGui.QColor(189, 152, 66, a=255),
+    PySide6.QtGui.QColor(190, 154, 68, a=255),
+    PySide6.QtGui.QColor(191, 156, 70, a=255),
+    PySide6.QtGui.QColor(193, 159, 71, a=255),
+    PySide6.QtGui.QColor(194, 161, 73, a=255),
+    PySide6.QtGui.QColor(195, 163, 75, a=255),
+    PySide6.QtGui.QColor(196, 165, 78, a=255),
+    PySide6.QtGui.QColor(197, 168, 80, a=255),
+    PySide6.QtGui.QColor(198, 170, 82, a=255),
+    PySide6.QtGui.QColor(200, 172, 84, a=255),
+    PySide6.QtGui.QColor(201, 175, 87, a=255),
+    PySide6.QtGui.QColor(202, 177, 89, a=255),
+    PySide6.QtGui.QColor(203, 179, 92, a=255),
+    PySide6.QtGui.QColor(204, 181, 94, a=255),
+    PySide6.QtGui.QColor(205, 183, 97, a=255),
+    PySide6.QtGui.QColor(206, 186, 99, a=255),
+    PySide6.QtGui.QColor(207, 188, 102, a=255),
+    PySide6.QtGui.QColor(207, 190, 104, a=255),
+    PySide6.QtGui.QColor(208, 192, 107, a=255),
+    PySide6.QtGui.QColor(209, 194, 110, a=255),
+    PySide6.QtGui.QColor(210, 196, 112, a=255),
+    PySide6.QtGui.QColor(210, 198, 115, a=255),
+    PySide6.QtGui.QColor(211, 200, 118, a=255),
+    PySide6.QtGui.QColor(212, 201, 120, a=255),
+    PySide6.QtGui.QColor(212, 203, 123, a=255),
+    PySide6.QtGui.QColor(212, 205, 126, a=255),
+    PySide6.QtGui.QColor(213, 206, 129, a=255),
+    PySide6.QtGui.QColor(213, 208, 131, a=255),
+    PySide6.QtGui.QColor(213, 209, 134, a=255),
+    PySide6.QtGui.QColor(214, 211, 136, a=255),
+    PySide6.QtGui.QColor(214, 212, 139, a=255),
+    PySide6.QtGui.QColor(214, 213, 142, a=255),
+    PySide6.QtGui.QColor(214, 215, 144, a=255),
+    PySide6.QtGui.QColor(214, 216, 147, a=255),
+    PySide6.QtGui.QColor(213, 217, 149, a=255),
+    PySide6.QtGui.QColor(213, 218, 152, a=255),
+    PySide6.QtGui.QColor(213, 219, 154, a=255),
+    PySide6.QtGui.QColor(212, 220, 156, a=255),
+    PySide6.QtGui.QColor(212, 221, 159, a=255),
+    PySide6.QtGui.QColor(211, 221, 161, a=255),
+    PySide6.QtGui.QColor(211, 222, 163, a=255),
+    PySide6.QtGui.QColor(210, 223, 165, a=255),
+    PySide6.QtGui.QColor(209, 223, 167, a=255),
+    PySide6.QtGui.QColor(208, 224, 169, a=255),
+    PySide6.QtGui.QColor(207, 224, 171, a=255),
+    PySide6.QtGui.QColor(206, 224, 173, a=255),
+    PySide6.QtGui.QColor(205, 225, 175, a=255),
+    PySide6.QtGui.QColor(204, 225, 177, a=255),
+    PySide6.QtGui.QColor(203, 225, 179, a=255),
+    PySide6.QtGui.QColor(202, 225, 181, a=255),
+    PySide6.QtGui.QColor(200, 225, 182, a=255),
+    PySide6.QtGui.QColor(199, 225, 184, a=255),
+    PySide6.QtGui.QColor(197, 225, 185, a=255),
+    PySide6.QtGui.QColor(196, 225, 187, a=255),
+    PySide6.QtGui.QColor(194, 225, 188, a=255),
+    PySide6.QtGui.QColor(193, 225, 190, a=255),
+    PySide6.QtGui.QColor(191, 225, 191, a=255),
+    PySide6.QtGui.QColor(189, 224, 192, a=255),
+    PySide6.QtGui.QColor(187, 224, 194, a=255),
+    PySide6.QtGui.QColor(185, 223, 195, a=255),
+    PySide6.QtGui.QColor(184, 223, 196, a=255),
+    PySide6.QtGui.QColor(182, 222, 197, a=255),
+    PySide6.QtGui.QColor(180, 222, 198, a=255),
+    PySide6.QtGui.QColor(177, 221, 199, a=255),
+    PySide6.QtGui.QColor(175, 220, 200, a=255),
+    PySide6.QtGui.QColor(173, 220, 200, a=255),
+    PySide6.QtGui.QColor(171, 219, 201, a=255),
+    PySide6.QtGui.QColor(169, 218, 202, a=255),
+    PySide6.QtGui.QColor(167, 217, 203, a=255),
+    PySide6.QtGui.QColor(164, 216, 203, a=255),
+    PySide6.QtGui.QColor(162, 215, 204, a=255),
+    PySide6.QtGui.QColor(160, 214, 204, a=255),
+    PySide6.QtGui.QColor(157, 213, 205, a=255),
+    PySide6.QtGui.QColor(155, 212, 205, a=255),
+    PySide6.QtGui.QColor(153, 211, 206, a=255),
+    PySide6.QtGui.QColor(150, 209, 206, a=255),
+    PySide6.QtGui.QColor(148, 208, 206, a=255),
+    PySide6.QtGui.QColor(146, 207, 206, a=255),
+    PySide6.QtGui.QColor(143, 206, 207, a=255),
+    PySide6.QtGui.QColor(141, 204, 207, a=255),
+    PySide6.QtGui.QColor(139, 203, 207, a=255),
+    PySide6.QtGui.QColor(136, 201, 207, a=255),
+    PySide6.QtGui.QColor(134, 200, 207, a=255),
+    PySide6.QtGui.QColor(132, 198, 207, a=255),
+    PySide6.QtGui.QColor(129, 197, 207, a=255),
+    PySide6.QtGui.QColor(127, 195, 207, a=255),
+    PySide6.QtGui.QColor(125, 194, 206, a=255),
+    PySide6.QtGui.QColor(123, 192, 206, a=255),
+    PySide6.QtGui.QColor(120, 190, 206, a=255),
+    PySide6.QtGui.QColor(118, 189, 206, a=255),
+    PySide6.QtGui.QColor(116, 187, 205, a=255),
+    PySide6.QtGui.QColor(114, 185, 205, a=255),
+    PySide6.QtGui.QColor(112, 184, 205, a=255),
+    PySide6.QtGui.QColor(110, 182, 204, a=255),
+    PySide6.QtGui.QColor(108, 180, 204, a=255),
+    PySide6.QtGui.QColor(106, 178, 203, a=255),
+    PySide6.QtGui.QColor(104, 177, 203, a=255),
+    PySide6.QtGui.QColor(103, 175, 202, a=255),
+    PySide6.QtGui.QColor(101, 173, 202, a=255),
+    PySide6.QtGui.QColor(99, 171, 201, a=255),
+    PySide6.QtGui.QColor(98, 169, 201, a=255),
+    PySide6.QtGui.QColor(96, 168, 200, a=255),
+    PySide6.QtGui.QColor(95, 166, 199, a=255),
+    PySide6.QtGui.QColor(93, 164, 199, a=255),
+    PySide6.QtGui.QColor(92, 162, 198, a=255),
+    PySide6.QtGui.QColor(90, 160, 197, a=255),
+    PySide6.QtGui.QColor(89, 158, 196, a=255),
+    PySide6.QtGui.QColor(88, 156, 196, a=255),
+    PySide6.QtGui.QColor(87, 155, 195, a=255),
+    PySide6.QtGui.QColor(86, 153, 194, a=255),
+    PySide6.QtGui.QColor(85, 151, 193, a=255),
+    PySide6.QtGui.QColor(84, 149, 192, a=255),
+    PySide6.QtGui.QColor(83, 147, 191, a=255),
+    PySide6.QtGui.QColor(82, 145, 190, a=255),
+    PySide6.QtGui.QColor(82, 143, 189, a=255),
+    PySide6.QtGui.QColor(81, 141, 188, a=255),
+    PySide6.QtGui.QColor(80, 139, 187, a=255),
+    PySide6.QtGui.QColor(80, 138, 186, a=255),
+    PySide6.QtGui.QColor(79, 136, 185, a=255),
+    PySide6.QtGui.QColor(79, 134, 184, a=255),
+    PySide6.QtGui.QColor(79, 132, 183, a=255),
+    PySide6.QtGui.QColor(79, 130, 182, a=255),
+    PySide6.QtGui.QColor(78, 128, 180, a=255),
+    PySide6.QtGui.QColor(78, 126, 179, a=255),
+    PySide6.QtGui.QColor(78, 124, 178, a=255),
+    PySide6.QtGui.QColor(78, 122, 176, a=255),
+    PySide6.QtGui.QColor(79, 120, 175, a=255),
+    PySide6.QtGui.QColor(79, 118, 174, a=255),
+    PySide6.QtGui.QColor(79, 117, 172, a=255),
+    PySide6.QtGui.QColor(79, 115, 171, a=255),
+    PySide6.QtGui.QColor(80, 113, 169, a=255),
+    PySide6.QtGui.QColor(80, 111, 168, a=255),
+    PySide6.QtGui.QColor(81, 109, 166, a=255),
+    PySide6.QtGui.QColor(81, 107, 164, a=255),
+    PySide6.QtGui.QColor(82, 105, 163, a=255),
+    PySide6.QtGui.QColor(82, 103, 161, a=255),
+    PySide6.QtGui.QColor(83, 102, 159, a=255),
+    PySide6.QtGui.QColor(84, 100, 158, a=255),
+    PySide6.QtGui.QColor(84, 98, 156, a=255),
+    PySide6.QtGui.QColor(85, 96, 154, a=255),
+    PySide6.QtGui.QColor(86, 95, 152, a=255),
+    PySide6.QtGui.QColor(87, 93, 150, a=255),
+    PySide6.QtGui.QColor(87, 91, 148, a=255),
+    PySide6.QtGui.QColor(88, 89, 147, a=255),
+    PySide6.QtGui.QColor(89, 88, 145, a=255),
+    PySide6.QtGui.QColor(90, 86, 143, a=255),
+    PySide6.QtGui.QColor(91, 85, 141, a=255),
+    PySide6.QtGui.QColor(92, 83, 139, a=255),
+    PySide6.QtGui.QColor(92, 82, 137, a=255),
+    PySide6.QtGui.QColor(93, 80, 135, a=255),
+    PySide6.QtGui.QColor(94, 79, 133, a=255),
+    PySide6.QtGui.QColor(95, 77, 131, a=255),
+    PySide6.QtGui.QColor(96, 76, 129, a=255),
+    PySide6.QtGui.QColor(97, 75, 127, a=255),
+    PySide6.QtGui.QColor(98, 73, 125, a=255),
+    PySide6.QtGui.QColor(99, 72, 123, a=255),
+    PySide6.QtGui.QColor(99, 71, 121, a=255),
+    PySide6.QtGui.QColor(100, 70, 119, a=255),
+    PySide6.QtGui.QColor(101, 69, 118, a=255),
+    PySide6.QtGui.QColor(102, 68, 116, a=255),
+    PySide6.QtGui.QColor(103, 67, 114, a=255),
+    PySide6.QtGui.QColor(104, 66, 112, a=255),
+    PySide6.QtGui.QColor(104, 65, 110, a=255),
+    PySide6.QtGui.QColor(105, 64, 108, a=255),
+    PySide6.QtGui.QColor(106, 63, 107, a=255),
+    PySide6.QtGui.QColor(107, 63, 105, a=255),
+    PySide6.QtGui.QColor(108, 62, 103, a=255),
+    PySide6.QtGui.QColor(108, 61, 101, a=255),
+    PySide6.QtGui.QColor(109, 61, 100, a=255),
+    PySide6.QtGui.QColor(110, 60, 98, a=255),
+    PySide6.QtGui.QColor(111, 59, 96, a=255),
+    PySide6.QtGui.QColor(111, 59, 95, a=255),
+    PySide6.QtGui.QColor(112, 58, 93, a=255),
+    PySide6.QtGui.QColor(113, 58, 92, a=255),
+    PySide6.QtGui.QColor(114, 58, 90, a=255),
+    PySide6.QtGui.QColor(114, 57, 89, a=255),
+]
 
 
 def style_to_integer(style: EventStyle) -> int:
@@ -654,7 +1177,7 @@ def style_to_integer(style: EventStyle) -> int:
     raise Exception(f"unknown {style=}")
 
 
-def colormap_to_texture(
+def event_colormap_to_texture(
     on_colormap: list[PySide6.QtGui.QColor],
     off_colormap: list[PySide6.QtGui.QColor],
 ) -> tuple[PySide6.QtOpenGL.QOpenGLTexture, float]:
@@ -693,6 +1216,35 @@ def colormap_to_texture(
         colormap_texture,
         0.0 if length == 0 else float(len(off_colormap)) / float(length),
     )
+
+
+def frame_colormap_to_texture(
+    colormap: list[PySide6.QtGui.QColor],
+) -> PySide6.QtOpenGL.QOpenGLTexture:
+    colormap_texture = PySide6.QtOpenGL.QOpenGLTexture(
+        PySide6.QtOpenGL.QOpenGLTexture.Target.Target1D
+    )
+    colormap_texture.setWrapMode(PySide6.QtOpenGL.QOpenGLTexture.WrapMode.ClampToEdge)
+    colormap_texture.setMinMagFilters(
+        PySide6.QtOpenGL.QOpenGLTexture.Filter.Linear,
+        PySide6.QtOpenGL.QOpenGLTexture.Filter.Linear,
+    )
+    colormap_texture.setFormat(PySide6.QtOpenGL.QOpenGLTexture.TextureFormat.RGBA32F)
+    length = len(colormap)
+    colormap_texture.setSize(length, height=1, depth=1)
+    colormap_texture.allocateStorage()
+    colormap_data = numpy.zeros(length * 4, dtype=numpy.float32)
+    for index, color in enumerate(colormap):
+        colormap_data[index * 4] = color.redF()
+        colormap_data[index * 4 + 1] = color.greenF()
+        colormap_data[index * 4 + 2] = color.blueF()
+        colormap_data[index * 4 + 3] = color.alphaF()
+    colormap_texture.setData(
+        PySide6.QtOpenGL.QOpenGLTexture.PixelFormat.RGBA,
+        PySide6.QtOpenGL.QOpenGLTexture.PixelType.Float32,
+        colormap_data,  # type: ignore
+    )
+    return colormap_texture
 
 
 class EventDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
@@ -861,7 +1413,7 @@ class EventDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
                 PySide6.QtOpenGL.QOpenGLTexture.PixelType.Float32,
                 self.ts_and_ons,  # type: ignore
             )
-            colormap_texture, colormap_split = colormap_to_texture(
+            colormap_texture, colormap_split = event_colormap_to_texture(
                 on_colormap=self.on_colormap,
                 off_colormap=self.off_colormap,
             )
@@ -944,11 +1496,12 @@ class EventDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
             )
             if self.colormaps_changed:
                 self.program.colormap_texture, self.program.colormap_split = (
-                    colormap_to_texture(
+                    event_colormap_to_texture(
                         on_colormap=self.on_colormap,
                         off_colormap=self.off_colormap,
                     )
                 )
+                self.colormaps_changed = False
             self.program.inner.setUniformValue1f(
                 "colormap_split",  # type: ignore
                 self.program.colormap_split,
@@ -1057,7 +1610,7 @@ class EventDisplay(PySide6.QtQuick.QQuickItem):
         get_on_colormap,
         set_on_colormap,
         None,
-        "colormap for OFF events (polarity 0)",
+        "colormap for ON events (polarity 1)",
     )
 
     def get_off_colormap(self) -> list[PySide6.QtGui.QColor]:
@@ -1215,7 +1768,6 @@ class EventDisplay(PySide6.QtQuick.QQuickItem):
             self._renderer.set_clear_and_draw_areas(
                 clear_area=self._clear_area, draw_area=self._draw_area
             )
-
             # @TODO emit signal for paint area change
 
 
@@ -1226,18 +1778,22 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
         vertices_buffer: PySide6.QtOpenGL.QOpenGLBuffer
         vertex_array_object: PySide6.QtOpenGL.QOpenGLVertexArrayObject
         frame_texture: PySide6.QtOpenGL.QOpenGLTexture
+        colormap_texture: typing.Optional[PySide6.QtOpenGL.QOpenGLTexture]
 
         def cleanup(self):
             self.vertices_buffer.destroy()
             self.frame_texture.destroy()
+            if self.colormap_texture is not None:
+                self.colormap_texture.destroy()
 
     def __init__(
         self,
         window: PySide6.QtQuick.QQuickWindow,
         visible: bool,
         sensor_size: PySide6.QtCore.QSize,
-        mode: typing.Literal["L", "RGB", "RGBA"],
-        dtype: typing.Literal["u1", "u2", "f4"],
+        mode: FrameMode,
+        dtype: FrameDtype,
+        colormap: list[PySide6.QtGui.QColor],
         padding_color: PySide6.QtGui.QColor,
         clear_background: bool,
     ):
@@ -1246,6 +1802,7 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
         self.visible = visible
         self.sensor_size = sensor_size
         self.mode: FrameMode = mode
+        self.colormap = colormap
         if dtype == "u1":
             self.pixel_type = PySide6.QtOpenGL.QOpenGLTexture.PixelType.UInt8
             pixel_format_suffix = "_Integer"
@@ -1263,7 +1820,7 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
             byte_width = 4
         else:
             raise Exception(f"unsupported dtype {self.dtype}")
-        if mode == "L":
+        if mode == "L" or mode == "P":
             self.depth = 1
             self.pixel_format = PySide6.QtOpenGL.QOpenGLTexture.PixelFormat[
                 f"Red{pixel_format_suffix}"
@@ -1307,6 +1864,7 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
             sensor_size.width() * sensor_size.height() * self.depth,
             dtype=self.dtype,
         )
+        self.colormap_changed = False
         self.clear_area = PySide6.QtCore.QRect()
         self.draw_area = PySide6.QtCore.QRect()
         self.program: typing.Optional[FrameDisplayRenderer.Program] = None
@@ -1328,6 +1886,11 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
     def set_visible(self, visible: bool):
         with PySide6.QtCore.QMutexLocker(self.lock):
             self.visible = visible
+
+    def set_colormap(self, colormap: list[PySide6.QtGui.QColor]):
+        with PySide6.QtCore.QMutexLocker(self.lock):
+            self.colormap = colormap
+            self.colormap_changed = True
 
     def set_padding_color(self, padding_color: PySide6.QtGui.QColor):
         with PySide6.QtCore.QMutexLocker(self.lock):
@@ -1398,13 +1961,14 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
                 depth=self.depth,
             )
             frame_texture.allocateStorage()
-
             frame_texture.setData(
                 self.pixel_format,
                 self.pixel_type,
                 self.frame,  # type: ignore
                 self.transfer_options,
             )
+            colormap_texture = frame_colormap_to_texture(self.colormap)
+
             vertices_location = program.attributeLocation("vertices")
             program.enableAttributeArray(vertices_location)
             program.setAttributeBuffer(vertices_location, GL_FLOAT, 0, 2, 0)
@@ -1416,6 +1980,7 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
                 vertices_buffer=vertices_buffer,
                 vertex_array_object=vertex_array_object,
                 frame_texture=frame_texture,
+                colormap_texture=colormap_texture,
             )
 
     @PySide6.QtCore.Slot()
@@ -1459,6 +2024,10 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
             self.program.inner.setUniformValue1i(
                 self.program.inner.uniformLocation("frame_sampler"), 0
             )
+            if self.mode == "P":
+                self.program.inner.setUniformValue1i(
+                    self.program.inner.uniformLocation("colormap_sampler"), 1
+                )
             self.program.frame_texture.bind(0)
             self.program.frame_texture.setData(
                 self.pixel_format,
@@ -1466,6 +2035,13 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
                 self.frame,  # type: ignore
                 self.transfer_options,
             )
+            if self.colormap_changed and self.program.colormap_texture is not None:
+                self.program.colormap_texture = frame_colormap_to_texture(
+                    colormap=self.colormap
+                )
+                self.colormap_changed = False
+            if self.program.colormap_texture is not None:
+                self.program.colormap_texture.bind(1)
             self.program.vertex_array_object.bind()
             self.glDrawArrays(GL_TRIANGLE_STRIP, 0, 4)
             self.program.vertex_array_object.release()
@@ -1489,8 +2065,9 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
         self._clear_area: typing.Optional[PySide6.QtCore.QRectF] = None
         self._draw_area: typing.Optional[PySide6.QtCore.QRectF] = None
         self._sensor_size: typing.Optional[PySide6.QtCore.QSize] = None
-        self._mode: typing.Optional[typing.Literal["L", "RGB", "RGBA"]] = None
-        self._dtype: typing.Optional[typing.Literal["u1", "u2", "f4"]] = None
+        self._mode: typing.Optional[FrameMode] = None
+        self._dtype: typing.Optional[FrameDtype] = None
+        self._colormap = DEFAULT_FRAME_COLORMAP
         self._padding_color = PySide6.QtGui.QColor(0x19, 0x19, 0x19)
         self._clear_background = True
         self._timer = PySide6.QtCore.QTimer(interval=16)
@@ -1517,7 +2094,7 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
     )
 
     def set_mode(self, mode: FrameMode):
-        assert mode in {"L", "RGB", "RGBA"}
+        assert mode in {"L", "RGB", "RGBA", "P"}
         if self._mode is not None:
             raise Exception(f"mode may only be set once")
         self._mode = mode
@@ -1542,6 +2119,23 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
         set_dtype,
         None,
         "input frame pixel type",
+    )
+
+    def get_colormap(self) -> list[PySide6.QtGui.QColor]:
+        return self._colormap
+
+    def set_colormap(self, colormap: list[PySide6.QtGui.QColor]):
+        colormap = [PySide6.QtGui.QColor(color) for color in colormap]
+        self._colormap = colormap
+        if self._renderer is not None:
+            self._renderer.set_colormap(colormap=colormap)
+
+    colormap = PySide6.QtCore.Property(
+        list,
+        get_colormap,
+        set_colormap,
+        None,
+        "colormap for frame values (mode P only)",
     )
 
     def get_padding_color(self) -> PySide6.QtGui.QColor:
@@ -1632,6 +2226,7 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
                 sensor_size=self._sensor_size,
                 mode=self._mode,
                 dtype=self._dtype,
+                colormap=self._colormap,
                 padding_color=self._padding_color,
                 clear_background=self._clear_background,
             )
@@ -1685,7 +2280,6 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
             self._renderer.set_clear_and_draw_areas(
                 clear_area=self._clear_area, draw_area=self._draw_area
             )
-
             # @TODO emit signal for paint area change
 
 

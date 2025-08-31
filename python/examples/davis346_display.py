@@ -256,4 +256,4 @@ if __name__ == "__main__":
     app.run()
     context["running"] = False
     camera_thread.join()
-    device.__exit__(None, None, None)
+    device.close()
