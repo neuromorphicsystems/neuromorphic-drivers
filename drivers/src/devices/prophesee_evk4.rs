@@ -250,6 +250,11 @@ impl device::Usb for Device {
                     b'P', 0x00, b'r', 0x00, b'o', 0x00, b'p', 0x00, b'h', 0x00, b'e', 0x00, b's',
                     0x00, b'e', 0x00, b'e', 0x00,
                 ],
+               // CenturyArks (UTF-16)
+                &[
+                    b'C', 0x00, b'e', 0x00, b'n', 0x00, b't', 0x00, b'u', 0x00, b'r', 0x00, b'y',
+                    0x00, b'A', 0x00, b'r', 0x00, b'k', 0x00, b's', 0x00,
+                ],
                 // IDS Imaging Development Systems GmbH (UTF-16)
                 &[
                     b'I', 0x00, b'D', 0x00, b'S', 0x00, b' ', 0x00, b'I', 0x00, b'm', 0x00, b'a',

@@ -7,8 +7,8 @@ pub mod properties;
 pub mod usb;
 
 pub use adapters::Adapter;
+pub use device::SerialOrBusNumberAndAddress;
 pub use device::Usb as UsbDevice;
-pub use device::SerialOrBusNumberAndAddress as SerialOrBusNumberAndAddress;
 pub use devices::list_devices;
 pub use devices::open;
 pub use devices::Configuration;
