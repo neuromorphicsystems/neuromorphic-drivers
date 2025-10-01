@@ -1,4 +1,4 @@
-<img src="https://raw.githubusercontent.com/neuromorphicsystems/neuromorphic-drivers/main/logo.png" width="600">
+<img src="https://raw.githubusercontent.com/neuromorphicsystems/neuromorphic-drivers/main/logo.png" width="512">
 
 <h1>Neuromorphic Drivers</h1>
 
