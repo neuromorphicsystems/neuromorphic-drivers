@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/neuromorphicsystems/neuromorphic-drivers/main/logo.png" width="512">
+
 ![pypi](https://img.shields.io/pypi/v/neuromorphic-drivers)
 ![crates.io](https://img.shields.io/crates/v/neuromorphic-drivers)
 [![Neuromorphic Computing](https://img.shields.io/badge/Collaboration_Network-Open_Neuromorphic-blue)](https://open-neuromorphic.org/neuromorphic-computing/)
