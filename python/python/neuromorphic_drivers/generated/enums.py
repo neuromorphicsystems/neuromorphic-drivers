@@ -15,3 +15,4 @@ class Name(enum.Enum):
     INIVATION_DVXPLORER = "iniVation DVXplorer"
     PROPHESEE_EVK3_HD = "Prophesee EVK3 HD"
     PROPHESEE_EVK4 = "Prophesee EVK4"
+    CENTURYARKS_VGA = "CenturyArks VGA"

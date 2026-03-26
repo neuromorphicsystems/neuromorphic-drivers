@@ -6,6 +6,7 @@ from .devices import inivation_davis346
 from .devices import inivation_dvxplorer
 from .devices import prophesee_evk3_hd
 from .devices import prophesee_evk4
+from .devices import centuryarks_vga
 
 
 Properties = typing.Union[
@@ -13,6 +14,7 @@ Properties = typing.Union[
     inivation_dvxplorer.Properties,
     prophesee_evk3_hd.Properties,
     prophesee_evk4.Properties,
+    centuryarks_vga.Properties,
 ]
 
 Configuration = typing.Union[
@@ -20,6 +22,7 @@ Configuration = typing.Union[
     inivation_dvxplorer.Configuration,
     prophesee_evk3_hd.Configuration,
     prophesee_evk4.Configuration,
+    centuryarks_vga.Configuration,
 ]
 
 UsbConfiguration = typing.Union[
@@ -27,6 +30,7 @@ UsbConfiguration = typing.Union[
     inivation_dvxplorer.UsbConfiguration,
     prophesee_evk3_hd.UsbConfiguration,
     prophesee_evk4.UsbConfiguration,
+    centuryarks_vga.UsbConfiguration,
 ]
 
 
@@ -39,6 +43,8 @@ def name_to_properties(name: enums.Name) -> Properties:
         return prophesee_evk3_hd.Properties()
     if name == enums.Name.PROPHESEE_EVK4:
         return prophesee_evk4.Properties()
+    if name == enums.Name.CENTURYARKS_VGA:
+        return centuryarks_vga.Properties()
     raise Exception(f"unknown name {name}")
 
 
@@ -51,4 +57,6 @@ def deserialize_configuration(name: enums.Name, data: bytes) -> Configuration:
         return serde.bincode.deserialize(data, prophesee_evk3_hd.Configuration)[0]
     if name == enums.Name.PROPHESEE_EVK4:
         return serde.bincode.deserialize(data, prophesee_evk4.Configuration)[0]
+    if name == enums.Name.CENTURYARKS_VGA:
+        return serde.bincode.deserialize(data, centuryarks_vga.Configuration)[0]
     raise Exception(f"unknown name {name}")

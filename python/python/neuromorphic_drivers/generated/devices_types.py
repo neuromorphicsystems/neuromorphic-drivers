@@ -12,6 +12,7 @@ from .devices import inivation_davis346 as inivation_davis346
 from .devices import inivation_dvxplorer as inivation_dvxplorer
 from .devices import prophesee_evk3_hd as prophesee_evk3_hd
 from .devices import prophesee_evk4 as prophesee_evk4
+from .devices import centuryarks_vga as centuryarks_vga
 from .enums import *
 from .unions import *
 
@@ -346,6 +347,54 @@ def open(
     usb_configuration: typing.Optional[UsbConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> prophesee_evk4.PropheseeEvk4DeviceRawOptional:
+    ...
+
+
+@typing.overload
+def open(
+    configuration: centuryarks_vga.Configuration,
+    iterator_timeout: typing.Literal[None] = None,
+    raw: typing.Literal[False] = False,
+    serial: typing.Optional[str] = None,
+    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> centuryarks_vga.CenturyarksVgaDevice:
+    ...
+
+
+@typing.overload
+def open(
+    configuration: centuryarks_vga.Configuration,
+    iterator_timeout: float,
+    raw: typing.Literal[False] = False,
+    serial: typing.Optional[str] = None,
+    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> centuryarks_vga.CenturyarksVgaDeviceOptional:
+    ...
+
+
+@typing.overload
+def open(
+    configuration: centuryarks_vga.Configuration,
+    iterator_timeout: typing.Literal[None] = None,
+    raw: typing.Literal[True] = True,
+    serial: typing.Optional[str] = None,
+    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> centuryarks_vga.CenturyarksVgaDeviceRaw:
+    ...
+
+
+@typing.overload
+def open(
+    configuration: centuryarks_vga.Configuration,
+    iterator_timeout: float,
+    raw: typing.Literal[True] = True,
+    serial: typing.Optional[str] = None,
+    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> centuryarks_vga.CenturyarksVgaDeviceRawOptional:
     ...
 
 
