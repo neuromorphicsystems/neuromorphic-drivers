@@ -295,7 +295,7 @@ impl device::Usb for Device {
                 // "UE-39B0XCP" (UTF-16)
                 &[
                     b'U', 0x00, b'E', 0x00, b'-', 0x00, b'3', 0x00, b'9', 0x00, b'B', 0x00, b'0',
-                    0x00, b'X', 0x00, b'C', 0x00, b'P',
+                    0x00, b'X', 0x00, b'C', 0x00, b'P', 0x00
                 ],
             ],
             TIMEOUT,
