@@ -25,6 +25,7 @@ pub use devices::inivation_davis346;
 pub use devices::inivation_dvxplorer;
 pub use devices::prophesee_evk3_hd;
 pub use devices::prophesee_evk4;
+pub use devices::centuryarks_vga;
 
 pub use bincode;
 pub use libc;

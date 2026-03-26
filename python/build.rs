@@ -592,6 +592,7 @@ macro_rules! generate {
                                     "    def orientation(self) -> orientation.DvxplorerOrientation: ...\n",
                                 )
                             ).unwrap();
+
                         } else if stringify!($module) == "prophesee_evk4" {
                             writeln!(
                                 writer,
@@ -901,6 +902,7 @@ fn main() {
         (inivation_davis346, Davis346Packet),
         (inivation_dvxplorer, DvxplorerPacket),
         (prophesee_evk3_hd, Evt3Packet),
-        (prophesee_evk4, Evt3Packet)
+        (prophesee_evk4, Evt3Packet),
+        (centuryarks_vga, Evt3Packet)
     );
 }
