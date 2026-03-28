@@ -36,8 +36,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # macos-13 is an Intel runner, macos-latest is an ARM runner
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-13, windows-latest]
+        # macos-14 is an Intel runner, macos-latest is an ARM runner
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-14, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -60,8 +60,8 @@ jobs:
       matrix:
         numpy: ["==1.26.4", ">=2"]
         python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-        # macos-13 is an Intel runner, macos-latest is an ARM runner
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-13, windows-latest]
+        # macos-14 is an Intel runner, macos-latest is an ARM runner
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-14, windows-latest]
         exclude:
           # this configuration yields 'Windows fatal exception: access violation'
           # this may get fixed in a maintenance upgrade of 1.26.x (x > 4)
