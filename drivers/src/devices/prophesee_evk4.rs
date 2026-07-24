@@ -297,6 +297,11 @@ impl device::Usb for Device {
                     b'U', 0x00, b'E', 0x00, b'-', 0x00, b'3', 0x00, b'9', 0x00, b'B', 0x00, b'0',
                     0x00, b'X', 0x00, b'C', 0x00, b'P', 0x00
                 ],
+                // "UE-39B2XLS" (UTF-16)
+                &[
+                    b'U', 0x00, b'E', 0x00, b'-', 0x00, b'3', 0x00, b'9', 0x00, b'B', 0x00, b'2',
+                    0x00, b'X', 0x00, b'L', 0x00, b'S', 0x00
+                ],
             ],
             TIMEOUT,
         )?;
