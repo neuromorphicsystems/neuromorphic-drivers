@@ -12,7 +12,7 @@ concurrency:
     cancel-in-progress: true
 
 env:
-  CIBW_SKIP: cp38-* cp315-* cp315t-* pp* *i686 *win32
+  CIBW_SKIP: cp315-* cp315t-* *i686 *win32
 
   # cibuildhweel macOS configuration
   CIBW_ARCHS_MACOS: native

@@ -9,7 +9,10 @@ use crate::usb;
 
 use device::Device as _;
 
-use std::os::fd::AsRawFd;
+#[cfg(unix)]
+use std::os::fd::AsRawFd as _;
+#[cfg(windows)]
+use std::os::windows::io::AsRawSocket as _;
 
 const CONTROL_CHANNEL_PRIVILEGE_CONTROL: i32 = 2;
 const STREAM_CHANNEL_PACKET_SIZE_ADDRESS: u32 = 0x0000_0D04;
@@ -28,6 +31,10 @@ const UDP_HEADER_LENGTH: usize = 8;
 const GVSP_PACKET_OVERHEAD: usize = IPV4_HEADER_LENGTH + UDP_HEADER_LENGTH + GVSP_HEADER_LENGTH;
 const GVSP_MINIMUM_PACKET_SIZE: usize = 576;
 const GVSP_PARALLEL_SUBMISSIONS: usize = 1;
+#[cfg(windows)]
+const ADAPTERS_ADDRESSES_INITIAL_LENGTH: usize = 1 << 14;
+#[cfg(windows)]
+const ADAPTERS_ADDRESSES_ATTEMPTS: usize = 3;
 const GVSP_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(100);
 
 const START_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(250);
@@ -446,56 +453,43 @@ impl device::Ethernet for Device {
 
         let gvsp_running = running.clone();
         let gvsp_flag = flag.clone();
+        let datagram_length =
+            ring_configuration.buffer_length - IPV4_HEADER_LENGTH - UDP_HEADER_LENGTH;
         let gvsp_thread = std::thread::spawn(move || {
-            let mut header = [0u8; GVSP_HEADER_LENGTH];
+            // allocated once and re-used by every call to recv_from
+            let mut datagram = vec![0u8; datagram_length];
             let mut previous_identifier: Option<(u64, u32)> = None;
             while gvsp_running.load(std::sync::atomic::Ordering::Acquire) {
-                let count = {
-                    let buffer = producer.buffer();
-                    let mut scattered = [
-                        libc::iovec {
-                            iov_base: header.as_mut_ptr() as *mut libc::c_void,
-                            iov_len: header.len(),
-                        },
-                        libc::iovec {
-                            iov_base: buffer.as_mut_ptr() as *mut libc::c_void,
-                            iov_len: buffer.len(),
-                        },
-                    ];
-                    // unsafe: recvmsg writes at most iov_len bytes to each destination,
-                    // which are both borrowed for the duration of the call
-                    unsafe {
-                        let mut message: libc::msghdr = std::mem::zeroed();
-                        message.msg_iov = scattered.as_mut_ptr();
-                        message.msg_iovlen = scattered.len() as _;
-                        libc::recvmsg(gvsp_socket.as_raw_fd(), &mut message, 0)
+                let count = match gvsp_socket.recv_from(&mut datagram) {
+                    Ok((count, _)) => count,
+                    Err(error) => {
+                        if matches!(
+                            error.kind(),
+                            std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
+                        ) {
+                            continue;
+                        }
+                        gvsp_flag.store_error_if_not_set(Error::from(error));
+                        break;
                     }
                 };
-                if count < 0 {
-                    let error = std::io::Error::last_os_error();
-                    if matches!(
-                        error.kind(),
-                        std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
-                    ) {
-                        continue;
-                    }
-                    gvsp_flag.store_error_if_not_set(Error::from(error));
-                    break;
-                }
-                let count = count as usize;
                 if count < GVSP_HEADER_LENGTH
-                    || header[GVSP_FORMAT_INDEX] != GVSP_PAYLOAD_PACKET_FORMAT
+                    || datagram[GVSP_FORMAT_INDEX] != GVSP_PAYLOAD_PACKET_FORMAT
                 {
                     continue;
                 }
                 let identifier = (
-                    u64::from_be_bytes(header[GVSP_BLOCK_ID_RANGE].try_into().expect("8 bytes")),
-                    u32::from_be_bytes(header[GVSP_PACKET_ID_RANGE].try_into().expect("4 bytes")),
+                    u64::from_be_bytes(datagram[GVSP_BLOCK_ID_RANGE].try_into().expect("8 bytes")),
+                    u32::from_be_bytes(datagram[GVSP_PACKET_ID_RANGE].try_into().expect("4 bytes")),
                 );
                 if follows(previous_identifier, identifier) {
                     previous_identifier = Some(identifier);
+                    let buffer = producer.buffer();
+                    let length = (count - GVSP_HEADER_LENGTH).min(buffer.len());
+                    buffer[..length]
+                        .copy_from_slice(&datagram[GVSP_HEADER_LENGTH..GVSP_HEADER_LENGTH + length]);
                     producer.commit(
-                        count - GVSP_HEADER_LENGTH,
+                        length,
                         std::time::SystemTime::now(),
                         std::time::Instant::now(),
                     );
@@ -698,6 +692,7 @@ fn follows(previous: Option<(u64, u32)>, current: (u64, u32)) -> bool {
     }
 }
 
+#[cfg(unix)]
 fn set_receive_buffer_size(socket: &std::net::UdpSocket, size: usize) {
     let value = size as libc::c_int;
     unsafe {
@@ -711,6 +706,21 @@ fn set_receive_buffer_size(socket: &std::net::UdpSocket, size: usize) {
     }
 }
 
+#[cfg(windows)]
+fn set_receive_buffer_size(socket: &std::net::UdpSocket, size: usize) {
+    let value = size as i32;
+    unsafe {
+        windows_sys::Win32::Networking::WinSock::setsockopt(
+            socket.as_raw_socket() as windows_sys::Win32::Networking::WinSock::SOCKET,
+            windows_sys::Win32::Networking::WinSock::SOL_SOCKET,
+            windows_sys::Win32::Networking::WinSock::SO_RCVBUF,
+            &value as *const i32 as *const u8,
+            std::mem::size_of::<i32>() as i32,
+        );
+    }
+}
+
+#[cfg(unix)]
 fn local_ipv4_interfaces() -> Vec<(std::net::Ipv4Addr, std::net::Ipv4Addr)> {
     let mut result = Vec::new();
     let mut ifap: *mut libc::ifaddrs = std::ptr::null_mut();
@@ -741,6 +751,83 @@ fn local_ipv4_interfaces() -> Vec<(std::net::Ipv4Addr, std::net::Ipv4Addr)> {
             current = interface.ifa_next;
         }
         libc::freeifaddrs(ifap);
+    }
+    result
+}
+
+#[cfg(windows)]
+fn local_ipv4_interfaces() -> Vec<(std::net::Ipv4Addr, std::net::Ipv4Addr)> {
+    let mut result = Vec::new();
+    // GetAdaptersAddresses writes IP_ADAPTER_ADDRESSES_LH structures, whose alignment
+    // exceeds that of u8, hence the u64 buffer
+    let mut words = vec![0u64; ADAPTERS_ADDRESSES_INITIAL_LENGTH.div_ceil(8)];
+    let mut length = (words.len() * 8) as u32;
+    unsafe {
+        for attempt in 0..ADAPTERS_ADDRESSES_ATTEMPTS {
+            let code = windows_sys::Win32::NetworkManagement::IpHelper::GetAdaptersAddresses(
+                windows_sys::Win32::Networking::WinSock::AF_INET as u32,
+                windows_sys::Win32::NetworkManagement::IpHelper::GAA_FLAG_SKIP_ANYCAST
+                    | windows_sys::Win32::NetworkManagement::IpHelper::GAA_FLAG_SKIP_MULTICAST
+                    | windows_sys::Win32::NetworkManagement::IpHelper::GAA_FLAG_SKIP_DNS_SERVER
+                    | windows_sys::Win32::NetworkManagement::IpHelper::GAA_FLAG_SKIP_FRIENDLY_NAME,
+                std::ptr::null(),
+                words.as_mut_ptr()
+                    as *mut windows_sys::Win32::NetworkManagement::IpHelper::IP_ADAPTER_ADDRESSES_LH,
+                &mut length,
+            );
+            if code == windows_sys::Win32::Foundation::ERROR_BUFFER_OVERFLOW
+                && attempt + 1 < ADAPTERS_ADDRESSES_ATTEMPTS
+            {
+                words.resize((length as usize).div_ceil(8), 0);
+                length = (words.len() * 8) as u32;
+                continue;
+            }
+            if code != windows_sys::Win32::Foundation::NO_ERROR {
+                return result;
+            }
+            break;
+        }
+        let mut adapter = words.as_ptr()
+            as *const windows_sys::Win32::NetworkManagement::IpHelper::IP_ADAPTER_ADDRESSES_LH;
+        while !adapter.is_null() {
+            if (*adapter).IfType
+                != windows_sys::Win32::NetworkManagement::IpHelper::IF_TYPE_SOFTWARE_LOOPBACK
+                && (*adapter).OperStatus
+                    == windows_sys::Win32::NetworkManagement::Ndis::IfOperStatusUp
+            {
+                let mut unicast = (*adapter).FirstUnicastAddress;
+                while !unicast.is_null() {
+                    let socket_address = (*unicast).Address.lpSockaddr;
+                    if !socket_address.is_null()
+                        && (*socket_address).sa_family
+                            == windows_sys::Win32::Networking::WinSock::AF_INET
+                    {
+                        let address = std::net::Ipv4Addr::from(
+                            (*(socket_address
+                                as *const windows_sys::Win32::Networking::WinSock::SOCKADDR_IN))
+                            .sin_addr
+                            .S_un
+                            .S_addr
+                            .to_ne_bytes(),
+                        );
+                        if !address.is_loopback() {
+                            let prefix_length =
+                                ((*unicast).OnLinkPrefixLength as u32).min(u32::BITS);
+                            result.push((
+                                address,
+                                std::net::Ipv4Addr::from(if prefix_length == 0 {
+                                    0
+                                } else {
+                                    u32::MAX << (u32::BITS - prefix_length)
+                                }),
+                            ));
+                        }
+                    }
+                    unicast = (*unicast).Next;
+                }
+            }
+            adapter = (*adapter).Next;
+        }
     }
     result
 }

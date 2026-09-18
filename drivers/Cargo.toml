@@ -22,3 +22,6 @@ paste = "1.0"
 rusb = {version = "0.9.4", features = ["vendored"]}
 serde = {version = "1.0", features = ["derive"]}
 thiserror = "2.0"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = {version = "0.61.2", features = ["Win32_Foundation", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock"]}
