@@ -64,7 +64,7 @@ Tick marks indicate supported features, minus signs indicate that the camera doe
 | inivation_dvxplorer | USB        | `polarity_events` `imu_events` `trigger_events`          | ▢                  | ▢              | -            | ▢            | -            | ✓²          | -           | ▢                 | -             |
 | inivation_davis346  | USB        | `polarity_events` `imu_events` `trigger_events` `frames` | ▢                  | ▢              | -            | ▢            | -            | ✓²          | -           | ▢                 | ▢             |
 
-The Lucid Triton is a GigE Vision camera; it is discovered and controlled over the network (no udev rule is needed). For reliable streaming the camera should be on the same subnet as the host (static IP). On Linux, raise the kernel socket buffer cap so the requested `SO_RCVBUF` takes effect, e.g. `sudo sysctl -w net.core.rmem_max=33554432`.
+The Lucid Triton is a GigE Vision camera (ethernet). For reliable streaming the camera should be on the same subnet as the host. On Linux, raising the size of the kernel socket buffer can improves performance, for instance `sudo sysctl -w net.core.rmem_max=67108864`.
 
 ¹Temperature can be sampled at arbitrary times by calling a function
 
@@ -85,7 +85,7 @@ The Lucid Triton is a GigE Vision camera; it is discovered and controlled over t
 pip install neuromorphic_drivers
 ```
 
-Wheels are available for CPython 3.9 to 3.14 on Linux (x86-64 and ARM64), macOS (Intel and Apple Silicon), and Windows x64. The free-threaded build of Python 3.14 (_3.14t_) is supported: the extension declares `Py_MOD_GIL_NOT_USED`, hence importing it does not re-enable the GIL. A given device may only be iterated by one thread at a time, other threads raise `RuntimeError` until the current iteration completes.
+Wheels are available for Python 3.9 to 3.14 on Linux (x86-64 and ARM64), macOS (Intel and Apple Silicon), and Windows x64. The free-threaded build of Python 3.14 (_3.14t_) is supported: the extension declares `Py_MOD_GIL_NOT_USED`, hence importing it does not re-enable the GIL. A given device may only be iterated by one thread at a time, other threads raise `RuntimeError` until the current iteration completes.
 
 On Linux, run the following comman after installing the package to install UDEV rules.
 
@@ -112,7 +112,7 @@ with nd.open() as device:
             pass
 ```
 
-Packets contain a variable number of events (typically a few thousand to a few hundred thousand) covering a variable amount of time (typically a tens of microseconds to a few milliseconds).
+Packets contain a variable number of events (typically a few thousand to a few hundred thousand) covering a variable amount of time (typically tens of microseconds to a few milliseconds).
 
 ## Device configuration
 
@@ -123,8 +123,8 @@ import neuromorphic_drivers as nd
 
 configuration = nd.prophesee_evk4.Configuration(
     biases=nd.prophesee_evk4.Biases(
-        diff_off=170,
-        diff_on=130,
+        diff_off=30,
+        diff_on=30,
     )
 )
 
