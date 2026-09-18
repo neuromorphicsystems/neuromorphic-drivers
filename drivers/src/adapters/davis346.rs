@@ -134,7 +134,7 @@ fn acceleration(
         Some(accelerometer_scale) => accelerometer_scale.acceleration_metres_per_second(
             i16::from_be_bytes([byte0, byte1]) * (if flip { -1 } else { 1 }),
         ),
-        None => std::f32::NAN,
+        None => f32::NAN,
     }
 }
 
@@ -143,7 +143,7 @@ fn rotation(gyroscope_scale: Option<GyroscopeScale>, byte0: u8, byte1: u8, flip:
         Some(gyroscope_scale) => gyroscope_scale.rotation_radians_per_second(
             i16::from_be_bytes([byte0, byte1]) * (if flip { -1 } else { 1 }),
         ),
-        None => std::f32::NAN,
+        None => f32::NAN,
     }
 }
 
@@ -379,7 +379,7 @@ impl Adapter {
                                                     i16::from_be_bytes([bytes[6], bytes[7]]),
                                                 )
                                             } else {
-                                                std::f32::NAN
+                                                f32::NAN
                                             },
                                         })
                                     }
@@ -638,12 +638,7 @@ impl Adapter {
                         _ => {}
                     },
                     6 => {
-                        match (word & 0x0C00) >> 10 {
-                            0 => {
-                                // @DEV @TODO auto-exposure feedback
-                            }
-                            _ => {}
-                        }
+                        // @DEV @TODO auto-exposure feedback when (word & 0x0C00) >> 10 == 0
                     }
                     7 => {
                         self.state.t_offset += 0x8000;

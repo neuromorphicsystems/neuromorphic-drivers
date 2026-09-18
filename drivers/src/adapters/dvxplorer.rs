@@ -94,6 +94,7 @@ pub struct State {
 }
 
 pub struct Adapter {
+    #[allow(dead_code)]
     dvs_orientation: inivation_dvxplorer::DvsOrientation,
     imu_orientation: inivation_dvxplorer::ImuOrientation,
     state: State,
@@ -109,7 +110,7 @@ fn acceleration(
         Some(accelerometer_scale) => accelerometer_scale.acceleration_metres_per_second(
             i16::from_be_bytes([byte0, byte1]) * (if flip { -1 } else { 1 }),
         ),
-        None => std::f32::NAN,
+        None => f32::NAN,
     }
 }
 
@@ -118,7 +119,7 @@ fn rotation(gyroscope_scale: Option<GyroscopeScale>, byte0: u8, byte1: u8, flip:
         Some(gyroscope_scale) => gyroscope_scale.rotation_radians_per_second(
             i16::from_be_bytes([byte0, byte1]) * (if flip { -1 } else { 1 }),
         ),
-        None => std::f32::NAN,
+        None => f32::NAN,
     }
 }
 
@@ -285,7 +286,7 @@ impl Adapter {
                                                 / 512.0)
                                                 + 23.0
                                         } else {
-                                            std::f32::NAN
+                                            f32::NAN
                                         },
                                     })
                                 }
@@ -425,7 +426,7 @@ impl Adapter {
                                                 1 => GyroscopeScale::OneThousand,
                                                 2 => GyroscopeScale::FiveHundred,
                                                 3 => GyroscopeScale::TwoHundredAndFifty,
-                                                4 | 5 | 6 | 7 => {
+                                                4..=7 => {
                                                     GyroscopeScale::OneHundredAndTwentyFive
                                                 }
                                                 _ => unreachable!(),

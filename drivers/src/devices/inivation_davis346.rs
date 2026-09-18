@@ -304,7 +304,10 @@ impl device::Device for Device {
         self.configuration_updater.update(configuration);
     }
 
-    fn next_with_timeout(&'_ self, timeout: &std::time::Duration) -> Option<ring::ReadBufferView<'_>> {
+    fn next_with_timeout(
+        &'_ self,
+        timeout: &std::time::Duration,
+    ) -> Option<ring::ReadBufferView<'_>> {
         self.ring.next_with_timeout(timeout)
     }
 
@@ -365,15 +368,11 @@ impl device::Usb for Device {
         IntoWarning: From<ring::Overflow> + Clone + Send + 'static,
     {
         let (handle, vendor_and_product_id, serial) = match serial_or_bus_number_and_address {
-            device::Identifier::Serial(serial) => {
-                Self::open_serial(event_loop.context(), serial)?
-            }
+            device::Identifier::Serial(serial) => Self::open_serial(event_loop.context(), serial)?,
             device::Identifier::Location(device::Location::BusNumberAndAddress {
                 bus_number,
                 address,
-            }) => {
-                Self::open_bus_number_and_address(event_loop.context(), bus_number, address)?
-            }
+            }) => Self::open_bus_number_and_address(event_loop.context(), bus_number, address)?,
             device::Identifier::Location(device::Location::Address(_)) => {
                 return Err(usb::Error::Address.into())
             }
@@ -648,6 +647,7 @@ macro_rules! update_bias {
     };
 }
 
+#[allow(clippy::too_many_arguments)]
 fn update_configuration(
     handle: &rusb::DeviceHandle<rusb::Context>,
     previous_configuration: Option<&Configuration>,
@@ -830,157 +830,134 @@ fn update_configuration(
         configuration.biases
     );
 
-    if has_pixel_filter {
-        if match previous_configuration {
-            Some(previous_configuration) => {
-                previous_configuration.pixel_mask != configuration.pixel_mask
-            }
-            None => true,
-        } {
-            for (index, code) in configuration.pixel_mask.iter().enumerate() {
-                let (x_value, y_value) = if *code == 0 {
-                    (PROPERTIES.width as u32, PROPERTIES.height as u32)
-                } else {
-                    (
-                        (code - 1) % PROPERTIES.width as u32,
-                        (code - 1) / PROPERTIES.width as u32,
-                    )
-                };
-                SpiRegister::new(ModuleAddress::Dvs, (11 + 2 * index) as u16)
-                    .set(handle, y_value)?;
-                SpiRegister::new(ModuleAddress::Dvs, (12 + 2 * index) as u16)
-                    .set(handle, x_value)?;
-            }
+    if has_pixel_filter
+        && previous_configuration.is_none_or(|previous_configuration| {
+            previous_configuration.pixel_mask != configuration.pixel_mask
+        })
+    {
+        for (index, code) in configuration.pixel_mask.iter().enumerate() {
+            let (x_value, y_value) = if *code == 0 {
+                (PROPERTIES.width as u32, PROPERTIES.height as u32)
+            } else {
+                (
+                    (code - 1) % PROPERTIES.width as u32,
+                    (code - 1) / PROPERTIES.width as u32,
+                )
+            };
+            SpiRegister::new(ModuleAddress::Dvs, (11 + 2 * index) as u16).set(handle, y_value)?;
+            SpiRegister::new(ModuleAddress::Dvs, (12 + 2 * index) as u16).set(handle, x_value)?;
         }
     }
 
-    if has_activity_filter {
-        if match previous_configuration {
-            Some(previous_configuration) => {
-                previous_configuration.activity_filter != configuration.activity_filter
-            }
-            None => true,
-        } {
-            DVS_FILTER_BACKGROUND_ACTIVITY.set(
-                handle,
-                configuration.activity_filter.mask_isolated_enable as u32,
-            )?;
-            DVS_FILTER_BACKGROUND_ACTIVITY_TIME
-                .set(handle, configuration.activity_filter.mask_isolated_tau)?;
-            DVS_FILTER_REFRACTORY_PERIOD.set(
-                handle,
-                configuration.activity_filter.refractory_period_enable as u32,
-            )?;
-            DVS_FILTER_REFRACTORY_PERIOD_TIME
-                .set(handle, configuration.activity_filter.refractory_period_tau)?;
-        }
+    if has_activity_filter
+        && previous_configuration.is_none_or(|previous_configuration| {
+            previous_configuration.activity_filter != configuration.activity_filter
+        })
+    {
+        DVS_FILTER_BACKGROUND_ACTIVITY.set(
+            handle,
+            configuration.activity_filter.mask_isolated_enable as u32,
+        )?;
+        DVS_FILTER_BACKGROUND_ACTIVITY_TIME
+            .set(handle, configuration.activity_filter.mask_isolated_tau)?;
+        DVS_FILTER_REFRACTORY_PERIOD.set(
+            handle,
+            configuration.activity_filter.refractory_period_enable as u32,
+        )?;
+        DVS_FILTER_REFRACTORY_PERIOD_TIME
+            .set(handle, configuration.activity_filter.refractory_period_tau)?;
     }
 
-    if has_roi_filter {
-        if match previous_configuration {
-            Some(previous_configuration) => {
-                previous_configuration.region_of_interest != configuration.region_of_interest
-            }
-            None => true,
-        } {
-            DVS_FILTER_ROI_START_COLUMN
-                .set(handle, configuration.region_of_interest.left as u32)?;
-            DVS_FILTER_ROI_START_ROW.set(handle, configuration.region_of_interest.top as u32)?;
-            DVS_FILTER_ROI_END_COLUMN.set(
-                handle,
-                (configuration.region_of_interest.left + configuration.region_of_interest.width)
-                    .min(PROPERTIES.width - 1) as u32,
-            )?;
-            DVS_FILTER_ROI_END_ROW.set(
-                handle,
-                (configuration.region_of_interest.top + configuration.region_of_interest.height)
-                    .min(PROPERTIES.height - 1) as u32,
-            )?;
-        }
+    if has_roi_filter
+        && previous_configuration.is_none_or(|previous_configuration| {
+            previous_configuration.region_of_interest != configuration.region_of_interest
+        })
+    {
+        DVS_FILTER_ROI_START_COLUMN.set(handle, configuration.region_of_interest.left as u32)?;
+        DVS_FILTER_ROI_START_ROW.set(handle, configuration.region_of_interest.top as u32)?;
+        DVS_FILTER_ROI_END_COLUMN.set(
+            handle,
+            (configuration.region_of_interest.left + configuration.region_of_interest.width)
+                .min(PROPERTIES.width - 1) as u32,
+        )?;
+        DVS_FILTER_ROI_END_ROW.set(
+            handle,
+            (configuration.region_of_interest.top + configuration.region_of_interest.height)
+                .min(PROPERTIES.height - 1) as u32,
+        )?;
     }
 
-    if has_skip_filter {
-        if match previous_configuration {
-            Some(previous_configuration) => {
-                previous_configuration.skip_events_every != configuration.skip_events_every
-            }
-            None => true,
-        } {
-            DVS_FILTER_SKIP_EVENTS.set(handle, (configuration.skip_events_every > 0) as u32)?;
-            DVS_FILTER_SKIP_EVENTS_EVERY.set(handle, configuration.skip_events_every)?;
-        }
+    if has_skip_filter
+        && previous_configuration.is_none_or(|previous_configuration| {
+            previous_configuration.skip_events_every != configuration.skip_events_every
+        })
+    {
+        DVS_FILTER_SKIP_EVENTS.set(handle, (configuration.skip_events_every > 0) as u32)?;
+        DVS_FILTER_SKIP_EVENTS_EVERY.set(handle, configuration.skip_events_every)?;
     }
 
-    if has_polarity_filter {
-        if match previous_configuration {
-            Some(previous_configuration) => {
-                previous_configuration.polarity_filter != configuration.polarity_filter
-            }
-            None => true,
-        } {
-            DVS_FILTER_POLARITY_FLATTEN.set(
-                handle,
-                match configuration.polarity_filter {
-                    PolarityFilter::Flatten | PolarityFilter::MaskOffFlatten => 1,
-                    _ => 0,
-                },
-            )?;
-            DVS_FILTER_POLARITY_SUPPRESS.set(
-                handle,
-                match configuration.polarity_filter {
-                    PolarityFilter::MaskOn
-                    | PolarityFilter::MaskOff
-                    | PolarityFilter::MaskOffFlatten => 1,
-                    _ => 0,
-                },
-            )?;
-            DVS_FILTER_POLARITY_SUPPRESS_TYPE.set(
-                handle,
-                match configuration.polarity_filter {
-                    PolarityFilter::MaskOn => 1,
-                    _ => 0,
-                },
-            )?;
-        }
+    if has_polarity_filter
+        && previous_configuration.is_none_or(|previous_configuration| {
+            previous_configuration.polarity_filter != configuration.polarity_filter
+        })
+    {
+        DVS_FILTER_POLARITY_FLATTEN.set(
+            handle,
+            match configuration.polarity_filter {
+                PolarityFilter::Flatten | PolarityFilter::MaskOffFlatten => 1,
+                _ => 0,
+            },
+        )?;
+        DVS_FILTER_POLARITY_SUPPRESS.set(
+            handle,
+            match configuration.polarity_filter {
+                PolarityFilter::MaskOn
+                | PolarityFilter::MaskOff
+                | PolarityFilter::MaskOffFlatten => 1,
+                _ => 0,
+            },
+        )?;
+        DVS_FILTER_POLARITY_SUPPRESS_TYPE.set(
+            handle,
+            match configuration.polarity_filter {
+                PolarityFilter::MaskOn => 1,
+                _ => 0,
+            },
+        )?;
     }
 
-    if has_roi_filter {
-        if match previous_configuration {
-            Some(previous_configuration) => {
-                previous_configuration.region_of_interest != configuration.region_of_interest
-            }
-            None => true,
-        } {
-            set_many(
-                handle,
-                &[
-                    (&APS_RUN, 0),
-                    (
-                        &APS_START_COLUMN_0,
-                        configuration.region_of_interest.left as u32,
-                    ),
-                    (
-                        &APS_START_ROW_0,
-                        configuration.region_of_interest.top as u32,
-                    ),
-                    (
-                        &APS_END_COLUMN_0,
-                        (configuration.region_of_interest.left
-                            + configuration.region_of_interest.width
-                            - 1)
-                        .min(345) as u32,
-                    ),
-                    (
-                        &APS_END_ROW_0,
-                        (configuration.region_of_interest.top
-                            + configuration.region_of_interest.height
-                            - 1)
-                        .min(259) as u32,
-                    ),
-                    (&APS_RUN, 0),
-                ],
-            )?;
-        }
+    if has_roi_filter
+        && previous_configuration.is_none_or(|previous_configuration| {
+            previous_configuration.region_of_interest != configuration.region_of_interest
+        })
+    {
+        set_many(
+            handle,
+            &[
+                (&APS_RUN, 0),
+                (
+                    &APS_START_COLUMN_0,
+                    configuration.region_of_interest.left as u32,
+                ),
+                (
+                    &APS_START_ROW_0,
+                    configuration.region_of_interest.top as u32,
+                ),
+                (
+                    &APS_END_COLUMN_0,
+                    (configuration.region_of_interest.left + configuration.region_of_interest.width
+                        - 1)
+                    .min(345) as u32,
+                ),
+                (
+                    &APS_END_ROW_0,
+                    (configuration.region_of_interest.top + configuration.region_of_interest.height
+                        - 1)
+                    .min(259) as u32,
+                ),
+                (&APS_RUN, 0),
+            ],
+        )?;
     }
 
     if match previous_configuration {
@@ -1065,7 +1042,9 @@ const MULTIPLEXER_STATISTICS_DVS_DROPPED: SpiRegister64 =
     SpiRegister64::new(ModuleAddress::Multiplexer, 83);
 
 // dvs module registers
+#[allow(dead_code)]
 const DVS_SIZE_COLUMNS: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 0);
+#[allow(dead_code)]
 const DVS_SIZE_ROWS: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 1);
 const DVS_ORIENTATION: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 2);
 const DVS_RUN: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 3);
@@ -1109,7 +1088,9 @@ const DVS_STATISTICS_FILTERED_REFRACTORY_PERIOD: SpiRegister64 =
 const DVS_FILTER_PIXEL_AUTO_TRAIN: SpiRegister = SpiRegister::new(ModuleAddress::Dvs, 100);
 
 // aps module registers
+#[allow(dead_code)]
 const APS_SIZE_COLUMNS: SpiRegister = SpiRegister::new(ModuleAddress::Aps, 0);
+#[allow(dead_code)]
 const APS_SIZE_ROWS: SpiRegister = SpiRegister::new(ModuleAddress::Aps, 1);
 const APS_ORIENTATION: SpiRegister = SpiRegister::new(ModuleAddress::Aps, 2);
 #[allow(dead_code)]

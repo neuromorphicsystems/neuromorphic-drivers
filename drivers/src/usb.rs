@@ -452,7 +452,7 @@ impl TransferManager {
             manager
                 .transfers
                 .reserve_exact(configuration.parallel_submissions);
-            for index in 0..configuration.parallel_submissions {
+            for (index, write_buffer_view) in write_buffer_views.iter().enumerate() {
                 // unsafe: libusb1_sys wrapper
                 let libusb_transfer = unsafe { libusb1_sys::libusb_alloc_transfer(0) };
                 if libusb_transfer.is_null() {
@@ -471,7 +471,7 @@ impl TransferManager {
                             libusb1_sys::libusb_fill_control_transfer(
                                 libusb_transfer,
                                 handle.as_raw(),
-                                write_buffer_views[index].data,
+                                write_buffer_view.data,
                                 usb_transfer_callback,
                                 transfer_context_pointer as *mut libc::c_void,
                                 timeout.as_millis() as libc::c_uint,
@@ -487,8 +487,8 @@ impl TransferManager {
                                 libusb_transfer,
                                 handle.as_raw(),
                                 endpoint,
-                                write_buffer_views[index].data,
-                                write_buffer_views[index].capacity as libc::c_int,
+                                write_buffer_view.data,
+                                write_buffer_view.capacity as libc::c_int,
                                 packets as libc::c_int,
                                 usb_transfer_callback,
                                 transfer_context_pointer as *mut libc::c_void,
@@ -501,8 +501,8 @@ impl TransferManager {
                                 libusb_transfer,
                                 handle.as_raw(),
                                 endpoint,
-                                write_buffer_views[index].data,
-                                write_buffer_views[index].capacity as libc::c_int,
+                                write_buffer_view.data,
+                                write_buffer_view.capacity as libc::c_int,
                                 usb_transfer_callback,
                                 transfer_context_pointer as *mut libc::c_void,
                                 timeout.as_millis() as libc::c_uint,
@@ -514,8 +514,8 @@ impl TransferManager {
                                 libusb_transfer,
                                 handle.as_raw(),
                                 endpoint,
-                                write_buffer_views[index].data,
-                                write_buffer_views[index].capacity as libc::c_int,
+                                write_buffer_view.data,
+                                write_buffer_view.capacity as libc::c_int,
                                 usb_transfer_callback,
                                 transfer_context_pointer as *mut libc::c_void,
                                 timeout.as_millis() as libc::c_uint,
@@ -532,8 +532,8 @@ impl TransferManager {
                                 handle.as_raw(),
                                 endpoint,
                                 stream_id,
-                                write_buffer_views[index].data,
-                                write_buffer_views[index].capacity as libc::c_int,
+                                write_buffer_view.data,
+                                write_buffer_view.capacity as libc::c_int,
                                 usb_transfer_callback,
                                 transfer_context_pointer as *mut libc::c_void,
                                 timeout.as_millis() as libc::c_uint,

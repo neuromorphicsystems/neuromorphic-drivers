@@ -584,6 +584,7 @@ struct SpiRegister {
 }
 
 impl SpiRegister {
+    #[allow(dead_code)]
     fn get(&self, handle: &rusb::DeviceHandle<rusb::Context>) -> Result<u8, Error> {
         let mut buffer = [0; 4];
         let count = handle.read_control(
@@ -787,6 +788,7 @@ const DEVICE_TIMING_NEXT_GH_CNT: SpiRegister = SpiRegister::new(ModuleAddress::D
 const DEVICE_TIMING_SELX_WIDTH: SpiRegister = SpiRegister::new(ModuleAddress::Device, 0x324C);
 const DEVICE_TIMING_AY_START: SpiRegister = SpiRegister::new(ModuleAddress::Device, 0x324E);
 const DEVICE_TIMING_AY_END: SpiRegister = SpiRegister::new(ModuleAddress::Device, 0x324F);
+#[allow(dead_code)]
 const DEVICE_TIMING_MAX_EVENT_NUM: SpiRegister = SpiRegister::new(ModuleAddress::Device, 0x3251);
 const DEVICE_TIMING_R_START: SpiRegister = SpiRegister::new(ModuleAddress::Device, 0x3253);
 const DEVICE_TIMING_R_END: SpiRegister = SpiRegister::new(ModuleAddress::Device, 0x3254);
@@ -798,6 +800,7 @@ const DEVICE_TIMING_READ_TIME_INTERVAL: SpiRegister16 =
     SpiRegister16::new(ModuleAddress::Device, 0x325D);
 const DEVICE_DIGITAL_EXTERNAL_TRIGGER: SpiRegister =
     SpiRegister::new(ModuleAddress::Device, 0x3260);
+#[allow(dead_code)]
 const DEVICE_TIMING_NEXT_SELX_START: SpiRegister16 =
     SpiRegister16::new(ModuleAddress::Device, 0x3261);
 const DEVICE_DIGITAL_BOOT_SEQUENCE: SpiRegister = SpiRegister::new(ModuleAddress::Device, 0x3266);
@@ -852,7 +855,9 @@ const EXTERNAL_INPUT_GENERATE_INJECT_ON_FALLING_EDGE: SpiRegister32 =
 
 // system information module registers
 const LOGIC_VERSION: SpiRegister32 = SpiRegister32::new(ModuleAddress::SystemInformation, 0);
+#[allow(dead_code)]
 const CHIP_IDENTIFIER: SpiRegister32 = SpiRegister32::new(ModuleAddress::SystemInformation, 1);
+#[allow(dead_code)]
 const DEVICE_IS_MASTER: SpiRegister32 = SpiRegister32::new(ModuleAddress::SystemInformation, 2);
 const LOGIC_CLOCK: SpiRegister32 = SpiRegister32::new(ModuleAddress::SystemInformation, 3);
 const USB_CLOCK: SpiRegister32 = SpiRegister32::new(ModuleAddress::SystemInformation, 5);
