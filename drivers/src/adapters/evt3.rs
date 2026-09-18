@@ -2,11 +2,20 @@
 pub struct State {
     pub t: u64,
     pub overflows: u32,
-    pub previous_msb_t: u16,
+    pub previous_msb_t: Option<u16>,
     pub previous_lsb_t: u16,
     pub x: u16,
     pub y: u16,
     pub polarity: neuromorphic_types::Polarity,
+}
+
+impl State {
+    fn t_from_words(&self) -> Option<u64> {
+        self.previous_msb_t.map(|previous_msb_t| {
+            (((self.previous_lsb_t as u32) | ((previous_msb_t as u32) << 12)) as u64)
+                | ((self.overflows as u64) << 24)
+        })
+    }
 }
 
 pub struct Adapter {
@@ -23,6 +32,18 @@ pub struct EventsLengths {
     pub trigger_falling: usize,
 }
 
+const EVT_ADDR_Y: u16 = 0b0000;
+const EVT_ADDR_X: u16 = 0b0010;
+const VECT_BASE_X: u16 = 0b0011;
+const VECT_12: u16 = 0b0100;
+const VECT_8: u16 = 0b0101;
+const EVT_TIME_LOW: u16 = 0b0110;
+const CONTINUED_4: u16 = 0b0111;
+const EVT_TIME_HIGH: u16 = 0b1000;
+const EXT_TRIGGER: u16 = 0b1010;
+const OTHERS: u16 = 0b1110;
+const CONTINUED_12: u16 = 0b1111;
+
 impl Adapter {
     pub fn from_dimensions(width: u16, height: u16) -> Self {
         Self {
@@ -31,7 +52,7 @@ impl Adapter {
             state: State {
                 t: 0,
                 overflows: 0,
-                previous_msb_t: 0,
+                previous_msb_t: None,
                 previous_lsb_t: 0,
                 x: 0,
                 y: 0,
@@ -69,21 +90,21 @@ impl Adapter {
         let mut x = self.state.x;
         let mut y = self.state.y;
         let mut polarity = self.state.polarity;
+        let mut has_msb_t = self.state.previous_msb_t.is_some();
         for index in 0..slice.len() / 2 {
             let word = u16::from_le_bytes([slice[index * 2], slice[index * 2 + 1]]);
             match word >> 12 {
-                0b0000 => {
+                EVT_ADDR_Y => {
                     y = word & 0b11111111111;
                 }
-                0b0001 => (),
-                0b0010 => {
+                EVT_ADDR_X => {
                     x = word & 0b11111111111;
                     polarity = if (word & (1 << 11)) > 0 {
                         neuromorphic_types::Polarity::On
                     } else {
                         neuromorphic_types::Polarity::Off
                     };
-                    if x < self.width && y < self.height {
+                    if has_msb_t && x < self.width && y < self.height {
                         match polarity {
                             neuromorphic_types::Polarity::On => {
                                 lengths.on += 1;
@@ -94,7 +115,7 @@ impl Adapter {
                         }
                     }
                 }
-                0b0011 => {
+                VECT_BASE_X => {
                     x = word & 0b11111111111;
                     polarity = if (word & (1 << 11)) > 0 {
                         neuromorphic_types::Polarity::On
@@ -102,47 +123,63 @@ impl Adapter {
                         neuromorphic_types::Polarity::Off
                     };
                 }
-                0b0100 => {
+                VECT_12 => {
                     if x < self.width && y < self.height {
-                        match polarity {
-                            neuromorphic_types::Polarity::On => {
-                                lengths.on +=
-                                    (word & ((1 << std::cmp::min(12, self.width - x)) - 1))
-                                        .count_ones() as usize;
-                            }
-                            neuromorphic_types::Polarity::Off => {
-                                lengths.off +=
-                                    (word & ((1 << std::cmp::min(12, self.width - x)) - 1))
-                                        .count_ones() as usize;
+                        if has_msb_t {
+                            match polarity {
+                                neuromorphic_types::Polarity::On => {
+                                    lengths.on += (word
+                                        & ((1 << std::cmp::min(12, self.width - x)) - 1))
+                                        .count_ones()
+                                        as usize;
+                                }
+                                neuromorphic_types::Polarity::Off => {
+                                    lengths.off += (word
+                                        & ((1 << std::cmp::min(12, self.width - x)) - 1))
+                                        .count_ones()
+                                        as usize;
+                                }
                             }
                         }
                         x = x.overflowing_add(12).0;
                     }
                 }
-                0b0101 => {
+                VECT_8 => {
                     if x < self.width && y < self.height {
-                        match polarity {
-                            neuromorphic_types::Polarity::On => {
-                                lengths.on += (word & ((1 << std::cmp::min(8, self.width - x)) - 1))
-                                    .count_ones()
-                                    as usize;
-                            }
-                            neuromorphic_types::Polarity::Off => {
-                                lengths.off +=
-                                    (word & ((1 << std::cmp::min(8, self.width - x)) - 1))
-                                        .count_ones() as usize;
+                        if has_msb_t {
+                            match polarity {
+                                neuromorphic_types::Polarity::On => {
+                                    lengths.on += (word
+                                        & ((1 << std::cmp::min(8, self.width - x)) - 1))
+                                        .count_ones()
+                                        as usize;
+                                }
+                                neuromorphic_types::Polarity::Off => {
+                                    lengths.off += (word
+                                        & ((1 << std::cmp::min(8, self.width - x)) - 1))
+                                        .count_ones()
+                                        as usize;
+                                }
                             }
                         }
                         x = x.overflowing_add(8).0;
                     }
                 }
-                0b1010 => {
-                    if (word & 1) > 0 {
-                        lengths.trigger_rising += 1;
-                    } else {
-                        lengths.trigger_falling += 1;
+                EVT_TIME_LOW => (),
+                EVT_TIME_HIGH => {
+                    has_msb_t = true;
+                }
+                EXT_TRIGGER => {
+                    if has_msb_t {
+                        if (word & 1) > 0 {
+                            lengths.trigger_rising += 1;
+                        } else {
+                            lengths.trigger_falling += 1;
+                        }
                     }
                 }
+                OTHERS => (),
+                CONTINUED_12 => (),
                 _ => (),
             }
         }
@@ -160,18 +197,20 @@ impl Adapter {
             let word = u16::from_le_bytes([slice[index * 2], slice[index * 2 + 1]]);
             index += 1;
             match word >> 12 {
-                0b0000 => {
+                EVT_ADDR_Y => {
                     self.state.y = word & 0b11111111111;
                 }
-                0b0001 => (),
-                0b0010 => {
+                EVT_ADDR_X => {
                     self.state.x = word & 0b11111111111;
                     self.state.polarity = if (word & (1 << 11)) > 0 {
                         neuromorphic_types::Polarity::On
                     } else {
                         neuromorphic_types::Polarity::Off
                     };
-                    if self.state.x < self.width && self.state.y < self.height {
+                    if self.state.previous_msb_t.is_some()
+                        && self.state.x < self.width
+                        && self.state.y < self.height
+                    {
                         match self.state.polarity {
                             neuromorphic_types::Polarity::On => {
                                 lengths.on += 1;
@@ -182,7 +221,7 @@ impl Adapter {
                         }
                     }
                 }
-                0b0011 => {
+                VECT_BASE_X => {
                     self.state.x = word & 0b11111111111;
                     self.state.polarity = if (word & (1 << 11)) > 0 {
                         neuromorphic_types::Polarity::On
@@ -190,96 +229,105 @@ impl Adapter {
                         neuromorphic_types::Polarity::Off
                     };
                 }
-                0b0100 => {
+                VECT_12 => {
                     if self.state.x < self.width && self.state.y < self.height {
-                        match self.state.polarity {
-                            neuromorphic_types::Polarity::On => {
-                                lengths.on += (word
-                                    & ((1 << std::cmp::min(12, self.width - self.state.x)) - 1))
-                                    .count_ones()
-                                    as usize;
-                            }
-                            neuromorphic_types::Polarity::Off => {
-                                lengths.off += (word
-                                    & ((1 << std::cmp::min(12, self.width - self.state.x)) - 1))
-                                    .count_ones()
-                                    as usize;
+                        if self.state.previous_msb_t.is_some() {
+                            match self.state.polarity {
+                                neuromorphic_types::Polarity::On => {
+                                    lengths.on += (word
+                                        & ((1 << std::cmp::min(12, self.width - self.state.x)) - 1))
+                                        .count_ones()
+                                        as usize;
+                                }
+                                neuromorphic_types::Polarity::Off => {
+                                    lengths.off += (word
+                                        & ((1 << std::cmp::min(12, self.width - self.state.x)) - 1))
+                                        .count_ones()
+                                        as usize;
+                                }
                             }
                         }
                         self.state.x = self.state.x.overflowing_add(12).0;
                     }
                 }
-                0b0101 => {
+                VECT_8 => {
                     if self.state.x < self.width && self.state.y < self.height {
-                        match self.state.polarity {
-                            neuromorphic_types::Polarity::On => {
-                                lengths.on += (word
-                                    & ((1 << std::cmp::min(8, self.width - self.state.x)) - 1))
-                                    .count_ones()
-                                    as usize;
-                            }
-                            neuromorphic_types::Polarity::Off => {
-                                lengths.off += (word
-                                    & ((1 << std::cmp::min(8, self.width - self.state.x)) - 1))
-                                    .count_ones()
-                                    as usize;
+                        if self.state.previous_msb_t.is_some() {
+                            match self.state.polarity {
+                                neuromorphic_types::Polarity::On => {
+                                    lengths.on += (word
+                                        & ((1 << std::cmp::min(8, self.width - self.state.x)) - 1))
+                                        .count_ones()
+                                        as usize;
+                                }
+                                neuromorphic_types::Polarity::Off => {
+                                    lengths.off += (word
+                                        & ((1 << std::cmp::min(8, self.width - self.state.x)) - 1))
+                                        .count_ones()
+                                        as usize;
+                                }
                             }
                         }
                         self.state.x = self.state.x.overflowing_add(8).0;
                     }
                 }
-                0b0110 => {
+                EVT_TIME_LOW => {
                     let lsb_t = word & 0b111111111111;
-                    if lsb_t != self.state.previous_lsb_t {
+                    if self.state.previous_msb_t.is_some() && self.state.previous_lsb_t != lsb_t {
                         self.state.previous_lsb_t = lsb_t;
-                        let t = (((self.state.previous_lsb_t as u32)
-                            | ((self.state.previous_msb_t as u32) << 12))
-                            as u64)
-                            | ((self.state.overflows as u64) << 24);
-                        if t >= self.state.t {
-                            self.state.t = t;
-                            if self.state.t >= threshold_t {
-                                break;
+                        if let Some(t) = self.state.t_from_words() {
+                            if t >= self.state.t {
+                                self.state.t = t;
+                                if self.state.t >= threshold_t {
+                                    break;
+                                }
                             }
                         }
                     }
                 }
-                0b0111 => (),
-                0b1000 => {
+                CONTINUED_4 => (),
+                EVT_TIME_HIGH => {
                     let msb_t = word & 0b111111111111;
-                    if msb_t != self.state.previous_msb_t {
-                        if msb_t > self.state.previous_msb_t {
-                            if (msb_t - self.state.previous_msb_t) < (1 << 11) {
+                    if self.state.previous_msb_t != Some(msb_t) {
+                        match self.state.previous_msb_t {
+                            None => {
+                                self.state.previous_msb_t = Some(msb_t);
                                 self.state.previous_lsb_t = 0;
-                                self.state.previous_msb_t = msb_t;
                             }
-                        } else if (self.state.previous_msb_t - msb_t) > (1 << 11) {
-                            self.state.overflows += 1;
-                            self.state.previous_lsb_t = 0;
-                            self.state.previous_msb_t = msb_t;
+                            Some(previous_msb_t) => {
+                                if msb_t > previous_msb_t {
+                                    if (msb_t - previous_msb_t) < (1 << 11) {
+                                        self.state.previous_msb_t = Some(msb_t);
+                                        self.state.previous_lsb_t = 0;
+                                    }
+                                } else if (previous_msb_t - msb_t) > (1 << 11) {
+                                    self.state.overflows += 1;
+                                    self.state.previous_msb_t = Some(msb_t);
+                                    self.state.previous_lsb_t = 0;
+                                }
+                            }
                         }
-                        let t = (((self.state.previous_lsb_t as u32)
-                            | ((self.state.previous_msb_t as u32) << 12))
-                            as u64)
-                            | ((self.state.overflows as u64) << 24);
-                        if t >= self.state.t {
-                            self.state.t = t;
-                            if self.state.t >= threshold_t {
-                                break;
+                        if let Some(t) = self.state.t_from_words() {
+                            if t >= self.state.t {
+                                self.state.t = t;
+                                if self.state.t >= threshold_t {
+                                    break;
+                                }
                             }
                         }
                     }
                 }
-                0b1001 => (),
-                0b1010 => {
-                    if (word & 1) > 0 {
-                        lengths.trigger_rising += 1;
-                    } else {
-                        lengths.trigger_falling += 1;
+                EXT_TRIGGER => {
+                    if self.state.previous_msb_t.is_some() {
+                        if (word & 1) > 0 {
+                            lengths.trigger_rising += 1;
+                        } else {
+                            lengths.trigger_falling += 1;
+                        }
                     }
                 }
-                #[allow(clippy::manual_range_patterns)]
-                0b1011 | 0b1100 | 0b1101 | 0b1110 | 0b1111 => (),
+                OTHERS => (),
+                CONTINUED_12 => (),
                 _ => (),
             }
         }
@@ -298,18 +346,20 @@ impl Adapter {
         for index in 0..slice.len() / 2 {
             let word = u16::from_le_bytes([slice[index * 2], slice[index * 2 + 1]]);
             match word >> 12 {
-                0b0000 => {
+                EVT_ADDR_Y => {
                     self.state.y = word & 0b11111111111;
                 }
-                0b0001 => (),
-                0b0010 => {
+                EVT_ADDR_X => {
                     self.state.x = word & 0b11111111111;
                     self.state.polarity = if (word & (1 << 11)) > 0 {
                         neuromorphic_types::Polarity::On
                     } else {
                         neuromorphic_types::Polarity::Off
                     };
-                    if self.state.x < self.width && self.state.y < self.height {
+                    if self.state.previous_msb_t.is_some()
+                        && self.state.x < self.width
+                        && self.state.y < self.height
+                    {
                         handle_polarity_event(neuromorphic_types::PolarityEvent {
                             t: self.state.t,
                             x: self.state.x,
@@ -318,7 +368,7 @@ impl Adapter {
                         });
                     }
                 }
-                0b0011 => {
+                VECT_BASE_X => {
                     self.state.x = word & 0b11111111111;
                     self.state.polarity = if (word & (1 << 11)) > 0 {
                         neuromorphic_types::Polarity::On
@@ -326,86 +376,99 @@ impl Adapter {
                         neuromorphic_types::Polarity::Off
                     };
                 }
-                0b0100 => {
+                VECT_12 => {
                     if self.state.x < self.width && self.state.y < self.height {
-                        let set = word & ((1 << std::cmp::min(12, self.width - self.state.x)) - 1);
-                        for bit in 0..12 {
-                            if (set & (1 << bit)) > 0 {
-                                handle_polarity_event(neuromorphic_types::PolarityEvent {
-                                    t: self.state.t,
-                                    x: self.state.x + bit,
-                                    y: self.state.y,
-                                    polarity: self.state.polarity,
-                                });
+                        if self.state.previous_msb_t.is_some() {
+                            let set =
+                                word & ((1 << std::cmp::min(12, self.width - self.state.x)) - 1);
+                            for bit in 0..12 {
+                                if (set & (1 << bit)) > 0 {
+                                    handle_polarity_event(neuromorphic_types::PolarityEvent {
+                                        t: self.state.t,
+                                        x: self.state.x + bit,
+                                        y: self.state.y,
+                                        polarity: self.state.polarity,
+                                    });
+                                }
                             }
                         }
                         self.state.x = self.state.x.overflowing_add(12).0;
                     }
                 }
-                0b0101 => {
+                VECT_8 => {
                     if self.state.x < self.width && self.state.y < self.height {
-                        let set = word & ((1 << std::cmp::min(8, self.width - self.state.x)) - 1);
-                        for bit in 0..8 {
-                            if (set & (1 << bit)) > 0 {
-                                handle_polarity_event(neuromorphic_types::PolarityEvent {
-                                    t: self.state.t,
-                                    x: self.state.x + bit,
-                                    y: self.state.y,
-                                    polarity: self.state.polarity,
-                                });
+                        if self.state.previous_msb_t.is_some() {
+                            let set =
+                                word & ((1 << std::cmp::min(8, self.width - self.state.x)) - 1);
+                            for bit in 0..8 {
+                                if (set & (1 << bit)) > 0 {
+                                    handle_polarity_event(neuromorphic_types::PolarityEvent {
+                                        t: self.state.t,
+                                        x: self.state.x + bit,
+                                        y: self.state.y,
+                                        polarity: self.state.polarity,
+                                    });
+                                }
                             }
                         }
                         self.state.x = self.state.x.overflowing_add(8).0;
                     }
                 }
-                0b0110 => {
+                EVT_TIME_LOW => {
                     let lsb_t = word & 0b111111111111;
-                    if lsb_t != self.state.previous_lsb_t {
+                    if self.state.previous_msb_t.is_some() && self.state.previous_lsb_t != lsb_t {
                         self.state.previous_lsb_t = lsb_t;
-                        let t = (((self.state.previous_lsb_t as u32)
-                            | ((self.state.previous_msb_t as u32) << 12))
-                            as u64)
-                            | ((self.state.overflows as u64) << 24);
-                        if t >= self.state.t {
-                            self.state.t = t;
-                        }
-                    }
-                }
-                0b0111 => (),
-                0b1000 => {
-                    let msb_t = word & 0b111111111111;
-                    if msb_t != self.state.previous_msb_t {
-                        if msb_t > self.state.previous_msb_t {
-                            if (msb_t - self.state.previous_msb_t) < (1 << 11) {
-                                self.state.previous_lsb_t = 0;
-                                self.state.previous_msb_t = msb_t;
+                        if let Some(t) = self.state.t_from_words() {
+                            if t >= self.state.t {
+                                self.state.t = t;
                             }
-                        } else if (self.state.previous_msb_t - msb_t) > (1 << 11) {
-                            self.state.overflows += 1;
-                            self.state.previous_lsb_t = 0;
-                            self.state.previous_msb_t = msb_t;
-                        }
-                        let t = (((self.state.previous_lsb_t as u32)
-                            | ((self.state.previous_msb_t as u32) << 12))
-                            as u64)
-                            | ((self.state.overflows as u64) << 24);
-                        if t >= self.state.t {
-                            self.state.t = t;
                         }
                     }
                 }
-                0b1001 => (),
-                0b1010 => handle_trigger_event(neuromorphic_types::TriggerEvent {
-                    t: self.state.t,
-                    id: ((word >> 8) & 0b1111) as u8,
-                    polarity: if (word & 1) > 0 {
-                        neuromorphic_types::TriggerPolarity::Rising
-                    } else {
-                        neuromorphic_types::TriggerPolarity::Falling
-                    },
-                }),
-                #[allow(clippy::manual_range_patterns)]
-                0b1011 | 0b1100 | 0b1101 | 0b1110 | 0b1111 => (),
+                CONTINUED_4 => (),
+                EVT_TIME_HIGH => {
+                    let msb_t = word & 0b111111111111;
+                    if self.state.previous_msb_t != Some(msb_t) {
+                        match self.state.previous_msb_t {
+                            None => {
+                                self.state.previous_msb_t = Some(msb_t);
+                                self.state.previous_lsb_t = 0;
+                            }
+                            Some(previous_msb_t) => {
+                                if msb_t > previous_msb_t {
+                                    if (msb_t - previous_msb_t) < (1 << 11) {
+                                        self.state.previous_msb_t = Some(msb_t);
+                                        self.state.previous_lsb_t = 0;
+                                    }
+                                } else if (previous_msb_t - msb_t) > (1 << 11) {
+                                    self.state.overflows += 1;
+                                    self.state.previous_msb_t = Some(msb_t);
+                                    self.state.previous_lsb_t = 0;
+                                }
+                            }
+                        }
+                        if let Some(t) = self.state.t_from_words() {
+                            if t >= self.state.t {
+                                self.state.t = t;
+                            }
+                        }
+                    }
+                }
+                EXT_TRIGGER => {
+                    if self.state.previous_msb_t.is_some() {
+                        handle_trigger_event(neuromorphic_types::TriggerEvent {
+                            t: self.state.t,
+                            id: ((word >> 8) & 0b1111) as u8,
+                            polarity: if (word & 1) > 0 {
+                                neuromorphic_types::TriggerPolarity::Rising
+                            } else {
+                                neuromorphic_types::TriggerPolarity::Falling
+                            },
+                        });
+                    }
+                }
+                OTHERS => (),
+                CONTINUED_12 => (),
                 _ => (),
             }
         }

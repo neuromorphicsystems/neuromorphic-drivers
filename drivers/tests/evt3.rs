@@ -11,22 +11,8 @@ fn convert() {
                 let events_lengths = adapter.events_lengths(&bytes);
                 events_lengths.on + events_lengths.off
             };
-            let mut events = Vec::new();
-            events.reserve(polarity_events_length);
-            unsafe {
-                events.set_len(polarity_events_length);
-            }
-            let events_slice = &mut events[..];
-            let mut index = 0;
-            adapter.convert(
-                &bytes,
-                |event| {
-                    events_slice[index] = event;
-                    index += 1;
-                },
-                |_| {},
-            );
-            events.truncate(index);
+            let mut events = Vec::with_capacity(polarity_events_length);
+            adapter.convert(&bytes, |event| events.push(event), |_| {});
             println!(
                 "convert (calc. size + single allocation): {} µs, t = {}, polarity={}",
                 start.elapsed().as_micros(),

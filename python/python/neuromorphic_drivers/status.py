@@ -13,6 +13,7 @@ class RawRingStatus:
     raw_packets: int
     clutch_engaged: bool
     overflow_indices: typing.Optional[list[int]]
+    dropped_packets: int
 
 
 @dataclasses.dataclass
@@ -26,6 +27,7 @@ class RingStatus:
     raw_packets: int
     clutch_engaged: bool
     current_t: int
+    dropped_packets: int
 
 
 @dataclasses.dataclass

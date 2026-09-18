@@ -26,8 +26,7 @@ if __name__ == "__main__":
     device = nd.open(iterator_timeout=1.0 / 60.0)
     print(device.serial(), device.properties())
 
-    app = ui.App(
-        f"""
+    app = ui.App(f"""
         import QtQuick
         import NeuromorphicDrivers
 
@@ -44,8 +43,7 @@ if __name__ == "__main__":
                 tau: 100000
             }}
         }}
-        """
-    )
+        """)
 
     event_display = app.event_display()
     camera_thread = threading.Thread(

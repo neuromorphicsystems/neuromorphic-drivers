@@ -29,18 +29,19 @@
 
 # Overview
 
-_Neuromorphic drivers_ is a library to interact with USB event cameras in real-time. It is compatible with all major operating systems (Linux x64 and ARM, macOS x64 and ARM, and Windows x64) and it aims to support as many commercial devices as possible.
+_Neuromorphic drivers_ is a library to interact with USB and Ethernet event cameras in real-time. It is compatible with all major operating systems (Linux x64 and ARM, macOS x64 and ARM, and Windows x64) and it aims to support as many commercial devices as possible.
 
 The library can be used in [Python](#python) and [Rust](#rust).
 
 By design, _Neuromorphic drivers_ provides no processing algorithms. It may instead be combined with other libraries (for instance https://github.com/neuromorphs/tonic or https://github.com/aestream/faery) to build real-time processing pipelines.
 
-_Neuromorphic drivers_ does not depend on Metavision, libcaer, or dv-processing. It instead uses its own implementation of the cameras' USB protocols ([drivers/src/devices](drivers/src/devices)). This approach facilitates cross-platform support and lets us ship lightweight pre-compiled Python wheels ([https://pypi.org/project/neuromorphic-drivers/#files](https://pypi.org/project/neuromorphic-drivers/#files)), which means that Python users do not need specific shared libraries or a compiler toolchain on their machine.
+_Neuromorphic drivers_ does not depend on Metavision, libcaer, or dv-processing. It instead uses its own implementation of the cameras' USB and Ethernet protocols ([drivers/src/devices](drivers/src/devices)). This approach facilitates cross-platform support and lets us ship lightweight pre-compiled Python wheels ([https://pypi.org/project/neuromorphic-drivers/#files](https://pypi.org/project/neuromorphic-drivers/#files)), which means that Python users do not need specific shared libraries or a compiler toolchain on their machine.
 
 # Supported devices
 
 | Device                             | Resolution | Default configuration                                                                                 | Photo                                                         |
 | ---------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Lucid Triton (GigE Vision)         | 1280 × 720 | [lucid_triton.py](python/python/neuromorphic_drivers/generated/devices/lucid_triton.py)               | <img src="photos/triton.png" alt="triton" width="200"/>       |
 | IDS uEye XCP-E                     | 1280 × 720 | [prophesee_evk4.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk4.py)           | <img src="photos/ueyexcpe.png" alt="ueyexcpe" width="200"/>   |
 | SilkyEvCam HD / SilkyEvCam HD Lite | 1280 × 720 | [prophesee_evk4.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk4.py)           | <img src="photos/silkyev.png" alt="silkyev" width="200"/>     |
 | Prophesee EVK4                     | 1280 × 720 | [prophesee_evk4.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk4.py)           | <img src="photos/evk4.png" alt="evk4" width="200"/>           |
@@ -54,12 +55,16 @@ The features listed below are device features – they are implemented in the ca
 
 Tick marks indicate supported features, minus signs indicate that the camera does not provide
 
-| Interface           | Stream data types                                        | Region of interest | External sync. | Rate limiter | Noise filter | Anti-flicker | Temperature | Illuminance | IMU sampling rate | Auto-exposure |
-| ------------------- | -------------------------------------------------------- | ------------------ | -------------- | ------------ | ------------ | ------------ | ----------- | ----------- | ----------------- | ------------- |
-| prophesee_evk4      | `polarity_events` `trigger_events`                       | ✓                  | ✓              | ✓            | ▢            | ▢            | ✓¹          | ✓³          | -                 | -             |
-| prophesee_evk3_hd   | `polarity_events` `trigger_events`                       | ✓                  | ▢              | ▢            | ▢            | ▢            | ▢           | ▢           | -                 | -             |
-| inivation_dvxplorer | `polarity_events` `imu_events` `trigger_events`          | ▢                  | ▢              | -            | ▢            | -            | ✓²          | -           | ▢                 | -             |
-| inivation_davis346  | `polarity_events` `imu_events` `trigger_events` `frames` | ▢                  | ▢              | -            | ▢            | -            | ✓²          | -           | ▢                 | ▢             |
+| Interface           | Connection | Stream data types                                        | Region of interest | External sync. | Rate limiter | Noise filter | Anti-flicker | Temperature | Illuminance | IMU sampling rate | Auto-exposure |
+| ------------------- | ---------- | -------------------------------------------------------- | ------------------ | -------------- | ------------ | ------------ | ------------ | ----------- | ----------- | ----------------- | ------------- |
+| lucid_triton        | Ethernet   | `polarity_events`                                        | ▢                  | ▢              | ▢            | ▢            | ▢            | ✓¹          | -           | -                 | -             |
+| prophesee_evk4      | USB        | `polarity_events` `trigger_events`                       | ✓                  | ✓              | ✓            | ▢            | ▢            | ✓¹          | ✓³          | -                 | -             |
+| prophesee_evk3_hd   | USB        | `polarity_events` `trigger_events`                       | ✓                  | ▢              | ▢            | ▢            | ▢            | ▢           | ▢           | -                 | -             |
+| inivation_dvxplorer | USB        | `polarity_events` `imu_events` `trigger_events`          | ▢                  | ▢              | -            | ▢            | -            | ✓²          | -           | ▢                 | -             |
+| inivation_davis346  | USB        | `polarity_events` `imu_events` `trigger_events` `frames` | ▢                  | ▢              | -            | ▢            | -            | ✓²          | -           | ▢                 | ▢             |
+| centuryarks_vga     | USB        | `polarity_events` `trigger_events`                       | ✓                  | ▢              | ✓            | ▢            | ▢            | ▢           | ▢           | -                 | -             |
+
+The Lucid Triton is a GigE Vision camera; it is discovered and controlled over the network (no udev rule is needed). For reliable streaming the camera should be on the same subnet as the host (static IP). On Linux, raise the kernel socket buffer cap so the requested `SO_RCVBUF` takes effect, e.g. `sudo sysctl -w net.core.rmem_max=33554432`.
 
 ¹Temperature can be sampled at arbitrary times by calling a function
 
@@ -79,6 +84,8 @@ Tick marks indicate supported features, minus signs indicate that the camera doe
 ```sh
 pip install neuromorphic_drivers
 ```
+
+Wheels are available for CPython 3.9 to 3.14 on Linux (x86-64 and ARM64), macOS (Intel and Apple Silicon), and Windows x64. The free-threaded build of Python 3.14 (_3.14t_) is supported: the extension declares `Py_MOD_GIL_NOT_USED`, hence importing it does not re-enable the GIL. A given device may only be iterated by one thread at a time, other threads raise `RuntimeError` until the current iteration completes.
 
 On Linux, run the following comman after installing the package to install UDEV rules.
 
@@ -152,7 +159,7 @@ with nd.open(configuration=configuration) as device:
 
 ## Raw mode
 
-Converting the raw USB data into events can be an expensive operation if the data rate is high. Raw mode skips parsing and can be useful if one simply wishes to store the data into a file to be processed offline.
+Converting the raw camera data into events can be an expensive operation if the data rate is high. Raw mode skips parsing and can be useful if one simply wishes to store the data into a file to be processed offline.
 
 ```py
 import neuromorphic_drivers as nd
@@ -176,38 +183,45 @@ def open(
     # If iterator_timeout is not None, packet may be None.
     iterator_timeout: typing.Optional[float] = None,
 
-    # whether to skip USB data parsing
+    # whether to skip data parsing
     raw: bool = False,
 
     # device serial number, None selects the first available device.
     # Use nd.list_devices() to get a list of connected devices and their serials.
     serial: typing.Optional[str] = None,
 
-    # USB software ring configuration, None falls back to default.
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    # IPv4 address of an Ethernet device, None selects the first available device.
+    # Use nd.list_devices() to get a list of connected devices and their addresses.
+    # USB devices are skipped when address is not None.
+    address: typing.Optional[str] = None,
 
-    # maximum number of raw USB packets merged to create a packet returned by the iterator.
-    # Under typical conditions, each iterator packet is built from one USB packet.
-    # However, if more than one USB packet has already been received,
-    # the library builds the iterator packet by merging the USB packets,
+    # software ring configuration, None falls back to default.
+    ring_configuration: typing.Optional[RingConfiguration] = None,
+
+    # maximum number of raw packets merged to create a packet returned by the iterator.
+    # Under typical conditions, each iterator packet is built from one raw packet
+    # (one USB transfer or one UDP packet).
+    # However, if more than one raw packet has already been received,
+    # the library builds the iterator packet by merging the raw packets,
     # to reduce the number of GIL (Global Interpreter Lock) operations.
     # While merging speeds up processing in such cases, it can lead to large latency spikes if too many packets are merged at once.
-    # iterator_maximum_raw_packets limits the number of packets that are merged, even if more USB packets have been received.
-    # The remaning USB packets are not dropped but simply returned on the next iteration(s).
+    # iterator_maximum_raw_packets limits the number of packets that are merged, even if more raw packets have been received.
+    # The remaning raw packets are not dropped but simply returned on the next iteration(s).
     iterator_maximum_raw_packets: int = 64,
 ): ...
 ```
 
-The fields of the USB configuration are identical across devices, but the default values depend on the device. The values below are for a Prophesee EVK4.
+The fields of the ring configuration are identical across devices, but the default values depend on the device. The values below are for a Prophesee EVK4.
 
 ```py
 @dataclasses.dataclass
-class UsbConfiguration:
+class RingConfiguration:
     buffer_length: serde.type.uint64 = 131072 # size of each buffer in the ring, in bytes
     ring_length: serde.type.uint64 = 4096 # number of buffers in the ring, the total size is ring_length * buffer_length
-    transfer_queue_length: serde.type.uint64 = 32 # number of libusb transfers submitted in parallel
-    allow_dma: bool = False # whether to enable Direct Memory Access
+    parallel_submissions: serde.type.uint64 = 32 # number of libusb transfers submitted in parallel
 ```
+
+On Ethernet devices, one ring buffer holds exactly one GVSP packet: `buffer_length` is the GVSP packet size (1400 bytes by default, and it must be even) and `parallel_submissions` must be 1. The Lucid Triton defaults to `buffer_length=1400`, `ring_length=131072`, `parallel_submissions=1`.
 
 ## More examples
 
@@ -229,7 +243,7 @@ cd python
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
-pip install maturin==1.9.1 patchelf numpy
+pip install maturin==1.15.0 patchelf numpy
 maturin develop  # or maturin develop --release to build with optimizations
 ```
 
@@ -240,6 +254,8 @@ cd python
 source .venv/bin/activate
 maturin develop  # or maturin develop --release to build with optimizations
 ```
+
+To check the free-threaded build, create a second environment with a `3.14t` interpreter (`uv venv --python 3.14t .venv314t`) and build in it. `sys._is_gil_enabled()` must still return `False` after importing the package.
 
 Before pushing new code, run the following to lint and format it.
 
@@ -296,18 +312,18 @@ cargo publish -p neuromorphic-drivers
 
 ## Event rate
 
-Recent event cameras, such as the Prophesee EVK4, can generate more data than can be processed in real-time under certain circumstances. While the data can always be moved to the computer's memory in real time, the simplest algorithms (including converting the raw USB bytes to a `{t, x, y, polarity}` event representation) struggle to keep up during data rate peaks. This library uses seperate threads for reading (USB to memory) and processing (memory to memory or disk) with a circular buffer (ring) at the interface. Short data bursts are seemlessly absorbed by the ring and are typically not an issue, even though they brifely cause a spike in latency. However, persistent high data rates cause the ring to slowly fill up. This increases latency and forces the library to eventually discard data. Depending on the use-case, one (or several) of the following work arounds can be applied:
+Recent event cameras, such as the Prophesee EVK4, can generate more data than can be processed in real-time under certain circumstances. While the data can always be moved to the computer's memory in real time, the simplest algorithms (including converting the raw camera bytes to a `{t, x, y, polarity}` event representation) struggle to keep up during data rate peaks. This library uses seperate threads for reading (device to memory) and processing (memory to memory or disk) with a circular buffer (ring) at the interface. Short data bursts are seemlessly absorbed by the ring and are typically not an issue, even though they brifely cause a spike in latency. However, persistent high data rates cause the ring to slowly fill up. This increases latency and forces the library to eventually discard data. Depending on the use-case, one (or several) of the following work arounds can be applied:
 
 -   generate fewer events by reducing the camera's sensitivity (usually by changing `diff_off` and `diff_on`).
 -   enable the event rate limiter if the device supports it (the limiter randomly drops events before sending them to the computer, reducing bandwidth issues but significantly degrading the quality of transient bursts).
 -   generate fewer events by reducing the camera's spatial resolution by masking rows and columns.
 -   change the environment if possible (avoid flickering lights, reduce ego-motion, remove background clutter, keep large and fast objects out of the field of view).
 -   call `device.clear_backlog(until=0)` whenever the `backlog` becomes too large (the maximum backlog is the size of the ring minus the size of the transfer queue).
--   use `nd.open(raw=true)` to skip the parser and directly access the USB bytes, typically to save them to a file.
+-   use `nd.open(raw=true)` to skip the parser and directly access the raw bytes, typically to save them to a file.
 
 ## Direct Memory Access
 
-This library relies on libusb for all USB communications. libusb supports Direct Memory Access (Linux only for now, though other platforms may be added in the future), which allows the USB controller to directly write packets to memory without requiring CPU (and OS kernel) intervention. While this can increase performance and reduce CPU usage, DMA comes with a handful of caveats and is thus not enabled in _Neuromorphic drivers_ by default. Users with knoweldge of their USB controller and its limitations may want to enable it to increase performance on embedded systems.
+This section applies to USB devices only. This library relies on libusb for all USB communications. libusb supports Direct Memory Access (Linux only for now, though other platforms may be added in the future), which allows the USB controller to directly write packets to memory without requiring CPU (and OS kernel) intervention. While this can increase performance and reduce CPU usage, DMA comes with a handful of caveats and is thus not enabled in _Neuromorphic drivers_ by default. Users with knoweldge of their USB controller and its limitations may want to enable it to increase performance on embedded systems.
 
 USB drivers have a limited number of DMA file objects (128 / 256 / 512 / 1024). This is typically not enough to accomodate event bursts (we use 4096 buffers by default for the EVK4, with 131072 bytes per buffer). The code falls back to non-DMA buffers if all the DMA buffers are used (for instance the first 128 buffers would be DMA and the rest would be non-DMA) and may result in variable performance over time.
 

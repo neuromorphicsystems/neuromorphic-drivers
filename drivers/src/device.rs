@@ -1,12 +1,30 @@
 use crate::flag;
+use crate::ring;
 use crate::usb;
 use rusb::UsbContext;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Location {
+    BusNumberAndAddress { bus_number: u8, address: u8 },
+    Address(std::net::Ipv4Addr),
+}
+
+impl std::fmt::Display for Location {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::BusNumberAndAddress {
+                bus_number,
+                address,
+            } => write!(formatter, "{bus_number}:{address}"),
+            Self::Address(address) => write!(formatter, "{address}"),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ListedDevice {
-    pub bus_number: u8,
-    pub address: u8,
-    pub speed: usb::Speed,
+    pub location: Location,
+    pub connection: crate::devices::Connection,
     pub serial: Result<String, usb::Error>,
 }
 
@@ -16,23 +34,64 @@ pub struct TemperatureCelsius(pub f32);
 pub type HandleAndProperties = (rusb::DeviceHandle<rusb::Context>, (u16, u16), String);
 
 #[derive(Debug, Clone, Copy)]
-pub enum SerialOrBusNumberAndAddress<'a> {
+pub enum Identifier<'a> {
     Serial(&'a str),
-    BusNumberAndAddress((u8, u8)),
+    Location(Location),
     None,
 }
 
-pub trait Usb: Sized {
+pub trait Device: Sized {
     type Adapter;
+    type BiasesBounds;
     type Configuration;
     type Error;
     type Properties;
 
-    const VENDOR_AND_PRODUCT_IDS: &'static [(u16, u16)];
-
     const PROPERTIES: Self::Properties;
 
-    const DEFAULT_USB_CONFIGURATION: usb::Configuration;
+    const RING_CONFIGURATION: ring::Configuration;
+
+    fn default_configuration(&self) -> Self::Configuration;
+
+    fn current_configuration(&self) -> Self::Configuration;
+
+    fn biases_bounds(&self) -> Self::BiasesBounds;
+
+    fn update_configuration(&self, configuration: Self::Configuration);
+
+    fn next_with_timeout(&self, timeout: &std::time::Duration) -> Option<ring::ReadBufferView<'_>>;
+
+    fn backlog(&self) -> usize;
+
+    fn clutch(&self) -> ring::Clutch;
+
+    fn serial(&self) -> String;
+
+    fn connection(&self) -> crate::devices::Connection;
+
+    fn create_adapter(&self) -> Self::Adapter;
+
+    /// Number of raw packets that never reached the consumer, either because the
+    /// ring overflowed or because the transport rejected them.
+    fn dropped_packets(&self) -> u64;
+}
+
+pub trait Ethernet: Device {
+    fn list_devices() -> Vec<ListedDevice>;
+
+    fn open<IntoError, IntoWarning>(
+        identifier: Identifier,
+        configuration: Self::Configuration,
+        ring_configuration: &ring::Configuration,
+        flag: flag::Flag<IntoError, IntoWarning>,
+    ) -> Result<Self, Self::Error>
+    where
+        IntoError: From<Self::Error> + Clone + Send + 'static,
+        IntoWarning: From<crate::ring::Overflow> + Clone + Send + 'static;
+}
+
+pub trait Usb: Device {
+    const VENDOR_AND_PRODUCT_IDS: &'static [(u16, u16)];
 
     /// read_serial must return Ok(None) if the device is not compatible with the interface.
     /// This behaviour is required to support Prophesee EVK3 HD cameras, which share a VID/PID with
@@ -43,42 +102,22 @@ pub trait Usb: Sized {
     /// This is required even if read_serial does not use bulk transfers.
     fn read_serial(handle: &mut rusb::DeviceHandle<rusb::Context>) -> rusb::Result<Option<String>>;
 
-    fn default_configuration(&self) -> Self::Configuration;
-
-    fn current_configuration(&self) -> Self::Configuration;
-
-    fn update_configuration(&self, configuration: Self::Configuration);
-
-    fn open<IntoError, IntoWarning>(
-        serial_or_bus_number_and_address: SerialOrBusNumberAndAddress,
-        configuration: Self::Configuration,
-        usb_configuration: &usb::Configuration,
-        event_loop: std::sync::Arc<usb::EventLoop>,
-        flag: flag::Flag<IntoError, IntoWarning>,
-    ) -> Result<Self, Self::Error>
-    where
-        IntoError: From<Self::Error> + Clone + Send + 'static,
-        IntoWarning: From<crate::usb::Overflow> + Clone + Send + 'static;
-
-    fn next_with_timeout(&self, timeout: &std::time::Duration) -> Option<usb::BufferView>;
-
-    fn backlog(&self) -> usize;
-
-    fn clutch(&self) -> usb::Clutch;
-
     fn vendor_and_product_id(&self) -> (u16, u16);
-
-    fn serial(&self) -> String;
-
-    fn chip_firmware_configuration(&self) -> Self::Configuration;
 
     fn bus_number(&self) -> u8;
 
     fn address(&self) -> u8;
 
-    fn speed(&self) -> usb::Speed;
-
-    fn create_adapter(&self) -> Self::Adapter;
+    fn open<IntoError, IntoWarning>(
+        identifier: Identifier,
+        configuration: Self::Configuration,
+        ring_configuration: &ring::Configuration,
+        event_loop: std::sync::Arc<usb::EventLoop>,
+        flag: flag::Flag<IntoError, IntoWarning>,
+    ) -> Result<Self, Self::Error>
+    where
+        IntoError: From<Self::Error> + Clone + Send + 'static,
+        IntoWarning: From<crate::ring::Overflow> + Clone + Send + 'static;
 
     fn list_devices(devices: &rusb::DeviceList<rusb::Context>) -> rusb::Result<Vec<ListedDevice>> {
         let mut result = Vec::new();
@@ -99,9 +138,11 @@ pub trait Usb: Sized {
         {
             if let Some(serial) = Self::read_serial(&mut device.open()?).transpose() {
                 result.push(ListedDevice {
-                    bus_number: device.bus_number(),
-                    address: device.address(),
-                    speed: device.speed().into(),
+                    location: Location::BusNumberAndAddress {
+                        bus_number: device.bus_number(),
+                        address: device.address(),
+                    },
+                    connection: crate::usb::Speed::from(device.speed()).into(),
                     serial: serial.map_err(|error| error.into()),
                 });
             }

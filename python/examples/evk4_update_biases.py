@@ -4,8 +4,8 @@ import neuromorphic_drivers as nd
 
 configuration = nd.prophesee_evk4.Configuration(
     biases=nd.prophesee_evk4.Biases(
-        diff_off=130,
-        diff_on=150,
+        diff_off=30,
+        diff_on=30,
     )
 )
 

@@ -1,12 +1,12 @@
-use neuromorphic_drivers::UsbDevice;
+use neuromorphic_drivers::GenericDevice;
 
 #[test]
 fn read() -> Result<(), neuromorphic_drivers::Error> {
     let (flag, event_loop) = neuromorphic_drivers::flag_and_event_loop()?;
     let device = neuromorphic_drivers::prophesee_evk4::open(
-        neuromorphic_drivers::SerialOrBusNumberAndAddress::None,
+        neuromorphic_drivers::Identifier::None,
         neuromorphic_drivers::prophesee_evk4::DEFAULT_CONFIGURATION,
-        &neuromorphic_drivers::prophesee_evk4::DEFAULT_USB_CONFIGURATION,
+        &neuromorphic_drivers::prophesee_evk4::RING_CONFIGURATION,
         event_loop,
         flag.clone(),
     )?;

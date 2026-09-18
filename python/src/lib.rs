@@ -6,7 +6,7 @@ mod adapters;
 mod bytes;
 mod structured_array;
 
-type ListedDevice = (String, String, Option<String>, Option<String>);
+type ListedDevice = (String, String, String, Option<String>, Option<String>);
 
 #[pyo3::pyfunction]
 fn list_devices() -> pyo3::PyResult<Vec<ListedDevice>> {
@@ -20,7 +20,8 @@ fn list_devices() -> pyo3::PyResult<Vec<ListedDevice>> {
             };
             (
                 listed_device.device_type.name().to_owned(),
-                listed_device.speed.to_string(),
+                listed_device.connection.to_string(),
+                listed_device.location.to_string(),
                 serial,
                 error,
             )
@@ -102,7 +103,7 @@ enum Orientation {
 #[pyo3::pyclass(subclass)]
 struct Device {
     device: Option<neuromorphic_drivers_rs::Device>,
-    adapter: Option<std::sync::Mutex<adapters::Adapter>>,
+    adapter: std::sync::Mutex<Option<adapters::Adapter>>,
     iterator_timeout: Option<std::time::Duration>,
     iterator_maximum_raw_packets: usize,
     flag: neuromorphic_drivers_rs::Flag<
@@ -111,16 +112,10 @@ struct Device {
     >,
 }
 
-// unsafe workaround until auto traits are stabilized
-// see https://docs.rs/pyo3/0.19.0/pyo3/marker/index.html
-struct DeviceReference<'a>(pub &'a neuromorphic_drivers_rs::Device);
-unsafe impl Send for DeviceReference<'_> {}
-unsafe impl Sync for DeviceReference<'_> {}
 enum Buffer<'a> {
-    Adapter(std::sync::MutexGuard<'a, adapters::Adapter>),
+    Adapter(&'a mut adapters::Adapter),
     Bytes(bytes::Bytes),
 }
-unsafe impl Send for Buffer<'_> {}
 
 struct Status {
     instant: std::time::Instant,
@@ -129,28 +124,36 @@ struct Status {
     clutch_engaged: bool,
     overflow_indices: Vec<usize>,
     current_t: Option<u64>,
+    dropped_packets: u64,
 }
 
 #[pyo3::pymethods]
 impl Device {
     #[new]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         raw: bool,
         iterator_maximum_raw_packets: usize,
         device_type: Option<String>,
         configuration: Option<Vec<u8>>,
         serial: Option<String>,
-        usb_configuration: Option<Vec<u8>>,
+        address: Option<String>,
+        ring_configuration: Option<Vec<u8>>,
         iterator_timeout: Option<f64>,
     ) -> pyo3::PyResult<Self> {
         let (flag, event_loop) = neuromorphic_drivers_rs::flag_and_event_loop()
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(format!("{error}")))?;
         let device = neuromorphic_drivers_rs::open(
-            match serial.as_ref() {
-                Some(serial) => {
-                    neuromorphic_drivers_rs::SerialOrBusNumberAndAddress::Serial(serial.as_str())
-                }
-                None => neuromorphic_drivers_rs::SerialOrBusNumberAndAddress::None,
+            match (serial.as_ref(), address.as_ref()) {
+                (Some(serial), _) => neuromorphic_drivers_rs::Identifier::Serial(serial.as_str()),
+                (None, Some(address)) => neuromorphic_drivers_rs::Identifier::Location(
+                    neuromorphic_drivers_rs::Location::Address(address.parse().map_err(|_| {
+                        pyo3::exceptions::PyRuntimeError::new_err(format!(
+                            "\"{address}\" is not a valid IPv4 address"
+                        ))
+                    })?),
+                ),
+                (None, None) => neuromorphic_drivers_rs::Identifier::None,
             },
             if let Some(device_type) = device_type {
                 if let Some(configuration) = configuration {
@@ -171,10 +174,10 @@ impl Device {
             } else {
                 None
             },
-            if let Some(usb_configuration) = usb_configuration {
+            if let Some(ring_configuration) = ring_configuration {
                 Some(
-                    neuromorphic_drivers_rs::UsbConfiguration::deserialize_bincode(
-                        &usb_configuration,
+                    neuromorphic_drivers_rs::RingConfiguration::deserialize_bincode(
+                        &ring_configuration,
                     )
                     .map_err(|error| {
                         pyo3::exceptions::PyRuntimeError::new_err(format!("{error}"))
@@ -187,11 +190,11 @@ impl Device {
             flag.clone(),
         )
         .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(format!("{error}")))?;
-        let adapter = if raw {
+        let adapter = std::sync::Mutex::new(if raw {
             None
         } else {
-            Some(std::sync::Mutex::new(device.create_adapter().into()))
-        };
+            Some(device.create_adapter().into())
+        });
         Ok(Self {
             device: Some(device),
             adapter,
@@ -232,24 +235,26 @@ impl Device {
     fn __next__(
         slf: pyo3::PyRef<Self>,
         python: pyo3::Python,
-    ) -> pyo3::PyResult<Option<pyo3::PyObject>> {
+    ) -> pyo3::PyResult<Option<pyo3::Py<pyo3::PyAny>>> {
         let start = std::time::Instant::now();
         let flag = slf.flag.clone();
         let iterator_timeout = slf.iterator_timeout;
         let iterator_maximum_raw_packets = slf.iterator_maximum_raw_packets;
-        let device = DeviceReference(slf.device.as_ref().ok_or(
-            pyo3::exceptions::PyRuntimeError::new_err("__next__ called after __exit__"),
-        )?);
-        let mut buffer = match slf.adapter.as_ref() {
-            Some(adapter) => Some(adapter.try_lock().map_err(|_| {
-                pyo3::exceptions::PyRuntimeError::new_err(
-                    "__next__ called while device is used by a different thread",
-                )
-            })?),
-            None => None,
-        }
-        .map_or_else(|| Buffer::Bytes(bytes::Bytes::new()), Buffer::Adapter);
-        python.allow_threads(|| -> pyo3::PyResult<Option<pyo3::PyObject>> {
+        let device = slf
+            .device
+            .as_ref()
+            .ok_or(pyo3::exceptions::PyRuntimeError::new_err(
+                "__next__ called after __exit__",
+            ))?;
+        let mut adapter = slf.adapter.try_lock().map_err(|_| {
+            pyo3::exceptions::PyRuntimeError::new_err(
+                "__next__ called while device is used by a different thread",
+            )
+        })?;
+        let mut buffer = adapter
+            .as_mut()
+            .map_or_else(|| Buffer::Bytes(bytes::Bytes::new()), Buffer::Adapter);
+        python.detach(|| -> pyo3::PyResult<Option<pyo3::Py<pyo3::PyAny>>> {
             let mut status: Option<Status> = None;
             let mut available_raw_packets = None;
             let buffer_timeout = iterator_timeout.unwrap_or(std::time::Duration::from_millis(100));
@@ -257,14 +262,15 @@ impl Device {
                 flag.load_error().map_err(|error| {
                     pyo3::exceptions::PyRuntimeError::new_err(format!("{error:?}"))
                 })?;
-                if let Some(buffer_view) = device.0.next_with_timeout(&buffer_timeout) {
+                if let Some(buffer_view) = device.next_with_timeout(&buffer_timeout) {
                     if let Some(status) = status.as_mut() {
                         status.raw_packets += 1;
                         status.backlog = buffer_view.backlog();
                         status.clutch_engaged = matches!(
                             buffer_view.clutch,
-                            neuromorphic_drivers_rs::usb::Clutch::Engaged
+                            neuromorphic_drivers_rs::ring::Clutch::Engaged
                         );
+                        status.dropped_packets = device.dropped_packets();
                     } else {
                         status = Some(Status {
                             instant: buffer_view.instant,
@@ -272,10 +278,11 @@ impl Device {
                             raw_packets: 1,
                             clutch_engaged: matches!(
                                 buffer_view.clutch,
-                                neuromorphic_drivers_rs::usb::Clutch::Engaged
+                                neuromorphic_drivers_rs::ring::Clutch::Engaged
                             ),
                             overflow_indices: Vec::new(),
                             current_t: None,
+                            dropped_packets: device.dropped_packets(),
                         });
                     }
                     let _ = available_raw_packets.get_or_insert_with(|| {
@@ -293,7 +300,7 @@ impl Device {
                                 status.current_t = Some(adapter.current_t());
                             }
                         }
-                        Buffer::Bytes(bytes) => pyo3::Python::with_gil(|python| {
+                        Buffer::Bytes(bytes) => {
                             if buffer_view.first_after_overflow {
                                 status
                                     .as_mut()
@@ -301,8 +308,8 @@ impl Device {
                                     .overflow_indices
                                     .push(bytes.length());
                             }
-                            bytes.extend_from_slice(python, buffer_view.slice);
-                        }),
+                            bytes.extend_from_slice(buffer_view.slice);
+                        }
                     }
                 }
                 if iterator_timeout.is_some_and(|timeout| start.elapsed() >= timeout)
@@ -312,12 +319,10 @@ impl Device {
                             .is_some_and(|status| status.raw_packets >= available_raw_packets)
                     })
                 {
-                    return pyo3::Python::with_gil(|python| {
+                    return pyo3::Python::attach(|python| {
                         let packet = match &mut buffer {
                             Buffer::Adapter(adapter) => Some(adapter.take_into_packet(python)?),
-                            Buffer::Bytes(bytes) => pyo3::Python::with_gil(|python| {
-                                bytes.take(python).map(|bytes| bytes.into())
-                            }),
+                            Buffer::Bytes(bytes) => bytes.take(python).map(|bytes| bytes.into()),
                         };
                         let duration_since_epoch = std::time::SystemTime::now()
                             .duration_since(std::time::SystemTime::UNIX_EPOCH)
@@ -335,6 +340,7 @@ impl Device {
                                     status.clutch_engaged,
                                     status.overflow_indices,
                                     status.current_t,
+                                    status.dropped_packets,
                                 )
                             }),
                             packet,
@@ -365,24 +371,25 @@ impl Device {
         until: usize,
     ) -> pyo3::PyResult<()> {
         let flag = slf.flag.clone();
-        let device = DeviceReference(slf.device.as_ref().ok_or(
-            pyo3::exceptions::PyRuntimeError::new_err("__next__ called after __exit__"),
-        )?);
-        let mut buffer = match slf.adapter.as_ref() {
-            Some(adapter) => Some(adapter.try_lock().map_err(|_| {
-                pyo3::exceptions::PyRuntimeError::new_err(
-                    "__next__ called while device is used by a different thread",
-                )
-            })?),
-            None => None,
-        }
-        .map_or_else(|| Buffer::Bytes(bytes::Bytes::new()), Buffer::Adapter);
-        python.allow_threads(|| loop {
+        let device = slf
+            .device
+            .as_ref()
+            .ok_or(pyo3::exceptions::PyRuntimeError::new_err(
+                "__next__ called after __exit__",
+            ))?;
+        let mut adapter = slf.adapter.try_lock().map_err(|_| {
+            pyo3::exceptions::PyRuntimeError::new_err(
+                "__next__ called while device is used by a different thread",
+            )
+        })?;
+        let mut buffer = adapter
+            .as_mut()
+            .map_or_else(|| Buffer::Bytes(bytes::Bytes::new()), Buffer::Adapter);
+        python.detach(|| loop {
             flag.load_error()
                 .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(format!("{error:?}")))?;
-            if let Some(buffer_view) = device
-                .0
-                .next_with_timeout(&std::time::Duration::from_millis(0))
+            if let Some(buffer_view) =
+                device.next_with_timeout(&std::time::Duration::from_millis(0))
             {
                 if buffer_view.backlog() < until {
                     return Ok(());
@@ -421,18 +428,18 @@ impl Device {
             .serial())
     }
 
-    fn chip_firmware_configuration(
+    fn biases_bounds(
         slf: pyo3::PyRef<Self>,
         python: pyo3::Python,
-    ) -> pyo3::PyResult<pyo3::PyObject> {
+    ) -> pyo3::PyResult<pyo3::Py<pyo3::PyAny>> {
         Ok(pyo3::types::PyBytes::new(
             python,
             &slf.device
                 .as_ref()
                 .ok_or(pyo3::exceptions::PyRuntimeError::new_err(
-                    "serial called after __exit__",
+                    "biases_bounds called after __exit__",
                 ))?
-                .chip_firmware_configuration()
+                .biases_bounds()
                 .serialize_bincode()
                 .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(format!("{error}")))?,
         )
@@ -441,14 +448,14 @@ impl Device {
         .into_any())
     }
 
-    fn speed(slf: pyo3::PyRef<Self>) -> pyo3::PyResult<String> {
+    fn connection(slf: pyo3::PyRef<Self>) -> pyo3::PyResult<String> {
         Ok(slf
             .device
             .as_ref()
             .ok_or(pyo3::exceptions::PyRuntimeError::new_err(
-                "speed called after __exit__",
+                "connection called after __exit__",
             ))?
-            .speed()
+            .connection()
             .to_string())
     }
 
@@ -460,15 +467,37 @@ impl Device {
                 "temperature_celsius called after __exit__",
             ))? {
             neuromorphic_drivers_rs::Device::InivationDavis346(_) => Err(
-                pyo3::exceptions::PyRuntimeError::new_err(format!("temperature_celsius is not implemented for the DAVIS346 (temperature samples are stored with IMU samples and can be accessed in the packet loop)")),
+                pyo3::exceptions::PyRuntimeError::new_err("temperature_celsius is not implemented for the DAVIS346 (temperature samples are stored with IMU samples and can be accessed in the packet loop)"),
             ),
             neuromorphic_drivers_rs::Device::PropheseeEvk4(device) =>
                 device
                 .temperature_celsius()
                 .map(|temperature| temperature.0)
                 .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(format!("{error}"))),
+            neuromorphic_drivers_rs::Device::LucidTriton(device) =>
+                device
+                .temperature_celsius()
+                .map(|temperature| temperature.0)
+                .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(format!("{error}"))),
             device => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
                 "temperature_celsius is not implemented for the {}",
+                device.name()
+            ))),
+        }
+    }
+
+    fn address(slf: pyo3::PyRef<Self>) -> pyo3::PyResult<String> {
+        match slf
+            .device
+            .as_ref()
+            .ok_or(pyo3::exceptions::PyRuntimeError::new_err(
+                "address called after __exit__",
+            ))? {
+            neuromorphic_drivers_rs::Device::LucidTriton(device) => {
+                Ok(device.address().to_string())
+            }
+            device => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                "address is not implemented for the {}",
                 device.name()
             ))),
         }
@@ -579,7 +608,7 @@ impl Device {
     }
 }
 
-#[pyo3::pymodule]
+#[pyo3::pymodule(gil_used = false)]
 fn neuromorphic_drivers(module: &pyo3::Bound<'_, pyo3::types::PyModule>) -> pyo3::PyResult<()> {
     module.add_class::<Device>()?;
     module.add_function(pyo3::wrap_pyfunction!(list_devices, module)?)?;

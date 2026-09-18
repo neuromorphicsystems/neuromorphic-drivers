@@ -14,7 +14,8 @@ from .udev import *
 @dataclasses.dataclass
 class ListedDevice:
     name: Name
-    speed: Speed
+    connection: Connection
+    address: str
     serial: typing.Optional[str]
     error: typing.Optional[str]
 
@@ -23,21 +24,26 @@ def list_devices() -> list[ListedDevice]:
     return [
         ListedDevice(
             name=Name(name),
-            speed=Speed(speed),
+            connection=Connection(connection),
+            address=address,
             serial=serial,
             error=error,
         )
-        for (name, speed, serial, error) in extension_list_devices()
+        for (name, connection, address, serial, error) in extension_list_devices()
     ]
 
 
 def print_device_list(color: bool = True):
-    table = [["Name", "Speed", "Serial", "Error"]]
+    table = [["Name", "Connection", "Serial", "Error"]]
     for device in list_devices():
         table.append(
             [
                 device.name.value,
-                device.speed.value,
+                (
+                    f"{device.connection.value} ({device.address})"
+                    if device.connection == Connection.ETHERNET
+                    else device.connection.value
+                ),
                 "-" if device.serial is None else device.serial,
                 "-" if device.error is None else device.error,
             ]

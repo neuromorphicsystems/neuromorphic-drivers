@@ -10,14 +10,14 @@ class Device(ExtensionDevice):
     def name(self):
         return enums.Name(super().name())
 
-    def chip_firmware_configuration(self):
-        return unions.deserialize_configuration(
+    def biases_bounds(self):
+        return unions.deserialize_biases_bounds(
             self.name(),
-            super().chip_firmware_configuration(),
+            super().biases_bounds(),
         )
 
-    def speed(self):
-        return enums.Speed(super().speed())
+    def connection(self):
+        return enums.Connection(super().connection())
 
     def properties(self):
         return unions.name_to_properties(self.name())
@@ -37,7 +37,7 @@ class Device(ExtensionDevice):
                     ring=(
                         None
                         if ring_status is None
-                        else status.RawRingStatus(*ring_status[0:5])
+                        else status.RawRingStatus(*(ring_status[0:5] + ring_status[6:7]))
                     ),
                 ),
                 packet,
@@ -48,7 +48,7 @@ class Device(ExtensionDevice):
                 ring=(
                     None
                     if ring_status is None
-                    else status.RingStatus(*(ring_status[0:4] + ring_status[5:6]))
+                    else status.RingStatus(*(ring_status[0:4] + ring_status[5:7]))
                 ),
             ),
             packet,

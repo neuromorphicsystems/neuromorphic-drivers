@@ -1,12 +1,109 @@
 use crate::adapters;
-use crate::device::SerialOrBusNumberAndAddress;
-use crate::device::Usb;
+use crate::device::Device as _;
+use crate::device::Identifier;
 use crate::flag;
+use crate::ring;
 use crate::usb;
 use rusb::UsbContext;
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum Connection {
+    UsbUnknown,
+    UsbLow,
+    UsbFull,
+    UsbHigh,
+    UsbSuper,
+    UsbSuperPlus,
+    Ethernet,
+}
+
+impl From<usb::Speed> for Connection {
+    fn from(speed: usb::Speed) -> Self {
+        match speed {
+            usb::Speed::Unknown => Self::UsbUnknown,
+            usb::Speed::Low => Self::UsbLow,
+            usb::Speed::Full => Self::UsbFull,
+            usb::Speed::High => Self::UsbHigh,
+            usb::Speed::Super => Self::UsbSuper,
+            usb::Speed::SuperPlus => Self::UsbSuperPlus,
+        }
+    }
+}
+
+impl std::fmt::Display for Connection {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UsbUnknown => write!(formatter, "{}", usb::Speed::Unknown),
+            Self::UsbLow => write!(formatter, "{}", usb::Speed::Low),
+            Self::UsbFull => write!(formatter, "{}", usb::Speed::Full),
+            Self::UsbHigh => write!(formatter, "{}", usb::Speed::High),
+            Self::UsbSuper => write!(formatter, "{}", usb::Speed::Super),
+            Self::UsbSuperPlus => write!(formatter, "{}", usb::Speed::SuperPlus),
+            Self::Ethernet => write!(formatter, "Ethernet"),
+        }
+    }
+}
+
+macro_rules! list_devices_for {
+    (usb, $module:ident, $devices:expr) => {
+        <$module::Device as crate::device::Usb>::list_devices($devices)?
+    };
+    (ethernet, $module:ident, $devices:expr) => {
+        <$module::Device as crate::device::Ethernet>::list_devices()
+    };
+}
+
+macro_rules! open_for {
+    (usb, $module:ident, $identifier:expr, $configuration:expr, $ring_configuration:expr, $event_loop:expr, $flag:expr) => {
+        <$module::Device as crate::device::Usb>::open(
+            $identifier,
+            $configuration,
+            $ring_configuration,
+            $event_loop,
+            $flag,
+        )
+    };
+    (ethernet, $module:ident, $identifier:expr, $configuration:expr, $ring_configuration:expr, $event_loop:expr, $flag:expr) => {
+        <$module::Device as crate::device::Ethernet>::open(
+            $identifier,
+            $configuration,
+            $ring_configuration,
+            $flag,
+        )
+    };
+}
+
+macro_rules! vendor_and_product_id_for {
+    (usb, $device:expr) => {
+        Some(crate::device::Usb::vendor_and_product_id($device))
+    };
+    (ethernet, $device:expr) => {{
+        let _ = $device;
+        None
+    }};
+}
+
+macro_rules! unpack_for {
+    (usb, $module:ident, $device_type:expr, $error:expr) => {{
+        let _ = $device_type;
+        let _ = $error;
+        None
+    }};
+    (ethernet, $module:ident, $device_type:expr, $error:expr) => {
+        match $error {
+            $module::Error::SerialNotFound(serial) => Some(Error::DeviceWithSerial {
+                device_type: $device_type,
+                serial: serial.clone(),
+            }),
+            $module::Error::NotFound => Some(Error::Device($device_type)),
+            $module::Error::BusNumberAndAddress => Some(Error::AddressUnsupported($device_type)),
+            _ => None,
+        }
+    };
+}
+
 macro_rules! register {
-    ($($module:ident),+) => {
+    ($($module:ident: $transport:ident),+ $(,)?) => {
         paste::paste! {
             $(
                 pub mod $module;
@@ -39,6 +136,16 @@ macro_rules! register {
                 }
             }
 
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+            #[serde(tag = "type", content = "biases_bounds")]
+            #[allow(clippy::large_enum_variant)]
+            pub enum BiasesBounds {
+                $(
+                    #[serde(rename = "" $module)]
+                    [<$module:camel>]($module::BiasesBounds),
+                )+
+            }
+
             #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
             #[serde(tag = "type", content = "configuration")]
             #[allow(clippy::large_enum_variant)]
@@ -47,6 +154,16 @@ macro_rules! register {
                     #[serde(rename = "" $module)]
                     [<$module:camel>]($module::Configuration),
                 )+
+            }
+
+            impl BiasesBounds {
+                pub fn serialize_bincode(&self) -> bincode::Result<Vec<u8>> {
+                    match self {
+                        $(
+                            BiasesBounds::[<$module:camel>](biases_bounds) => bincode::serialize(biases_bounds),
+                        )+
+                    }
+                }
             }
 
             impl Configuration {
@@ -90,9 +207,8 @@ macro_rules! register {
             #[derive(Debug)]
             pub struct ListedDevice {
                 pub device_type: Type,
-                pub bus_number: u8,
-                pub address: u8,
-                pub speed: usb::Speed,
+                pub location: crate::device::Location,
+                pub connection: Connection,
                 pub serial: Result<String, usb::Error>,
             }
 
@@ -100,9 +216,9 @@ macro_rules! register {
                 pub fn open(
                     &self,
                     configuration: Option<Configuration>,
-                    usb_configuration: Option<usb::Configuration>,
+                    ring_configuration: Option<ring::Configuration>,
                     event_loop: std::sync::Arc<usb::EventLoop>,
-                    flag: flag::Flag<Error, usb::Overflow>,
+                    flag: flag::Flag<Error, ring::Overflow>,
                 ) -> Result<Device, Error> {
                     match configuration {
                         Some(configuration) => {
@@ -121,14 +237,16 @@ macro_rules! register {
                                 match configuration {
                                     $(
                                         Configuration::[<$module:camel>](configuration) => Ok(
-                                            $module::Device::open(
-                                                SerialOrBusNumberAndAddress::BusNumberAndAddress((self.bus_number, self.address)),
+                                            open_for!(
+                                                $transport,
+                                                $module,
+                                                Identifier::Location(self.location),
                                                 configuration,
-                                                usb_configuration
+                                                ring_configuration
                                                 .as_ref()
-                                                .unwrap_or(&$module::Device::DEFAULT_USB_CONFIGURATION),
+                                                .unwrap_or(&$module::Device::RING_CONFIGURATION),
                                                 event_loop.clone(),
-                                                flag.clone(),
+                                                flag.clone()
                                             )
                                             .map(|device| paste::paste! {Device::[<$module:camel>](device)})
                                             .map_err(|error| Error::from(error).unpack())?
@@ -141,14 +259,16 @@ macro_rules! register {
                             match self.device_type {
                                 $(
                                     Type::[<$module:camel>] => Ok(
-                                        $module::Device::open(
-                                            SerialOrBusNumberAndAddress::BusNumberAndAddress((self.bus_number, self.address)),
+                                        open_for!(
+                                            $transport,
+                                            $module,
+                                            Identifier::Location(self.location),
                                             $module::Device::PROPERTIES.default_configuration.clone(),
-                                            usb_configuration
+                                            ring_configuration
                                             .as_ref()
-                                            .unwrap_or(&$module::Device::DEFAULT_USB_CONFIGURATION),
+                                            .unwrap_or(&$module::Device::RING_CONFIGURATION),
                                             event_loop.clone(),
-                                            flag.clone(),
+                                            flag.clone()
                                         )
                                         .map(|device| paste::paste! {Device::[<$module:camel>](device)})
                                         .map_err(|error| Error::from(error).unpack())?
@@ -166,13 +286,12 @@ macro_rules! register {
                 let mut result = Vec::new();
                 $(
                     result.extend(
-                        $module::Device::list_devices(&devices)?
+                        list_devices_for!($transport, $module, &devices)
                             .into_iter()
                             .map(|listed_device| ListedDevice {
                                 device_type: Type::[<$module:camel>],
-                                bus_number: listed_device.bus_number,
-                                address: listed_device.address,
-                                speed: listed_device.speed,
+                                location: listed_device.location,
+                                connection: listed_device.connection,
                                 serial: listed_device.serial,
                             }),
                     );
@@ -181,11 +300,11 @@ macro_rules! register {
             }
 
             pub fn open(
-                serial_or_bus_number_and_address: SerialOrBusNumberAndAddress,
+                identifier: Identifier,
                 configuration: Option<Configuration>,
-                usb_configuration: Option<usb::Configuration>,
+                ring_configuration: Option<ring::Configuration>,
                 event_loop: std::sync::Arc<usb::EventLoop>,
-                flag: flag::Flag<Error, usb::Overflow>,
+                flag: flag::Flag<Error, ring::Overflow>,
             ) -> Result<Device, Error>
             {
                 match configuration {
@@ -193,14 +312,16 @@ macro_rules! register {
                         match configuration {
                             $(
                                 Configuration::[<$module:camel>](configuration) => Ok(
-                                    $module::Device::open(
-                                        serial_or_bus_number_and_address,
+                                    open_for!(
+                                        $transport,
+                                        $module,
+                                        identifier,
                                         configuration,
-                                        usb_configuration
+                                        ring_configuration
                                         .as_ref()
-                                        .unwrap_or(&$module::Device::DEFAULT_USB_CONFIGURATION),
+                                        .unwrap_or(&$module::Device::RING_CONFIGURATION),
                                         event_loop.clone(),
-                                        flag.clone(),
+                                        flag.clone()
                                     )
                                     .map(|device| paste::paste! {Device::[<$module:camel>](device)})
                                     .map_err(|error| Error::from(error).unpack())?
@@ -210,29 +331,34 @@ macro_rules! register {
                     },
                     None => {
                         $(
-                            match $module::Device::open(
-                                serial_or_bus_number_and_address,
+                            match open_for!(
+                                $transport,
+                                $module,
+                                identifier,
                                 $module::Device::PROPERTIES.default_configuration.clone(),
-                                usb_configuration
+                                ring_configuration
                                 .as_ref()
-                                .unwrap_or(&$module::Device::DEFAULT_USB_CONFIGURATION),
+                                .unwrap_or(&$module::Device::RING_CONFIGURATION),
                                 event_loop.clone(),
-                                flag.clone(),
+                                flag.clone()
                             ) {
                                 Ok(device) => return Ok(Device::[<$module:camel>](device)),
                                 Err(error) => match Error::from(error).unpack() {
                                     Error::DeviceWithSerial {device_type: _, serial: _} => (),
                                     Error::Device(_) => (),
+                                    Error::AddressUnsupported(_) => (),
                                     error => return Err(error.into()),
                                 }
                             };
                         )+
-                        Err(match serial_or_bus_number_and_address {
-                            SerialOrBusNumberAndAddress::Serial(serial) => Error::Serial(serial.to_owned()),
-                            SerialOrBusNumberAndAddress::BusNumberAndAddress((bus_number, address)) => {
-                                Error::BusNumberAndAddressNotFound {bus_number, address}
-                            },
-                            SerialOrBusNumberAndAddress::None => Error::NoDevice
+                        Err(match identifier {
+                            Identifier::Serial(serial) => Error::Serial(serial.to_owned()),
+                            Identifier::Location(crate::device::Location::BusNumberAndAddress {
+                                bus_number,
+                                address,
+                            }) => Error::BusNumberAndAddressNotFound {bus_number, address},
+                            Identifier::Location(crate::device::Location::Address(_)) => Error::NoDevice,
+                            Identifier::None => Error::NoDevice
                         })
                     }
                 }
@@ -242,7 +368,7 @@ macro_rules! register {
             pub enum Properties {
                 $(
                     #[serde(rename = "" $module)]
-                    [<$module:camel>](<$module::Device as Usb>::Properties),
+                    [<$module:camel>](<$module::Device as crate::device::Device>::Properties),
                 )+
             }
 
@@ -255,10 +381,18 @@ macro_rules! register {
                     }
                 }
 
-                pub fn next_with_timeout(&self, timeout: &std::time::Duration) -> Option<usb::BufferView> {
+                pub fn next_with_timeout(&self, timeout: &std::time::Duration) -> Option<ring::ReadBufferView<'_>> {
                     match self {
                         $(
                             Self::[<$module:camel>](device) => device.next_with_timeout(timeout),
+                        )+
+                    }
+                }
+
+                pub fn dropped_packets(&self) -> u64 {
+                    match self {
+                        $(
+                            Self::[<$module:camel>](device) => device.dropped_packets(),
                         )+
                     }
                 }
@@ -287,10 +421,10 @@ macro_rules! register {
                     }
                 }
 
-                pub fn vendor_and_product_id(&self) -> (u16, u16) {
+                pub fn vendor_and_product_id(&self) -> Option<(u16, u16)> {
                     match self {
                         $(
-                            Self::[<$module:camel>](device) => device.vendor_and_product_id(),
+                            Self::[<$module:camel>](device) => vendor_and_product_id_for!($transport, device),
                         )+
                     }
                 }
@@ -303,18 +437,10 @@ macro_rules! register {
                     }
                 }
 
-                pub fn chip_firmware_configuration(&self) -> Configuration {
+                pub fn connection(&self) -> Connection {
                     match self {
                         $(
-                            Self::[<$module:camel>](device) => Configuration::[<$module:camel>](device.chip_firmware_configuration()),
-                        )+
-                    }
-                }
-
-                pub fn speed(&self) -> usb::Speed {
-                    match self {
-                        $(
-                            Self::[<$module:camel>](device) => device.speed(),
+                            Self::[<$module:camel>](device) => device.connection(),
                         )+
                     }
                 }
@@ -323,6 +449,14 @@ macro_rules! register {
                     match self {
                         $(
                             Self::[<$module:camel>](device) => Configuration::[<$module:camel>](device.default_configuration()),
+                        )+
+                    }
+                }
+
+                pub fn biases_bounds(&self) -> BiasesBounds {
+                    match self {
+                        $(
+                            Self::[<$module:camel>](device) => BiasesBounds::[<$module:camel>](device.biases_bounds()),
                         )+
                     }
                 }
@@ -388,6 +522,9 @@ macro_rules! register {
                 #[error("no {0} found")]
                 Device(Type),
 
+                #[error("{0} devices cannot be identified by an IP address")]
+                AddressUnsupported(Type),
+
                 #[error("serial \"{0}\" not found")]
                 Serial(String),
 
@@ -427,10 +564,21 @@ macro_rules! register {
                                             serial,
                                         },
                                         usb::Error::Device => Self::Device(Type::[<$module:camel>]),
+                                        usb::Error::Address => {
+                                            Self::AddressUnsupported(Type::[<$module:camel>])
+                                        }
                                         error => Self::[<$module:camel>]($module::Error::Usb(error)),
                                     },
                                     #[allow(unreachable_patterns)]  // devices may not need extra errors besides "usb::Error"
-                                    error => Self::[<$module:camel>](error)
+                                    error => match unpack_for!(
+                                        $transport,
+                                        $module,
+                                        Type::[<$module:camel>],
+                                        &error
+                                    ) {
+                                        Some(unpacked) => unpacked,
+                                        None => Self::[<$module:camel>](error),
+                                    }
                                 }
                             }
                         )+
@@ -442,4 +590,11 @@ macro_rules! register {
     };
 }
 
-register! { inivation_davis346, inivation_dvxplorer, prophesee_evk3_hd, prophesee_evk4, centuryarks_vga }
+register! {
+    inivation_davis346: usb,
+    inivation_dvxplorer: usb,
+    prophesee_evk3_hd: usb,
+    prophesee_evk4: usb,
+    centuryarks_vga: usb,
+    lucid_triton: ethernet,
+}

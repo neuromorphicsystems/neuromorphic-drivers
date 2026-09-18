@@ -1,19 +1,6 @@
 use crate::flag;
+use crate::ring;
 use rusb::UsbContext;
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct Configuration {
-    pub buffer_length: usize,
-    pub ring_length: usize,
-    pub transfer_queue_length: usize,
-    pub allow_dma: bool,
-}
-
-impl Configuration {
-    pub fn deserialize_bincode(data: &[u8]) -> bincode::Result<Configuration> {
-        bincode::deserialize(data)
-    }
-}
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum Error {
@@ -47,11 +34,11 @@ pub enum Error {
     #[error("device not found")]
     Device,
 
-    #[error("ring size is smaller than or equal to transfer queue size")]
-    ConfigurationSizes,
+    #[error("this device is connected over USB and cannot be identified by an IP address")]
+    Address,
 
-    #[error("ring overflow")]
-    Overflow,
+    #[error(transparent)]
+    Configuration(#[from] ring::ConfigurationError),
 
     #[error("control transfer error (expected {expected:?}, read {read:?})")]
     Mismatch { expected: Vec<u8>, read: Vec<u8> },
@@ -64,6 +51,9 @@ pub enum Error {
 
     #[error("the device is already used by another program")]
     Busy,
+
+    #[error("USB transfer allocation failed (successfully allocated {0} transfers)")]
+    TransferAllocationFailed(usize),
 }
 
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
@@ -158,48 +148,11 @@ pub fn assert_string_descriptor_any(
     })
 }
 
-extern "system" {
-    pub fn libusb_dev_mem_alloc(
-        dev_handle: *mut libusb1_sys::libusb_device_handle,
-        length: libc::ssize_t,
-    ) -> *mut libc::c_uchar;
-
-    pub fn libusb_dev_mem_free(
-        dev_handle: *mut libusb1_sys::libusb_device_handle,
-        buffer: *mut libc::c_uchar,
-        length: libc::ssize_t,
-    ) -> *mut libc::c_int;
-}
-
-struct BufferData(std::ptr::NonNull<u8>);
-
-unsafe impl Send for BufferData {}
-unsafe impl Sync for BufferData {}
-
-impl BufferData {
-    fn as_ptr(&self) -> *mut u8 {
-        self.0.as_ptr()
-    }
-}
-
-struct Buffer {
-    system_time: std::time::SystemTime,
-    instant: std::time::Instant,
-    first_after_overflow: bool,
-    data: BufferData,
-    length: usize,
-    capacity: usize,
-    dma: bool,
-}
-
 pub struct EventLoop {
     context: rusb::Context,
     running: std::sync::Arc<std::sync::atomic::AtomicBool>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
-
-#[derive(Debug, Clone, Copy)]
-pub struct Overflow(());
 
 impl EventLoop {
     pub fn new<IntoError, IntoWarning>(
@@ -208,7 +161,7 @@ impl EventLoop {
     ) -> Result<Self, Error>
     where
         IntoError: From<Error> + Clone + Send + 'static,
-        IntoWarning: From<Overflow> + Clone + Send + 'static,
+        IntoWarning: From<ring::Overflow> + Clone + Send + 'static,
     {
         let context = rusb::Context::new()?;
         let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
@@ -242,77 +195,26 @@ impl Drop for EventLoop {
     }
 }
 
-enum TransferStatus {
-    Active,
-    Complete,
-    Cancelling,
-    Deallocated,
-}
-
-#[derive(Clone)]
-pub struct WriteRange {
-    pub start: usize,
-    pub end: usize,
-    pub ring_length: usize,
-}
-
-impl WriteRange {
-    fn increment_start(&mut self) {
-        self.start = (self.start + 1) % self.ring_length;
-    }
-
-    fn increment_end(&mut self) {
-        self.end = (self.end + 1) % self.ring_length;
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum Clutch {
-    Disengaged,
-    Engaged,
-}
-
-struct RingContext {
-    read: usize,
-    write_range: WriteRange,
-    transfer_statuses: Vec<TransferStatus>,
-    buffers: Vec<Buffer>,
-    freewheel_buffers: Vec<Buffer>,
-    clutch: Clutch,
-}
-
-struct SharedRingContext {
-    on_error: Box<dyn Fn(Error) + Send + Sync + 'static>,
-    on_overflow: Box<dyn Fn(Overflow) + Send + Sync + 'static>,
-    shared: std::sync::Mutex<RingContext>,
-    shared_condvar: std::sync::Condvar,
-}
-
-struct LibusbTransfer(std::ptr::NonNull<libusb1_sys::libusb_transfer>);
-
-unsafe impl Send for LibusbTransfer {}
+struct LibusbTransfer(*mut libusb1_sys::libusb_transfer);
 
 impl LibusbTransfer {
-    unsafe fn as_mut(&mut self) -> &mut libusb1_sys::libusb_transfer {
-        self.0.as_mut()
-    }
-
-    fn as_ptr(&self) -> *mut libusb1_sys::libusb_transfer {
-        self.0.as_ptr()
+    fn cancel(&self) -> libc::c_int {
+        unsafe { libusb1_sys::libusb_cancel_transfer(self.0) }
     }
 }
 
-pub struct Ring {
+// unsafe: *mut libusb1_sys::libusb_transfer is thread-safe.
+unsafe impl Send for LibusbTransfer {}
+unsafe impl Sync for LibusbTransfer {}
+
+pub struct TransferManager {
     transfers: Vec<LibusbTransfer>,
+    ring: ring::SharedRing,
+    #[allow(dead_code)]
     handle: std::sync::Arc<rusb::DeviceHandle<rusb::Context>>,
-    active_buffer_view: std::sync::Arc<std::sync::atomic::AtomicBool>,
     #[allow(dead_code)]
     event_loop: std::sync::Arc<EventLoop>,
-    context: std::sync::Arc<SharedRingContext>,
 }
-
-unsafe impl Send for Ring {}
-unsafe impl Sync for Ring {}
 
 pub enum TransferType {
     Control(std::time::Duration),
@@ -336,652 +238,427 @@ pub enum TransferType {
     },
 }
 
-pub struct TransferProperties {
-    pub transfer_type: TransferType,
-    pub timeout: std::time::Duration,
+trait CallbacksTrait: Send + Sync + 'static {
+    fn on_error(&self, error: Error);
+    fn on_overflow(&self, overflow: ring::Overflow);
 }
 
-enum TransferClutch {
-    Disengaged,
-    DisengagedFirst,
-    Engaged,
+struct Callbacks<OnError, OnOverflow> {
+    on_error: OnError,
+    on_overflow: OnOverflow,
+}
+
+impl<OnError, OnOverflow> CallbacksTrait for Callbacks<OnError, OnOverflow>
+where
+    OnError: Fn(Error) + Send + Sync + 'static,
+    OnOverflow: Fn(ring::Overflow) + Send + Sync + 'static,
+{
+    fn on_error(&self, error: Error) {
+        (self.on_error)(error)
+    }
+    fn on_overflow(&self, overflow: ring::Overflow) {
+        (self.on_overflow)(overflow)
+    }
+}
+
+#[derive(Clone)]
+struct SharedCallbacks(std::sync::Arc<std::sync::Mutex<dyn CallbacksTrait>>);
+
+impl SharedCallbacks {
+    fn on_error(&self, error: Error) {
+        self.0
+            .lock()
+            .expect("callbacks is not poisoned")
+            .on_error(error)
+    }
+
+    fn on_overflow(&self, overflow: ring::Overflow) {
+        self.0
+            .lock()
+            .expect("callbacks is not poisoned")
+            .on_overflow(overflow)
+    }
 }
 
 struct TransferContext {
-    ring: std::sync::Arc<SharedRingContext>,
+    ring: ring::SharedRing,
+    callbacks: SharedCallbacks,
     transfer_index: usize,
-    clutch: TransferClutch,
+    clutch: ring::Clutch,
 }
 
 #[no_mangle]
 extern "system" fn usb_transfer_callback(transfer_pointer: *mut libusb1_sys::libusb_transfer) {
     let system_time = std::time::SystemTime::now();
-    let now = std::time::Instant::now();
-    let mut resubmit = false;
-    {
-        // unsafe: transfer is not null (libusb callback)
-        let transfer = unsafe { &mut *transfer_pointer };
-        let context = transfer.user_data;
-        assert!(!context.is_null(), "context is null");
-        // unsafe: context is a *mut TransferContext
-        let context = unsafe { &mut *(context as *mut TransferContext) };
-        let mut error = None;
-        {
-            let mut shared = context
-                .ring
-                .shared
-                .lock()
-                .expect("ring context's lock is not poisoned");
-            match shared.transfer_statuses[context.transfer_index] {
-                TransferStatus::Active => match transfer.status {
-                    libusb1_sys::constants::LIBUSB_TRANSFER_COMPLETED
-                    | libusb1_sys::constants::LIBUSB_TRANSFER_TIMED_OUT => {
-                        if !matches!(context.clutch, TransferClutch::Engaged) {
-                            let active_buffer = shared.write_range.start;
-                            shared.buffers[active_buffer].system_time = system_time;
-                            shared.buffers[active_buffer].instant = now;
-                            shared.buffers[active_buffer].first_after_overflow =
-                                matches!(context.clutch, TransferClutch::DisengagedFirst);
-                            shared.buffers[active_buffer].length = transfer.actual_length as usize;
-                            shared.write_range.increment_start();
-                            context.ring.shared_condvar.notify_one();
-                        }
-                        if shared.write_range.end == shared.read {
-                            if matches!(shared.clutch, Clutch::Disengaged) {
-                                shared.clutch = Clutch::Engaged;
-                                (context.ring.on_overflow)(Overflow(()));
-                            }
-                            context.clutch = TransferClutch::Engaged;
-                            transfer.buffer = shared.freewheel_buffers[context.transfer_index]
-                                .data
-                                .as_ptr();
-                            transfer.length =
-                                shared.freewheel_buffers[context.transfer_index].capacity as i32;
-                        } else {
-                            match shared.clutch {
-                                Clutch::Disengaged => {
-                                    context.clutch = TransferClutch::Disengaged;
+    let instant = std::time::Instant::now();
+
+    // unsafe: transfer is not null (libusb callback)
+    let transfer = unsafe { &mut *transfer_pointer };
+    let context = transfer.user_data;
+    assert!(!context.is_null(), "context is null");
+    // unsafe: context is a *mut TransferContext
+    let context = unsafe { &mut *(context as *mut TransferContext) };
+    let mut ring_data = context.ring.data();
+    match ring_data.transfer_status(context.transfer_index) {
+        ring::TransferStatus::Active => match transfer.status {
+            libusb1_sys::constants::LIBUSB_TRANSFER_COMPLETED
+            | libusb1_sys::constants::LIBUSB_TRANSFER_TIMED_OUT => {
+                let buffer_view = ring_data.transfer_complete(
+                    context.clutch,
+                    system_time,
+                    instant,
+                    transfer.actual_length as usize,
+                );
+                if matches!(context.clutch, ring::Clutch::Disengaged) {
+                    context.ring.notify_one();
+                }
+                if buffer_view.clutch_changed && matches!(buffer_view.clutch, ring::Clutch::Engaged)
+                {
+                    context.callbacks.on_overflow(ring::Overflow(()));
+                }
+                context.clutch = buffer_view.clutch;
+                transfer.buffer = buffer_view.data;
+                transfer.length = buffer_view.capacity as i32;
+                // unsafe: libusb_alloc_transfer succeeded (transfer_pointer points to a valid transfer)
+                match unsafe { libusb1_sys::libusb_submit_transfer(transfer_pointer) } {
+                    0 => (), // success
+                    submit_transfer_status => {
+                        context.callbacks.on_error(
+                            match submit_transfer_status {
+                                libusb1_sys::constants::LIBUSB_ERROR_IO => rusb::Error::Io,
+                                libusb1_sys::constants::LIBUSB_ERROR_INVALID_PARAM => {
+                                    rusb::Error::InvalidParam
                                 }
-                                Clutch::Engaged => {
-                                    shared.clutch = Clutch::Disengaged;
-                                    context.clutch = TransferClutch::DisengagedFirst;
-                                }
-                            }
-                            transfer.buffer = shared.buffers[shared.write_range.end].data.as_ptr();
-                            transfer.length =
-                                shared.buffers[shared.write_range.end].capacity as i32;
-                            shared.write_range.increment_end();
-                        }
-                        resubmit = true;
-                    }
-                    status @ (libusb1_sys::constants::LIBUSB_TRANSFER_ERROR
-                    | libusb1_sys::constants::LIBUSB_TRANSFER_CANCELLED
-                    | libusb1_sys::constants::LIBUSB_TRANSFER_STALL
-                    | libusb1_sys::constants::LIBUSB_TRANSFER_NO_DEVICE
-                    | libusb1_sys::constants::LIBUSB_TRANSFER_OVERFLOW) => {
-                        if !matches!(context.clutch, TransferClutch::Engaged) {
-                            let active_buffer = shared.write_range.start;
-                            shared.buffers[active_buffer].system_time = system_time;
-                            shared.buffers[active_buffer].instant = now;
-                            shared.buffers[active_buffer].length = transfer.actual_length as usize;
-                            shared.write_range.increment_start();
-                            context.ring.shared_condvar.notify_one();
-                        }
-                        // set clutch to report a packet drop
-                        shared.clutch = Clutch::Engaged;
-                        context.clutch = TransferClutch::Disengaged;
-                        shared.transfer_statuses[context.transfer_index] = TransferStatus::Complete;
-                        error = Some(
-                            match status {
-                                libusb1_sys::constants::LIBUSB_TRANSFER_ERROR
-                                | libusb1_sys::constants::LIBUSB_TRANSFER_CANCELLED => {
-                                    rusb::Error::Io
-                                }
-                                libusb1_sys::constants::LIBUSB_TRANSFER_STALL => rusb::Error::Pipe,
-                                libusb1_sys::constants::LIBUSB_TRANSFER_NO_DEVICE => {
+                                libusb1_sys::constants::LIBUSB_ERROR_ACCESS => rusb::Error::Access,
+                                libusb1_sys::constants::LIBUSB_ERROR_NO_DEVICE => {
                                     rusb::Error::NoDevice
                                 }
-                                libusb1_sys::constants::LIBUSB_TRANSFER_OVERFLOW => {
+                                libusb1_sys::constants::LIBUSB_ERROR_NOT_FOUND => {
+                                    rusb::Error::NotFound
+                                }
+                                libusb1_sys::constants::LIBUSB_ERROR_BUSY => rusb::Error::Busy,
+                                libusb1_sys::constants::LIBUSB_ERROR_TIMEOUT => {
+                                    rusb::Error::Timeout
+                                }
+                                libusb1_sys::constants::LIBUSB_ERROR_OVERFLOW => {
                                     rusb::Error::Overflow
+                                }
+                                libusb1_sys::constants::LIBUSB_ERROR_PIPE => rusb::Error::Pipe,
+                                libusb1_sys::constants::LIBUSB_ERROR_INTERRUPTED => {
+                                    rusb::Error::Interrupted
+                                }
+                                libusb1_sys::constants::LIBUSB_ERROR_NO_MEM => rusb::Error::NoMem,
+                                libusb1_sys::constants::LIBUSB_ERROR_NOT_SUPPORTED => {
+                                    rusb::Error::NotSupported
                                 }
                                 _ => rusb::Error::Other,
                             }
                             .into(),
                         );
                     }
-                    unknown_transfer_status => {
-                        panic!("unknown transfer status {unknown_transfer_status}")
-                    }
-                },
-                TransferStatus::Cancelling => match transfer.status {
-                    libusb1_sys::constants::LIBUSB_TRANSFER_COMPLETED
-                    | libusb1_sys::constants::LIBUSB_TRANSFER_TIMED_OUT
-                    | libusb1_sys::constants::LIBUSB_TRANSFER_ERROR
-                    | libusb1_sys::constants::LIBUSB_TRANSFER_CANCELLED
-                    | libusb1_sys::constants::LIBUSB_TRANSFER_STALL
-                    | libusb1_sys::constants::LIBUSB_TRANSFER_NO_DEVICE => {
-                        if !matches!(context.clutch, TransferClutch::Engaged) {
-                            let active_buffer = shared.write_range.start;
-                            shared.buffers[active_buffer].system_time = system_time;
-                            shared.buffers[active_buffer].instant = now;
-                            shared.buffers[active_buffer].length = transfer.actual_length as usize;
-                            shared.write_range.increment_start();
-                            context.ring.shared_condvar.notify_one();
-                        }
-                        // set clutch to report a packet drop
-                        shared.clutch = Clutch::Engaged;
-                        context.clutch = TransferClutch::Disengaged;
-                        shared.transfer_statuses[context.transfer_index] = TransferStatus::Complete;
-                    }
-                    unknown_transfer_status => {
-                        panic!("unknown transfer status {unknown_transfer_status}")
-                    }
-                },
-                TransferStatus::Complete => {
-                    panic!("callback called for a transfer marked as complete")
-                }
-                TransferStatus::Deallocated => {
-                    panic!("callback called for a transfer marked as deallocated")
                 }
             }
-        }
-        if let Some(error) = error {
-            (context.ring.on_error)(error);
-        }
-    }
-    if resubmit {
-        // unsafe: libusb_alloc_transfer succeeded
-        match unsafe { libusb1_sys::libusb_submit_transfer(transfer_pointer) } {
-            0 => (),
-            submit_transfer_status => {
-                // unsafe: transfer is not null (libusb callback)
-                let transfer = unsafe { &mut *transfer_pointer };
-                transfer.flags = 0;
-                let context = transfer.user_data;
-                assert!(!context.is_null(), "context is null");
-                // unsafe: context is a *mut TransferContext
-                let context = unsafe { &mut *(context as *mut TransferContext) };
-                (context.ring.on_error)(
-                    match submit_transfer_status {
-                        libusb1_sys::constants::LIBUSB_ERROR_IO => rusb::Error::Io,
-                        libusb1_sys::constants::LIBUSB_ERROR_INVALID_PARAM => {
-                            rusb::Error::InvalidParam
-                        }
-                        libusb1_sys::constants::LIBUSB_ERROR_ACCESS => rusb::Error::Access,
-                        libusb1_sys::constants::LIBUSB_ERROR_NO_DEVICE => rusb::Error::NoDevice,
-                        libusb1_sys::constants::LIBUSB_ERROR_NOT_FOUND => rusb::Error::NotFound,
-                        libusb1_sys::constants::LIBUSB_ERROR_BUSY => rusb::Error::Busy,
-                        libusb1_sys::constants::LIBUSB_ERROR_TIMEOUT => rusb::Error::Timeout,
-                        libusb1_sys::constants::LIBUSB_ERROR_OVERFLOW => rusb::Error::Overflow,
-                        libusb1_sys::constants::LIBUSB_ERROR_PIPE => rusb::Error::Pipe,
-                        libusb1_sys::constants::LIBUSB_ERROR_INTERRUPTED => {
-                            rusb::Error::Interrupted
-                        }
-                        libusb1_sys::constants::LIBUSB_ERROR_NO_MEM => rusb::Error::NoMem,
-                        libusb1_sys::constants::LIBUSB_ERROR_NOT_SUPPORTED => {
-                            rusb::Error::NotSupported
-                        }
+            status @ (libusb1_sys::constants::LIBUSB_TRANSFER_ERROR
+            | libusb1_sys::constants::LIBUSB_TRANSFER_CANCELLED
+            | libusb1_sys::constants::LIBUSB_TRANSFER_STALL
+            | libusb1_sys::constants::LIBUSB_TRANSFER_NO_DEVICE
+            | libusb1_sys::constants::LIBUSB_TRANSFER_OVERFLOW) => {
+                ring_data.transfer_complete_without_next(
+                    context.clutch,
+                    system_time,
+                    instant,
+                    transfer.actual_length as usize,
+                );
+                if matches!(context.clutch, ring::Clutch::Disengaged) {
+                    context.ring.notify_one();
+                }
+                ring_data
+                    .update_transfer_status(context.transfer_index, ring::TransferStatus::Complete);
+                context.callbacks.on_error(
+                    match status {
+                        libusb1_sys::constants::LIBUSB_TRANSFER_ERROR
+                        | libusb1_sys::constants::LIBUSB_TRANSFER_CANCELLED => rusb::Error::Io,
+                        libusb1_sys::constants::LIBUSB_TRANSFER_STALL => rusb::Error::Pipe,
+                        libusb1_sys::constants::LIBUSB_TRANSFER_NO_DEVICE => rusb::Error::NoDevice,
+                        libusb1_sys::constants::LIBUSB_TRANSFER_OVERFLOW => rusb::Error::Overflow,
                         _ => rusb::Error::Other,
                     }
                     .into(),
                 );
             }
+            unknown_transfer_status => {
+                panic!("unknown transfer status {unknown_transfer_status}")
+            }
+        },
+        ring::TransferStatus::Cancelling => match transfer.status {
+            libusb1_sys::constants::LIBUSB_TRANSFER_COMPLETED
+            | libusb1_sys::constants::LIBUSB_TRANSFER_TIMED_OUT
+            | libusb1_sys::constants::LIBUSB_TRANSFER_ERROR
+            | libusb1_sys::constants::LIBUSB_TRANSFER_CANCELLED
+            | libusb1_sys::constants::LIBUSB_TRANSFER_STALL
+            | libusb1_sys::constants::LIBUSB_TRANSFER_NO_DEVICE
+            | libusb1_sys::constants::LIBUSB_TRANSFER_OVERFLOW => {
+                ring_data.transfer_complete_without_next(
+                    context.clutch,
+                    system_time,
+                    instant,
+                    transfer.actual_length as usize,
+                );
+                ring_data
+                    .update_transfer_status(context.transfer_index, ring::TransferStatus::Complete);
+            }
+            unknown_transfer_status => {
+                panic!("unknown transfer status {unknown_transfer_status}")
+            }
+        },
+        ring::TransferStatus::Complete => {
+            panic!("callback called for a transfer marked as complete")
+        }
+        ring::TransferStatus::Deallocated => {
+            panic!("callback called for a transfer marked as deallocated")
         }
     }
 }
 
-impl Ring {
+impl TransferManager {
     pub fn new<OnError, OnOverflow>(
-        handle: std::sync::Arc<rusb::DeviceHandle<rusb::Context>>,
-        configuration: &Configuration,
+        configuration: &ring::Configuration,
+        transfer_type: TransferType,
         on_error: OnError,
         on_overflow: OnOverflow,
+        handle: std::sync::Arc<rusb::DeviceHandle<rusb::Context>>,
         event_loop: std::sync::Arc<EventLoop>,
-        transfer_type: TransferType,
     ) -> Result<Self, Error>
     where
         OnError: Fn(Error) + Send + Sync + 'static,
-        OnOverflow: Fn(Overflow) + Send + Sync + 'static,
+        OnOverflow: Fn(ring::Overflow) + Send + Sync + 'static,
     {
         assert!(
             handle.context() == event_loop.context(),
             "handle and event_loop must have the same context"
         );
-        if configuration.ring_length <= configuration.transfer_queue_length {
-            return Err(Error::ConfigurationSizes);
-        }
-        let mut buffers = Vec::new();
-        buffers.reserve_exact(configuration.ring_length);
-        let mut freewheel_buffers = Vec::new();
-        freewheel_buffers.reserve_exact(configuration.transfer_queue_length);
-        for index in 0..configuration.ring_length + configuration.transfer_queue_length {
-            let dma_buffer = if configuration.allow_dma {
-                // unsafe: libusb wrapper
-                unsafe {
-                    libusb_dev_mem_alloc(
-                        handle.as_raw(),
-                        configuration.buffer_length as libc::ssize_t,
-                    )
-                }
-            } else {
-                std::ptr::null_mut()
-            };
-            if dma_buffer.is_null() {
-                (if index < configuration.ring_length {
-                    &mut buffers
-                } else {
-                    &mut freewheel_buffers
-                })
-                .push(Buffer {
-                    system_time: std::time::SystemTime::now(),
-                    instant: std::time::Instant::now(),
-                    first_after_overflow: false,
-                    data: BufferData(
-                        std::ptr::NonNull::new(
-                            // unsafe: alloc wrapper
-                            // std::alloc::Layout::from_length_align_unchecked
-                            // - align must not be zero
-                            // - align must be a power of two
-                            // - size, when rounded up to the nearest multiple of align, must not overflow isize
-                            unsafe {
-                                std::alloc::alloc(std::alloc::Layout::from_size_align_unchecked(
-                                    configuration.buffer_length,
-                                    1,
-                                ))
-                            },
-                        )
-                        .ok_or(rusb::Error::NoMem)?,
-                    ),
-                    length: 0,
-                    capacity: configuration.buffer_length,
-                    dma: false,
-                });
-            } else {
-                (if index < configuration.ring_length {
-                    &mut buffers
-                } else {
-                    &mut freewheel_buffers
-                })
-                .push(Buffer {
-                    system_time: std::time::SystemTime::now(),
-                    instant: std::time::Instant::now(),
-                    first_after_overflow: false,
-                    // unsafe: dma_buffer is not null
-                    data: BufferData(unsafe { std::ptr::NonNull::new_unchecked(dma_buffer) }),
-                    length: 0,
-                    capacity: configuration.buffer_length,
-                    dma: true,
-                });
-            }
-        }
-        let mut transfer_statuses = Vec::new();
-        transfer_statuses.reserve_exact(configuration.transfer_queue_length);
-        for _ in 0..configuration.transfer_queue_length {
-            transfer_statuses.push(TransferStatus::Active);
-        }
-        let context = std::sync::Arc::new(SharedRingContext {
-            on_error: Box::new(on_error),
-            on_overflow: Box::new(on_overflow),
-            shared: std::sync::Mutex::new(RingContext {
-                read: buffers.len() - 1,
-                write_range: WriteRange {
-                    start: 0,
-                    end: configuration.transfer_queue_length,
-                    ring_length: configuration.ring_length,
-                },
-                transfer_statuses,
-                buffers,
-                freewheel_buffers,
-                clutch: Clutch::Disengaged,
-            }),
-            shared_condvar: std::sync::Condvar::new(),
-        });
-        let mut transfers: Vec<LibusbTransfer> = Vec::new();
-        transfers.reserve_exact(configuration.transfer_queue_length);
+        let (ring, write_buffer_views) = ring::SharedRing::new(configuration)?;
+        let mut manager = TransferManager {
+            transfers: Vec::new(),
+            ring,
+            handle: handle.clone(),
+            event_loop,
+        };
+        let callbacks = SharedCallbacks(std::sync::Arc::new(std::sync::Mutex::new(Callbacks {
+            on_error,
+            on_overflow,
+        })));
         {
-            let shared = context
-                .shared
-                .lock()
-                .expect("ring context's lock is not poisoned");
-            for index in 0..configuration.transfer_queue_length {
+            manager
+                .transfers
+                .reserve_exact(configuration.parallel_submissions);
+            for index in 0..configuration.parallel_submissions {
                 // unsafe: libusb1_sys wrapper
-                let mut transfer = match std::ptr::NonNull::new(unsafe {
-                    libusb1_sys::libusb_alloc_transfer(0)
-                }) {
-                    Some(transfer) => LibusbTransfer(transfer),
-                    None => {
-                        for transfer in transfers.iter_mut().take(index) {
-                            // unsafe: transfer is allocated and user_data is an allocated *mut TransferContext
-                            unsafe {
-                                let _ = Box::from_raw(
-                                    (transfer.as_mut()).user_data as *mut TransferContext,
-                                );
-                            };
-                            // unsafe: transfer is allocated
-                            unsafe { libusb1_sys::libusb_free_transfer(transfer.as_ptr()) };
-                        }
-                        return Err(rusb::Error::NoMem.into());
-                    }
-                };
-                let transfer_context = Box::new(TransferContext {
-                    ring: context.clone(),
-                    transfer_index: index,
-                    clutch: TransferClutch::Disengaged,
-                });
-                let transfer_context_pointer = Box::into_raw(transfer_context);
-                match transfer_type {
-                    // unsafe: libusb_alloc_transfer succeeded
-                    TransferType::Control(timeout) => unsafe {
-                        libusb1_sys::libusb_fill_control_transfer(
-                            transfer.as_ptr(),
-                            handle.as_raw(),
-                            shared.buffers[index].data.as_ptr(),
-                            usb_transfer_callback,
-                            transfer_context_pointer as *mut libc::c_void,
-                            timeout.as_millis() as libc::c_uint,
-                        )
-                    },
-                    // unsafe: libusb_alloc_transfer succeeded
-                    TransferType::Isochronous {
-                        endpoint,
-                        packets,
-                        timeout,
-                    } => unsafe {
-                        libusb1_sys::libusb_fill_iso_transfer(
-                            transfer.as_ptr(),
-                            handle.as_raw(),
+                let libusb_transfer = unsafe { libusb1_sys::libusb_alloc_transfer(0) };
+                if libusb_transfer.is_null() {
+                    return Err(Error::TransferAllocationFailed(index));
+                } else {
+                    let transfer_context = Box::new(TransferContext {
+                        ring: manager.ring.clone(),
+                        callbacks: callbacks.clone(),
+                        transfer_index: index,
+                        clutch: ring::Clutch::Disengaged,
+                    });
+                    let transfer_context_pointer = Box::into_raw(transfer_context);
+                    match transfer_type {
+                        // unsafe: libusb_alloc_transfer succeeded
+                        TransferType::Control(timeout) => unsafe {
+                            libusb1_sys::libusb_fill_control_transfer(
+                                libusb_transfer,
+                                handle.as_raw(),
+                                write_buffer_views[index].data,
+                                usb_transfer_callback,
+                                transfer_context_pointer as *mut libc::c_void,
+                                timeout.as_millis() as libc::c_uint,
+                            )
+                        },
+                        // unsafe: libusb_alloc_transfer succeeded
+                        TransferType::Isochronous {
                             endpoint,
-                            shared.buffers[index].data.as_ptr(),
-                            shared.buffers[index].capacity as libc::c_int,
-                            packets as libc::c_int,
-                            usb_transfer_callback,
-                            transfer_context_pointer as *mut libc::c_void,
-                            timeout.as_millis() as libc::c_uint,
-                        )
-                    },
-                    // unsafe: libusb_alloc_transfer succeeded
-                    TransferType::Bulk { endpoint, timeout } => unsafe {
-                        libusb1_sys::libusb_fill_bulk_transfer(
-                            transfer.as_ptr(),
-                            handle.as_raw(),
-                            endpoint,
-                            shared.buffers[index].data.as_ptr(),
-                            shared.buffers[index].capacity as libc::c_int,
-                            usb_transfer_callback,
-                            transfer_context_pointer as *mut libc::c_void,
-                            timeout.as_millis() as libc::c_uint,
-                        )
-                    },
-                    // unsafe: libusb_alloc_transfer succeeded
-                    TransferType::Interrupt { endpoint, timeout } => unsafe {
-                        libusb1_sys::libusb_fill_interrupt_transfer(
-                            transfer.as_ptr(),
-                            handle.as_raw(),
-                            endpoint,
-                            shared.buffers[index].data.as_ptr(),
-                            shared.buffers[index].capacity as libc::c_int,
-                            usb_transfer_callback,
-                            transfer_context_pointer as *mut libc::c_void,
-                            timeout.as_millis() as libc::c_uint,
-                        )
-                    },
-                    // unsafe: libusb_alloc_transfer succeeded
-                    TransferType::BulkStream {
-                        endpoint,
-                        stream_id,
-                        timeout,
-                    } => unsafe {
-                        libusb1_sys::libusb_fill_bulk_stream_transfer(
-                            transfer.as_ptr(),
-                            handle.as_raw(),
+                            packets,
+                            timeout,
+                        } => unsafe {
+                            libusb1_sys::libusb_fill_iso_transfer(
+                                libusb_transfer,
+                                handle.as_raw(),
+                                endpoint,
+                                write_buffer_views[index].data,
+                                write_buffer_views[index].capacity as libc::c_int,
+                                packets as libc::c_int,
+                                usb_transfer_callback,
+                                transfer_context_pointer as *mut libc::c_void,
+                                timeout.as_millis() as libc::c_uint,
+                            )
+                        },
+                        // unsafe: libusb_alloc_transfer succeeded
+                        TransferType::Bulk { endpoint, timeout } => unsafe {
+                            libusb1_sys::libusb_fill_bulk_transfer(
+                                libusb_transfer,
+                                handle.as_raw(),
+                                endpoint,
+                                write_buffer_views[index].data,
+                                write_buffer_views[index].capacity as libc::c_int,
+                                usb_transfer_callback,
+                                transfer_context_pointer as *mut libc::c_void,
+                                timeout.as_millis() as libc::c_uint,
+                            )
+                        },
+                        // unsafe: libusb_alloc_transfer succeeded
+                        TransferType::Interrupt { endpoint, timeout } => unsafe {
+                            libusb1_sys::libusb_fill_interrupt_transfer(
+                                libusb_transfer,
+                                handle.as_raw(),
+                                endpoint,
+                                write_buffer_views[index].data,
+                                write_buffer_views[index].capacity as libc::c_int,
+                                usb_transfer_callback,
+                                transfer_context_pointer as *mut libc::c_void,
+                                timeout.as_millis() as libc::c_uint,
+                            )
+                        },
+                        // unsafe: libusb_alloc_transfer succeeded
+                        TransferType::BulkStream {
                             endpoint,
                             stream_id,
-                            shared.buffers[index].data.as_ptr(),
-                            shared.buffers[index].capacity as libc::c_int,
-                            usb_transfer_callback,
-                            transfer_context_pointer as *mut libc::c_void,
-                            timeout.as_millis() as libc::c_uint,
-                        )
-                    },
-                }
-                // unsafe: libusb_alloc_transfer succeeded
-                unsafe {
-                    transfer.as_mut().flags = 0; // !LIBUSB_TRANSFER_SHORT_NOT_OK
-                                                 // !LIBUSB_TRANSFER_FREE_BUFFER
-                                                 // !LIBUSB_TRANSFER_FREE_TRANSFER
-                                                 // !LIBUSB_TRANSFER_ADD_ZERO_PACKET
-                }
-                transfers.push(transfer);
-            }
-        }
-        let result = Self {
-            transfers,
-            handle,
-            active_buffer_view: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            event_loop,
-            context,
-        };
-        for (index, transfer) in result.transfers.iter().enumerate() {
-            // unsafe: libusb_alloc_transfer succeeded
-            match unsafe { libusb1_sys::libusb_submit_transfer(transfer.as_ptr()) } {
-                0 => (),
-                submit_transfer_status => {
-                    {
-                        let mut shared = result
-                            .context
-                            .shared
-                            .lock()
-                            .expect("ring context's lock is not poisoned");
-                        for rest_index in index..result.transfers.len() {
-                            // dropping 'result' cancels transfers
-                            // mark unscheduled transfers as complete to prevent un-needed cancelling
-                            shared.transfer_statuses[rest_index] = TransferStatus::Complete;
-                        }
+                            timeout,
+                        } => unsafe {
+                            libusb1_sys::libusb_fill_bulk_stream_transfer(
+                                libusb_transfer,
+                                handle.as_raw(),
+                                endpoint,
+                                stream_id,
+                                write_buffer_views[index].data,
+                                write_buffer_views[index].capacity as libc::c_int,
+                                usb_transfer_callback,
+                                transfer_context_pointer as *mut libc::c_void,
+                                timeout.as_millis() as libc::c_uint,
+                            )
+                        },
                     }
-                    return Err(match submit_transfer_status {
-                        libusb1_sys::constants::LIBUSB_ERROR_IO => rusb::Error::Io,
-                        libusb1_sys::constants::LIBUSB_ERROR_INVALID_PARAM => {
-                            rusb::Error::InvalidParam
-                        }
-                        libusb1_sys::constants::LIBUSB_ERROR_ACCESS => rusb::Error::Access,
-                        libusb1_sys::constants::LIBUSB_ERROR_NO_DEVICE => rusb::Error::NoDevice,
-                        libusb1_sys::constants::LIBUSB_ERROR_NOT_FOUND => rusb::Error::NotFound,
-                        libusb1_sys::constants::LIBUSB_ERROR_BUSY => rusb::Error::Busy,
-                        libusb1_sys::constants::LIBUSB_ERROR_TIMEOUT => rusb::Error::Timeout,
-                        libusb1_sys::constants::LIBUSB_ERROR_OVERFLOW => rusb::Error::Overflow,
-                        libusb1_sys::constants::LIBUSB_ERROR_PIPE => rusb::Error::Pipe,
-                        libusb1_sys::constants::LIBUSB_ERROR_INTERRUPTED => {
-                            rusb::Error::Interrupted
-                        }
-                        libusb1_sys::constants::LIBUSB_ERROR_NO_MEM => rusb::Error::NoMem,
-                        libusb1_sys::constants::LIBUSB_ERROR_NOT_SUPPORTED => {
-                            rusb::Error::NotSupported
-                        }
-                        _ => rusb::Error::Other,
+                    // unsafe: libusb_alloc_transfer succeeded
+                    unsafe {
+                        (*libusb_transfer).flags = 0; // !LIBUSB_TRANSFER_SHORT_NOT_OK
+                                                      // !LIBUSB_TRANSFER_FREE_BUFFER
+                                                      // !LIBUSB_TRANSFER_FREE_TRANSFER
+                                                      // !LIBUSB_TRANSFER_ADD_ZERO_PACKET
                     }
-                    .into());
+                    manager.transfers.push(LibusbTransfer(libusb_transfer));
                 }
             }
+            for (index, transfer) in manager.transfers.iter().enumerate() {
+                // unsafe: libusb_alloc_transfer succeeded (transfer.data points to a valid transfer)
+                match unsafe { libusb1_sys::libusb_submit_transfer(transfer.0) } {
+                    0 => (), // success
+                    submit_transfer_status => {
+                        {
+                            let mut ring_data = manager.ring.data();
+                            for rest_index in index..manager.transfers.len() {
+                                // dropping 'manager' cancels transfers
+                                // mark unscheduled transfers as complete to prevent un-needed cancelling
+                                ring_data.update_transfer_status(
+                                    rest_index,
+                                    ring::TransferStatus::Complete,
+                                );
+                            }
+                        }
+                        return Err(match submit_transfer_status {
+                            libusb1_sys::constants::LIBUSB_ERROR_IO => rusb::Error::Io,
+                            libusb1_sys::constants::LIBUSB_ERROR_INVALID_PARAM => {
+                                rusb::Error::InvalidParam
+                            }
+                            libusb1_sys::constants::LIBUSB_ERROR_ACCESS => rusb::Error::Access,
+                            libusb1_sys::constants::LIBUSB_ERROR_NO_DEVICE => rusb::Error::NoDevice,
+                            libusb1_sys::constants::LIBUSB_ERROR_NOT_FOUND => rusb::Error::NotFound,
+                            libusb1_sys::constants::LIBUSB_ERROR_BUSY => rusb::Error::Busy,
+                            libusb1_sys::constants::LIBUSB_ERROR_TIMEOUT => rusb::Error::Timeout,
+                            libusb1_sys::constants::LIBUSB_ERROR_OVERFLOW => rusb::Error::Overflow,
+                            libusb1_sys::constants::LIBUSB_ERROR_PIPE => rusb::Error::Pipe,
+                            libusb1_sys::constants::LIBUSB_ERROR_INTERRUPTED => {
+                                rusb::Error::Interrupted
+                            }
+                            libusb1_sys::constants::LIBUSB_ERROR_NO_MEM => rusb::Error::NoMem,
+                            libusb1_sys::constants::LIBUSB_ERROR_NOT_SUPPORTED => {
+                                rusb::Error::NotSupported
+                            }
+                            _ => rusb::Error::Other,
+                        }
+                        .into());
+                    }
+                }
+            }
         }
-        Ok(result)
+        Ok(manager)
     }
-}
 
-pub struct BufferView<'a> {
-    pub system_time: std::time::SystemTime,
-    pub instant: std::time::Instant,
-    pub first_after_overflow: bool,
-    pub slice: &'a [u8],
-    pub read: usize,
-    pub write_range: WriteRange,
-    pub clutch: Clutch,
-    active: std::sync::Arc<std::sync::atomic::AtomicBool>,
-}
+    pub fn dropped_packets(&self) -> u64 {
+        self.ring.dropped_packets()
+    }
 
-impl BufferView<'_> {
     pub fn backlog(&self) -> usize {
-        let result = (self.write_range.start + self.write_range.ring_length - 1 - self.read)
-            % self.write_range.ring_length;
-        if matches!(self.clutch, Clutch::Engaged) && result == 0 {
-            self.write_range.ring_length
-        } else {
-            result
-        }
+        self.ring.backlog()
     }
 
-    pub fn delay(&self) -> std::time::Duration {
-        self.instant.elapsed()
+    pub fn clutch(&self) -> ring::Clutch {
+        self.ring.clutch()
+    }
+
+    pub fn next_with_timeout(
+        &self,
+        duration: &std::time::Duration,
+    ) -> Option<ring::ReadBufferView<'_>> {
+        self.ring.next_with_timeout(duration)
     }
 }
 
-impl Drop for BufferView<'_> {
+impl Drop for TransferManager {
     fn drop(&mut self) {
-        self.active
-            .store(false, std::sync::atomic::Ordering::Release);
-    }
-}
-
-impl Ring {
-    pub fn backlog(&self) -> usize {
-        let shared = self
-            .context
-            .shared
-            .lock()
-            .expect("ring context's lock is not poisoned");
-        (shared.write_range.start + shared.buffers.len() - 1 - shared.read) % shared.buffers.len()
-    }
-
-    pub fn clutch(&self) -> Clutch {
-        let shared = self
-            .context
-            .shared
-            .lock()
-            .expect("ring context's lock is not poisoned");
-        shared.clutch
-    }
-
-    pub fn next_with_timeout(&self, duration: &std::time::Duration) -> Option<BufferView> {
-        if self
-            .active_buffer_view
-            .swap(true, std::sync::atomic::Ordering::AcqRel)
-        {
-            panic!("the buffer returned by a previous call of next_with_timeout must be dropped before calling next_with_timeout again");
-        }
-        let (system_time, instant, first_after_overflow, slice, read, write_range, clutch) = {
-            let start = std::time::Instant::now();
-            let mut shared = self
-                .context
-                .shared
-                .lock()
-                .expect("ring context's lock is not poisoned");
-            loop {
-                shared.read = (shared.read + 1) % shared.buffers.len();
-                while (shared.write_range.end + shared.buffers.len() - 1 - shared.read)
-                    % shared.buffers.len()
-                    < shared.transfer_statuses.len()
-                {
-                    let ellapsed = std::time::Instant::now() - start;
-                    if ellapsed >= *duration {
-                        self.active_buffer_view
-                            .store(false, std::sync::atomic::Ordering::Release);
-                        shared.read =
-                            (shared.read + shared.buffers.len() - 1) % shared.buffers.len();
-                        return None;
-                    }
-                    shared = self
-                        .context
-                        .shared_condvar
-                        .wait_timeout(shared, *duration - ellapsed)
-                        .expect("shared_condvar used with two different mutexes")
-                        .0;
-                }
-                if shared.buffers[shared.read].length > 0 {
-                    break;
-                }
-            }
-            (
-                shared.buffers[shared.read].system_time,
-                shared.buffers[shared.read].instant,
-                shared.buffers[shared.read].first_after_overflow,
-                // unsafe: data validity guaranteed by read / write_range in shared
-                unsafe {
-                    std::slice::from_raw_parts(
-                        shared.buffers[shared.read].data.as_ptr(),
-                        shared.buffers[shared.read].length,
-                    )
-                },
-                shared.read,
-                shared.write_range.clone(),
-                shared.clutch,
-            )
-        };
-        Some(BufferView {
-            system_time,
-            instant,
-            first_after_overflow,
-            slice,
-            read,
-            write_range,
-            clutch,
-            active: self.active_buffer_view.clone(),
-        })
-    }
-}
-
-impl Drop for Ring {
-    fn drop(&mut self) {
-        let mut dealloc_buffers = true;
         let before_dealloc_transfers = std::time::Instant::now();
         #[cfg(target_os = "macos")]
         {
-            let mut shared = self
-                .context
-                .shared
-                .lock()
-                .expect("ring context's lock is not poisoned");
-            // unsafe: transfer is allocated
-            let _ = unsafe { libusb1_sys::libusb_cancel_transfer(self.transfers[0].as_ptr()) };
+            // on macOS, cancelling any transfer for a device cancels all transfers for that device
+            let _ = self.transfers[0].cancel();
+            let mut ring_data = self.ring.data();
             for index in 0..self.transfers.len() {
-                shared.transfer_statuses[index] = TransferStatus::Cancelling;
+                ring_data.update_transfer_status(index, ring::TransferStatus::Cancelling);
             }
         }
         loop {
             let mut deallocated_transfers: usize = 0;
             {
-                let mut shared = self
-                    .context
-                    .shared
-                    .lock()
-                    .expect("ring context's lock is not poisoned");
+                let mut ring_data = self.ring.data();
                 for index in 0..self.transfers.len() {
-                    match shared.transfer_statuses[index] {
-                        TransferStatus::Active => {
-                            let status = unsafe {
-                                libusb1_sys::libusb_cancel_transfer(self.transfers[index].as_ptr())
-                            };
-                            if status == 0 {
-                                shared.transfer_statuses[index] = TransferStatus::Cancelling;
+                    match ring_data.transfer_status(index) {
+                        ring::TransferStatus::Active => {
+                            if self.transfers[index].cancel() == 0 {
+                                ring_data.update_transfer_status(
+                                    index,
+                                    ring::TransferStatus::Cancelling,
+                                );
                             } else {
-                                shared.transfer_statuses[index] = TransferStatus::Complete;
+                                ring_data
+                                    .update_transfer_status(index, ring::TransferStatus::Complete);
                             }
                         }
-                        TransferStatus::Complete => {
+                        ring::TransferStatus::Complete => {
                             // unsafe: transfer is allocated and user_data is an allocated *mut TransferContext
                             let _transfer_context = unsafe {
                                 Box::from_raw(
-                                    (self.transfers[index].as_mut()).user_data
-                                        as *mut TransferContext,
+                                    (*(self.transfers[index]).0).user_data as *mut TransferContext,
                                 )
                             };
                             // unsafe: transfer is allocated
-                            unsafe {
-                                libusb1_sys::libusb_free_transfer(self.transfers[index].as_ptr())
-                            };
-                            shared.transfer_statuses[index] = TransferStatus::Deallocated;
+                            unsafe { libusb1_sys::libusb_free_transfer(self.transfers[index].0) };
+                            ring_data
+                                .update_transfer_status(index, ring::TransferStatus::Deallocated);
                             deallocated_transfers += 1;
                         }
-                        TransferStatus::Cancelling => (),
-                        TransferStatus::Deallocated => {
+                        ring::TransferStatus::Cancelling => (),
+                        ring::TransferStatus::Deallocated => {
                             deallocated_transfers += 1;
                         }
                     }
@@ -990,41 +667,15 @@ impl Drop for Ring {
             if deallocated_transfers == self.transfers.len() {
                 break;
             }
-            // give up if the transfers are not freed after one second (better leak memory that loop forever)
+            // give up if the transfers are not freed after one second
+            // this may cause segfaults if libusb tries to use the buffers again,
+            // as the buffers will be freed by their Drop function
             if std::time::Instant::now() - before_dealloc_transfers
                 > std::time::Duration::from_secs(1)
             {
-                dealloc_buffers = false;
                 break;
             }
             std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-        if dealloc_buffers {
-            let shared = self
-                .context
-                .shared
-                .lock()
-                .expect("ring context's lock is not poisoned");
-            for buffer in shared.buffers.iter() {
-                if buffer.dma {
-                    // unsafe: buffer was allocated by libusb with 'capacity' bytes
-                    unsafe {
-                        libusb_dev_mem_free(
-                            self.handle.as_raw(),
-                            buffer.data.as_ptr() as *mut libc::c_uchar,
-                            buffer.capacity as libc::ssize_t,
-                        );
-                    };
-                } else {
-                    // unsafe: buffer was allocated by alloc with 'Layout {capacity, 1}'
-                    unsafe {
-                        std::alloc::dealloc(
-                            buffer.data.as_ptr(),
-                            std::alloc::Layout::from_size_align_unchecked(buffer.capacity, 1),
-                        );
-                    }
-                }
-            }
         }
     }
 }

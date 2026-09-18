@@ -12,7 +12,7 @@ concurrency:
     cancel-in-progress: true
 
 env:
-  CIBW_SKIP: cp38-* pp* *i686 *win32
+  CIBW_SKIP: cp38-* cp315-* cp315t-* pp* *i686 *win32
 
   # cibuildhweel macOS configuration
   CIBW_ARCHS_MACOS: native
@@ -43,8 +43,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/setup-python@v5
         with:
-          python-version: 3.13
-      - run: python -m pip install cibuildwheel==3.1.1
+          python-version: 3.14
+      - run: python -m pip install cibuildwheel==4.2.1
       - run: echo "MACOSX_DEPLOYMENT_TARGET=$(sw_vers -productVersion | cut -d '.' -f 1-2)" >> $GITHUB_ENV
         if: startsWith(matrix.os, 'macos')
       - run: python -m cibuildwheel python
@@ -59,7 +59,7 @@ jobs:
     strategy:
       matrix:
         numpy: ["==1.26.4", ">=2"]
-        python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.14t"]
         # macos-14 is an Intel runner, macos-latest is an ARM runner
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-14, windows-latest]
         exclude:
@@ -67,7 +67,12 @@ jobs:
           # this may get fixed in a maintenance upgrade of 1.26.x (x > 4)
           - numpy: ==1.26.4
             os: windows-latest
-            python: 3.13
+            python: "3.13"
+          # numpy 1.26.4 has no wheels for Python 3.14 and does not build from source on it
+          - numpy: ==1.26.4
+            python: "3.14"
+          - numpy: ==1.26.4
+            python: "3.14t"
     steps:
     - uses: actions/setup-python@v5
       with:
@@ -81,6 +86,8 @@ jobs:
     - run: python -m pip install 'numpy${{ matrix.numpy }}'
     - run: python -m pip install --no-index --find-links wheelhouse neuromorphic-drivers
     - run: python -c 'import neuromorphic_drivers'
+    - run: python -c 'import sys, neuromorphic_drivers; assert not sys._is_gil_enabled(), "importing neuromorphic_drivers re-enabled the GIL"'
+      if: endsWith(matrix.python, 't')
   build_sdist:
     name: Build source distribution
     runs-on: ubuntu-latest

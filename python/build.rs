@@ -1,4 +1,4 @@
-use neuromorphic_drivers::device::Usb;
+use neuromorphic_drivers::device::Device as _;
 use std::io::Write;
 
 fn quote_type(
@@ -422,11 +422,11 @@ macro_rules! generate {
                 "import enum\n",
                 "\n",
                 "\n",
-                "class Speed(enum.Enum):"
+                "class Connection(enum.Enum):"
             )).unwrap();
             {
                 let mut tracer = reflect::Tracer::new(reflect::TracerConfig::default());
-                let (_, samples) = tracer.trace_simple_type::<neuromorphic_drivers::usb::Speed>().unwrap();
+                let (_, samples) = tracer.trace_simple_type::<neuromorphic_drivers::devices::Connection>().unwrap();
                 let registry = tracer.registry().unwrap();
                 for (name, format) in registry {
                     match format {
@@ -489,14 +489,26 @@ macro_rules! generate {
                 );
                 generate_dataclasses(
                     &mut writer,
-                    &neuromorphic_drivers::devices::$module::Device::DEFAULT_USB_CONFIGURATION,
+                    &neuromorphic_drivers::devices::$module::BiasesBounds::default(),
+                    DataclassParameters {
+                        frozen: true,
+                        serializable: false,
+                        module_name: None,
+                        skip_fields: std::collections::HashSet::new(),
+                        name_to_new_name: std::collections::HashMap::new(),
+                        new_root_name: Some("BiasesBounds".to_owned()),
+                    },
+                );
+                generate_dataclasses(
+                    &mut writer,
+                    &neuromorphic_drivers::devices::$module::Device::RING_CONFIGURATION,
                     DataclassParameters {
                         frozen: false,
                         serializable: true,
                         module_name: None,
                         skip_fields: std::collections::HashSet::new(),
                         name_to_new_name: std::collections::HashMap::new(),
-                        new_root_name: Some("UsbConfiguration".to_owned()),
+                        new_root_name: Some("RingConfiguration".to_owned()),
                     },
                 );
                 generate_dataclasses(
@@ -539,6 +551,8 @@ macro_rules! generate {
                                 "    ) -> bool:\n",
                                 "        ...\n",
                                 "\n",
+                                "    def close(self) -> None: ...\n",
+                                "\n",
                                 "    def __iter__(self) -> \"{}{}\": ...\n",
                                 "\n",
                                 "    def __next__(self) -> tuple[{}{}, {}{}{}]: ...\n",
@@ -555,9 +569,9 @@ macro_rules! generate {
                                 "\n",
                                 "    def serial(self) -> str: ...\n",
                                 "\n",
-                                "    def chip_firmware_configuration(self) -> Configuration: ...\n",
+                                "    def biases_bounds(self) -> BiasesBounds: ...\n",
                                 "\n",
-                                "    def speed(self) -> enums.Speed: ...\n",
+                                "    def connection(self) -> enums.Connection: ...\n",
                                 "\n",
                                 "    def update_configuration(self, configuration: Configuration): ...",
                             ),
@@ -593,6 +607,16 @@ macro_rules! generate {
                                 )
                             ).unwrap();
 
+                        } else if stringify!($module) == "lucid_triton" {
+                            writeln!(
+                                writer,
+                                concat!(
+                                    "\n",
+                                    "    def address(self) -> str: ...\n",
+                                    "\n",
+                                    "    def temperature_celsius(self) -> float: ...",
+                                )
+                            ).unwrap();
                         } else if stringify!($module) == "prophesee_evk4" {
                             writeln!(
                                 writer,
@@ -634,9 +658,14 @@ macro_rules! generate {
                 writeln!(writer,  "    {}.Configuration,", stringify!($module)).unwrap();
             )+
             writeln!(writer, "]").unwrap();
-            writeln!(writer, "\nUsbConfiguration = typing.Union[").unwrap();
+            writeln!(writer, "\nBiasesBounds = typing.Union[").unwrap();
             $(
-                writeln!(writer,  "    {}.UsbConfiguration,", stringify!($module)).unwrap();
+                writeln!(writer,  "    {}.BiasesBounds,", stringify!($module)).unwrap();
+            )+
+            writeln!(writer, "]").unwrap();
+            writeln!(writer, "\nRingConfiguration = typing.Union[").unwrap();
+            $(
+                writeln!(writer,  "    {}.RingConfiguration,", stringify!($module)).unwrap();
             )+
             writeln!(writer, "]").unwrap();
             writeln!(
@@ -653,6 +682,29 @@ macro_rules! generate {
                     concat!(
                         "    if name == enums.Name.{}:\n",
                         "        return {}.Properties()",
+                    ),
+                    stringify!([<$module:upper>]),
+                    stringify!($module),
+                ).unwrap();
+            )+
+            writeln!(
+                writer,
+                "    raise Exception(f\"unknown name {{name}}\")",
+            ).unwrap();
+            writeln!(
+                writer,
+                concat!(
+                    "\n",
+                    "\n",
+                    "def deserialize_biases_bounds(name: enums.Name, data: bytes) -> BiasesBounds:",
+                ),
+            ).unwrap();
+            $(
+                writeln!(
+                    writer,
+                    concat!(
+                        "    if name == enums.Name.{}:\n",
+                        "        return serde.bincode.deserialize(data, {}.BiasesBounds)[0]",
                     ),
                     stringify!([<$module:upper>]),
                     stringify!($module),
@@ -739,6 +791,8 @@ macro_rules! generate {
                             "    ) -> bool:\n",
                             "        ...\n",
                             "\n",
+                            "    def close(self) -> None: ...\n",
+                            "\n",
                             "    def __iter__(self) -> \"{}{}\": ...\n",
                             "\n",
                             "    def __next__(self) -> tuple[{}{}, {}{}{}]: ...\n",
@@ -755,9 +809,9 @@ macro_rules! generate {
                             "\n",
                             "    def serial(self) -> str: ...\n",
                             "\n",
-                            "    def chip_firmware_configuration(self) -> Configuration: ...\n",
+                            "    def biases_bounds(self) -> BiasesBounds: ...\n",
                             "\n",
-                            "    def speed(self) -> Speed: ...\n",
+                            "    def connection(self) -> Connection: ...\n",
                             "\n",
                             "    def update_configuration(self, configuration: Configuration): ...\n",
                         ),
@@ -796,7 +850,8 @@ macro_rules! generate {
                                 "    iterator_timeout: {},\n",
                                 "    raw: typing.Literal[{}] = {},\n",
                                 "    serial: typing.Optional[str] = None,\n",
-                                "    usb_configuration: typing.Optional[UsbConfiguration] = None,\n",
+                                "    address: typing.Optional[str] = None,\n",
+                                "    ring_configuration: typing.Optional[RingConfiguration] = None,\n",
                                 "    iterator_maximum_raw_packets: int = 64,\n",
                                 ") -> {}.{}{}:\n",
                                 "    ...",
@@ -831,7 +886,8 @@ macro_rules! generate {
                             "    iterator_timeout: {} = None,\n",
                             "    raw: typing.Literal[{}] = {},\n",
                             "    serial: typing.Optional[str] = None,\n",
-                            "    usb_configuration: typing.Optional[UsbConfiguration] = None,\n",
+                                "    address: typing.Optional[str] = None,\n",
+                            "    ring_configuration: typing.Optional[RingConfiguration] = None,\n",
                             "    iterator_maximum_raw_packets: int = 64,\n",
                             ") -> {}{}:\n",
                             "    ...",
@@ -854,7 +910,8 @@ macro_rules! generate {
                     "    iterator_timeout: typing.Optional[float] = None,\n",
                     "    raw: bool = False,\n",
                     "    serial: typing.Optional[str] = None,\n",
-                    "    usb_configuration: typing.Optional[UsbConfiguration] = None,\n",
+                                "    address: typing.Optional[str] = None,\n",
+                    "    ring_configuration: typing.Optional[RingConfiguration] = None,\n",
                     "    iterator_maximum_raw_packets: int = 64,\n",
                     ") -> typing.Any:\n",
                     "    return device.Device.__new__(\n",
@@ -864,7 +921,8 @@ macro_rules! generate {
                     "        None if configuration is None else configuration.type(),\n",
                     "        None if configuration is None else configuration.serialize(),\n",
                     "        serial,\n",
-                    "        None if usb_configuration is None else usb_configuration.serialize(),\n",
+                        "        address,\n",
+                    "        None if ring_configuration is None else ring_configuration.serialize(),\n",
                     "        iterator_timeout,\n",
                     "    )",
                 ),
@@ -903,6 +961,7 @@ fn main() {
         (inivation_dvxplorer, DvxplorerPacket),
         (prophesee_evk3_hd, Evt3Packet),
         (prophesee_evk4, Evt3Packet),
-        (centuryarks_vga, Evt3Packet)
+        (centuryarks_vga, Evt3Packet),
+        (lucid_triton, Evt3Packet)
     );
 }

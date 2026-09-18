@@ -3,12 +3,68 @@ use crate::configuration;
 use crate::device;
 use crate::flag;
 use crate::properties;
+use crate::ring;
 use crate::usb;
 
-use device::Usb;
+use device::Device as _;
+use device::Usb as _;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct Biases {
+    pub pr: i16,
+    pub fo: i16,
+    pub hpf: i16,
+    pub diff_on: i16,
+    pub diff: i16,
+    pub diff_off: i16,
+    pub inv: i16,
+    pub refr: i16,
+    pub reqpuy: i16,
+    pub reqpux: i16,
+    pub sendreqpdy: i16,
+    pub unknown_1: i16,
+    pub unknown_2: i16,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct BiasesBounds {
+    pub pr: properties::Bounds<i16>,
+    pub fo: properties::Bounds<i16>,
+    pub hpf: properties::Bounds<i16>,
+    pub diff_on: properties::Bounds<i16>,
+    pub diff: properties::Bounds<i16>,
+    pub diff_off: properties::Bounds<i16>,
+    pub inv: properties::Bounds<i16>,
+    pub refr: properties::Bounds<i16>,
+    pub reqpuy: properties::Bounds<i16>,
+    pub reqpux: properties::Bounds<i16>,
+    pub sendreqpdy: properties::Bounds<i16>,
+    pub unknown_1: properties::Bounds<i16>,
+    pub unknown_2: properties::Bounds<i16>,
+}
+
+impl ChipFirmwareBiases {
+    fn bounds(&self) -> BiasesBounds {
+        BiasesBounds {
+            pr: properties::Bounds::offsets_from(self.pr),
+            fo: properties::Bounds::offsets_from(self.fo),
+            hpf: properties::Bounds::offsets_from(self.hpf),
+            diff_on: properties::Bounds::offsets_from(self.diff_on),
+            diff: properties::Bounds::offsets_from(self.diff),
+            diff_off: properties::Bounds::offsets_from(self.diff_off),
+            inv: properties::Bounds::offsets_from(self.inv),
+            refr: properties::Bounds::offsets_from(self.refr),
+            reqpuy: properties::Bounds::offsets_from(self.reqpuy),
+            reqpux: properties::Bounds::offsets_from(self.reqpux),
+            sendreqpdy: properties::Bounds::offsets_from(self.sendreqpdy),
+            unknown_1: properties::Bounds::offsets_from(self.unknown_1),
+            unknown_2: properties::Bounds::offsets_from(self.unknown_2),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ChipFirmwareBiases {
     pub pr: u8,
     pub fo: u8,
     pub hpf: u8,
@@ -52,11 +108,11 @@ pub struct Configuration {
 
 pub struct Device {
     handle: std::sync::Arc<rusb::DeviceHandle<rusb::Context>>,
-    ring: usb::Ring,
+    ring: usb::TransferManager,
     configuration_updater: configuration::Updater<Configuration>,
     vendor_and_product_id: (u16, u16),
     serial: String,
-    chip_firmware_configuration: Configuration,
+    chip_firmware_biases: ChipFirmwareBiases,
     register_mutex: std::sync::Arc<std::sync::Mutex<()>>,
 }
 
@@ -92,29 +148,31 @@ impl From<rusb::Error> for Error {
 
 pub const PROPERTIES: properties::Camera<Configuration> = Device::PROPERTIES;
 pub const DEFAULT_CONFIGURATION: Configuration = Device::PROPERTIES.default_configuration;
-pub const DEFAULT_USB_CONFIGURATION: usb::Configuration = Device::DEFAULT_USB_CONFIGURATION;
+pub const RING_CONFIGURATION: ring::Configuration = Device::RING_CONFIGURATION;
 pub fn open<IntoError, IntoWarning>(
-    serial_or_bus_number_and_address: device::SerialOrBusNumberAndAddress,
+    serial_or_bus_number_and_address: device::Identifier,
     configuration: Configuration,
-    usb_configuration: &usb::Configuration,
+    ring_configuration: &ring::Configuration,
     event_loop: std::sync::Arc<usb::EventLoop>,
     flag: flag::Flag<IntoError, IntoWarning>,
 ) -> Result<Device, Error>
 where
     IntoError: From<Error> + Clone + Send + 'static,
-    IntoWarning: From<usb::Overflow> + Clone + Send + 'static,
+    IntoWarning: From<ring::Overflow> + Clone + Send + 'static,
 {
     Device::open(
         serial_or_bus_number_and_address,
         configuration,
-        usb_configuration,
+        ring_configuration,
         event_loop,
         flag,
     )
 }
 
-impl device::Usb for Device {
+impl device::Device for Device {
     type Adapter = adapters::evt3::Adapter;
+
+    type BiasesBounds = BiasesBounds;
 
     type Configuration = Configuration;
 
@@ -122,33 +180,25 @@ impl device::Usb for Device {
 
     type Properties = properties::Camera<Self::Configuration>;
 
-    const VENDOR_AND_PRODUCT_IDS: &'static [(u16, u16)] = &[
-        (0x04B4, 0x00F4),
-        (0x04B4, 0x00F5),
-        (0x31F7, 0x0003),
-        (0x31F7, 0x0004),
-        (0x1409, 0x8E00),
-    ];
-
     const PROPERTIES: Self::Properties = Self::Properties {
         name: "Prophesee EVK4",
         width: 1280,
         height: 720,
         default_configuration: Self::Configuration {
             biases: Biases {
-                pr: 0x7C,
-                fo: 0x53,
-                hpf: 0x00,
-                diff_on: 0x66,
-                diff: 0x4D,
-                diff_off: 0x49,
-                inv: 0x5B,
-                refr: 0x14,
-                reqpuy: 0x8C,
-                reqpux: 0x7C,
-                sendreqpdy: 0x94,
-                unknown_1: 0x74,
-                unknown_2: 0x51,
+                pr: 0,
+                fo: 0,
+                hpf: 0,
+                diff_on: 0,
+                diff: 0,
+                diff_off: 0,
+                inv: 0,
+                refr: 0,
+                reqpuy: 0,
+                reqpux: 0,
+                sendreqpdy: 0,
+                unknown_1: 0,
+                unknown_2: 0,
             },
             x_mask: [0; 20],
             y_mask: [0; 12],
@@ -161,12 +211,68 @@ impl device::Usb for Device {
         },
     };
 
-    const DEFAULT_USB_CONFIGURATION: usb::Configuration = usb::Configuration {
+    const RING_CONFIGURATION: ring::Configuration = ring::Configuration {
         buffer_length: 1 << 17,
         ring_length: 1 << 12,
-        transfer_queue_length: 1 << 5,
-        allow_dma: false,
+        parallel_submissions: 1 << 5,
     };
+
+    fn default_configuration(&self) -> Self::Configuration {
+        PROPERTIES.default_configuration
+    }
+
+    fn biases_bounds(&self) -> Self::BiasesBounds {
+        self.chip_firmware_biases.bounds()
+    }
+
+    fn current_configuration(&self) -> Self::Configuration {
+        self.configuration_updater.current_configuration()
+    }
+
+    fn update_configuration(&self, configuration: Self::Configuration) {
+        self.configuration_updater.update(configuration);
+    }
+
+    fn next_with_timeout(
+        &'_ self,
+        timeout: &std::time::Duration,
+    ) -> Option<ring::ReadBufferView<'_>> {
+        self.ring.next_with_timeout(timeout)
+    }
+
+    fn dropped_packets(&self) -> u64 {
+        self.ring.dropped_packets()
+    }
+
+    fn backlog(&self) -> usize {
+        self.ring.backlog()
+    }
+
+    fn clutch(&self) -> ring::Clutch {
+        self.ring.clutch()
+    }
+
+    fn serial(&self) -> String {
+        self.serial.clone()
+    }
+
+    fn connection(&self) -> crate::devices::Connection {
+        usb::Speed::from(self.handle.device().speed()).into()
+    }
+
+    fn create_adapter(&self) -> Self::Adapter {
+        Self::Adapter::from_dimensions(Self::PROPERTIES.width, Self::PROPERTIES.height)
+    }
+}
+
+impl device::Usb for Device {
+    const VENDOR_AND_PRODUCT_IDS: &'static [(u16, u16)] = &[
+        (0x04B4, 0x00F4),
+        (0x04B4, 0x00F5),
+        (0x31F7, 0x0003),
+        (0x31F7, 0x0004),
+        (0x1409, 0x8E00),
+    ];
 
     fn read_serial(handle: &mut rusb::DeviceHandle<rusb::Context>) -> rusb::Result<Option<String>> {
         handle.claim_interface(0)?;
@@ -198,37 +304,31 @@ impl device::Usb for Device {
         )))
     }
 
-    fn default_configuration(&self) -> Self::Configuration {
-        PROPERTIES.default_configuration
-    }
-
-    fn current_configuration(&self) -> Self::Configuration {
-        self.configuration_updater.current_configuration()
-    }
-
-    fn update_configuration(&self, configuration: Self::Configuration) {
-        self.configuration_updater.update(configuration);
-    }
-
     fn open<IntoError, IntoWarning>(
-        serial_or_bus_number_and_address: device::SerialOrBusNumberAndAddress,
+        serial_or_bus_number_and_address: device::Identifier,
         configuration: Self::Configuration,
-        usb_configuration: &usb::Configuration,
+        ring_configuration: &ring::Configuration,
         event_loop: std::sync::Arc<usb::EventLoop>,
         flag: flag::Flag<IntoError, IntoWarning>,
     ) -> Result<Self, Self::Error>
     where
         IntoError: From<Self::Error> + Clone + Send + 'static,
-        IntoWarning: From<usb::Overflow> + Clone + Send + 'static,
+        IntoWarning: From<ring::Overflow> + Clone + Send + 'static,
     {
         let (handle, vendor_and_product_id, serial) = match serial_or_bus_number_and_address {
-            device::SerialOrBusNumberAndAddress::Serial(serial) => {
+            device::Identifier::Serial(serial) => {
                 Self::open_serial(event_loop.context(), serial)?
             }
-            device::SerialOrBusNumberAndAddress::BusNumberAndAddress((bus_number, address)) => {
+            device::Identifier::Location(device::Location::BusNumberAndAddress {
+                bus_number,
+                address,
+            }) => {
                 Self::open_bus_number_and_address(event_loop.context(), bus_number, address)?
             }
-            device::SerialOrBusNumberAndAddress::None => Self::open_any(event_loop.context())?,
+            device::Identifier::Location(device::Location::Address(_)) => {
+                return Err(usb::Error::Address.into())
+            }
+            device::Identifier::None => Self::open_any(event_loop.context())?,
         };
         usb::assert_control_transfer(
             &handle,
@@ -295,7 +395,7 @@ impl device::Usb for Device {
                 // "UE-39B0XCP" (UTF-16)
                 &[
                     b'U', 0x00, b'E', 0x00, b'-', 0x00, b'3', 0x00, b'9', 0x00, b'B', 0x00, b'0',
-                    0x00, b'X', 0x00, b'C', 0x00, b'P', 0x00
+                    0x00, b'X', 0x00, b'C', 0x00, b'P', 0x00,
                 ],
             ],
             TIMEOUT,
@@ -348,8 +448,7 @@ impl device::Usb for Device {
         )?; // psee,ccam5_imx636 psee,ccam5_gen42
 
         // Read default biases
-        let mut chip_firmware_configuration = Self::PROPERTIES.default_configuration.clone();
-        chip_firmware_configuration.biases = Biases {
+        let chip_firmware_biases = ChipFirmwareBiases {
             pr: BiasPr::read(&handle)?.idac_ctl as u8,
             fo: BiasFo::read(&handle)?.idac_ctl as u8,
             hpf: BiasHpf::read(&handle)?.idac_ctl as u8,
@@ -781,7 +880,7 @@ impl device::Usb for Device {
         }
         .write(&handle)?;
         loop {
-            let mut buffer = vec![0u8; Self::DEFAULT_USB_CONFIGURATION.buffer_length];
+            let mut buffer = vec![0u8; Self::RING_CONFIGURATION.buffer_length];
             match handle.read_bulk(0x81, &mut buffer, TIMEOUT) {
                 Ok(size) => {
                     if size == 0 {
@@ -799,7 +898,7 @@ impl device::Usb for Device {
             &[0x72, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
             TIMEOUT,
         )?;
-        update_configuration(&handle, None, &configuration)?;
+        update_configuration(&handle, &chip_firmware_biases, None, &configuration)?;
 
         // issd_evk3_imx636_start in hal_psee_plugins/include/devices/imx636/imx636_evk3_issd.h {
         MipiControl { value: 0x000002f9 }.write(&handle)?;
@@ -884,25 +983,26 @@ impl device::Usb for Device {
         let register_mutex = std::sync::Arc::new(std::sync::Mutex::new(()));
         Ok(Device {
             handle: handle.clone(),
-            ring: usb::Ring::new(
-                handle.clone(),
-                usb_configuration,
+            ring: usb::TransferManager::new(
+                ring_configuration,
+                usb::TransferType::Bulk {
+                    endpoint: 1 | libusb1_sys::constants::LIBUSB_ENDPOINT_IN,
+                    timeout: std::time::Duration::ZERO,
+                },
                 move |usb_error| {
                     error_flag.store_error_if_not_set(Self::Error::from(usb_error));
                 },
                 move |overflow| {
                     warning_flag.store_warning_if_not_set(overflow);
                 },
+                handle.clone(),
                 event_loop,
-                usb::TransferType::Bulk {
-                    endpoint: 1 | libusb1_sys::constants::LIBUSB_ENDPOINT_IN,
-                    timeout: std::time::Duration::ZERO,
-                },
             )?,
             configuration_updater: configuration::Updater::new(
                 configuration,
                 ConfigurationUpdaterContext {
                     handle,
+                    chip_firmware_biases,
                     flag,
                     register_mutex: register_mutex.clone(),
                 },
@@ -914,6 +1014,7 @@ impl device::Usb for Device {
                             .expect("register mutex is not poisoned");
                         update_configuration(
                             &context.handle,
+                            &context.chip_firmware_biases,
                             Some(previous_configuration),
                             configuration,
                         )
@@ -926,33 +1027,13 @@ impl device::Usb for Device {
             ),
             vendor_and_product_id,
             serial,
-            chip_firmware_configuration,
+            chip_firmware_biases,
             register_mutex,
         })
     }
 
-    fn next_with_timeout(&'_ self, timeout: &std::time::Duration) -> Option<usb::BufferView<'_>> {
-        self.ring.next_with_timeout(timeout)
-    }
-
-    fn backlog(&self) -> usize {
-        self.ring.backlog()
-    }
-
-    fn clutch(&self) -> usb::Clutch {
-        self.ring.clutch()
-    }
-
     fn vendor_and_product_id(&self) -> (u16, u16) {
         self.vendor_and_product_id
-    }
-
-    fn serial(&self) -> String {
-        self.serial.clone()
-    }
-
-    fn chip_firmware_configuration(&self) -> Self::Configuration {
-        self.chip_firmware_configuration.clone()
     }
 
     fn bus_number(&self) -> u8 {
@@ -961,14 +1042,6 @@ impl device::Usb for Device {
 
     fn address(&self) -> u8 {
         self.handle.device().address()
-    }
-
-    fn speed(&self) -> usb::Speed {
-        self.handle.device().speed().into()
-    }
-
-    fn create_adapter(&self) -> Self::Adapter {
-        Self::Adapter::from_dimensions(Self::PROPERTIES.width, Self::PROPERTIES.height)
     }
 }
 
@@ -1005,8 +1078,68 @@ impl Device {
     }
 }
 
+macro_rules! write_bias {
+    ($register:ident, $handle:expr, $idac_ctl:expr) => {
+        $register {
+            idac_ctl: $idac_ctl,
+            vdac_ctl: 0,
+            buf_stg: 1,
+            ibtype_sel: 0,
+            mux_sel: 0,
+            mux_en: 1,
+            vdac_en: 0,
+            buf_en: 1,
+            idac_en: 1,
+            reserved: 0,
+            single: 1,
+        }
+        .write($handle)
+    };
+}
+
+macro_rules! update_bias {
+    ($name:ident, $register:ident, $handle:ident, $chip_firmware_biases:ident, $previous_biases:ident, $biases:expr) => {
+        if match $previous_biases {
+            Some(previous_biases) => previous_biases.$name != $biases.$name,
+            None => true,
+        } {
+            write_bias!(
+                $register,
+                $handle,
+                (i32::from($chip_firmware_biases.$name) + i32::from($biases.$name)).clamp(0, 255)
+                    as u32
+            )?;
+        }
+    };
+}
+
+macro_rules! restore_bias {
+    ($name:ident, $register:ident, $handle:expr, $chip_firmware_biases:expr) => {
+        let _ = write_bias!($register, $handle, $chip_firmware_biases.$name as u32);
+    };
+}
+
 impl Drop for Device {
     fn drop(&mut self) {
+        {
+            let _guard = self
+                .register_mutex
+                .lock()
+                .expect("register mutex is not poisoned");
+            restore_bias!(pr, BiasPr, &self.handle, self.chip_firmware_biases);
+            restore_bias!(fo, BiasFo, &self.handle, self.chip_firmware_biases);
+            restore_bias!(hpf, BiasHpf, &self.handle, self.chip_firmware_biases);
+            restore_bias!(diff_on, BiasDiffOn, &self.handle, self.chip_firmware_biases);
+            restore_bias!(diff, BiasDiff, &self.handle, self.chip_firmware_biases);
+            restore_bias!(diff_off, BiasDiffOff, &self.handle, self.chip_firmware_biases);
+            restore_bias!(inv, BiasInv, &self.handle, self.chip_firmware_biases);
+            restore_bias!(refr, BiasRefr, &self.handle, self.chip_firmware_biases);
+            restore_bias!(reqpuy, BiasReqpuy, &self.handle, self.chip_firmware_biases);
+            restore_bias!(reqpux, BiasReqpux, &self.handle, self.chip_firmware_biases);
+            restore_bias!(sendreqpdy, BiasSendreqpdy, &self.handle, self.chip_firmware_biases);
+            restore_bias!(unknown_1, BiasUnknown1, &self.handle, self.chip_firmware_biases);
+            restore_bias!(unknown_2, BiasUnknown2, &self.handle, self.chip_firmware_biases);
+        }
         let _ = LifoCtrl {
             lifo_en: 0,
             lifo_out_en: 0,
@@ -1118,32 +1251,9 @@ fn request(
     Ok(buffer)
 }
 
-macro_rules! update_bias {
-    ($name:ident, $register:ident, $handle:ident, $previous_biases:ident, $biases:expr) => {
-        if match $previous_biases {
-            Some(previous_biases) => previous_biases.$name != $biases.$name,
-            None => true,
-        } {
-            $register {
-                idac_ctl: $biases.$name as u32,
-                vdac_ctl: 0,
-                buf_stg: 1,
-                ibtype_sel: 0,
-                mux_sel: 0,
-                mux_en: 1,
-                vdac_en: 0,
-                buf_en: 1,
-                idac_en: 1,
-                reserved: 0,
-                single: 1,
-            }
-            .write($handle)?;
-        }
-    };
-}
-
 fn update_configuration(
     handle: &rusb::DeviceHandle<rusb::Context>,
+    chip_firmware_biases: &ChipFirmwareBiases,
     previous_configuration: Option<&Configuration>,
     configuration: &Configuration,
 ) -> Result<(), Error> {
@@ -1162,13 +1272,14 @@ fn update_configuration(
     }
     {
         let previous_biases = previous_configuration.map(|configuration| &configuration.biases);
-        update_bias!(pr, BiasPr, handle, previous_biases, configuration.biases);
-        update_bias!(fo, BiasFo, handle, previous_biases, configuration.biases);
-        update_bias!(hpf, BiasHpf, handle, previous_biases, configuration.biases);
+        update_bias!(pr, BiasPr, handle, chip_firmware_biases, previous_biases, configuration.biases);
+        update_bias!(fo, BiasFo, handle, chip_firmware_biases, previous_biases, configuration.biases);
+        update_bias!(hpf, BiasHpf, handle, chip_firmware_biases, previous_biases, configuration.biases);
         update_bias!(
             diff_on,
             BiasDiffOn,
             handle,
+            chip_firmware_biases,
             previous_biases,
             configuration.biases
         );
@@ -1176,6 +1287,7 @@ fn update_configuration(
             diff,
             BiasDiff,
             handle,
+            chip_firmware_biases,
             previous_biases,
             configuration.biases
         );
@@ -1183,14 +1295,16 @@ fn update_configuration(
             diff_off,
             BiasDiffOff,
             handle,
+            chip_firmware_biases,
             previous_biases,
             configuration.biases
         );
-        update_bias!(inv, BiasInv, handle, previous_biases, configuration.biases);
+        update_bias!(inv, BiasInv, handle, chip_firmware_biases, previous_biases, configuration.biases);
         update_bias!(
             refr,
             BiasRefr,
             handle,
+            chip_firmware_biases,
             previous_biases,
             configuration.biases
         );
@@ -1198,6 +1312,7 @@ fn update_configuration(
             reqpuy,
             BiasReqpuy,
             handle,
+            chip_firmware_biases,
             previous_biases,
             configuration.biases
         );
@@ -1205,6 +1320,7 @@ fn update_configuration(
             reqpux,
             BiasReqpux,
             handle,
+            chip_firmware_biases,
             previous_biases,
             configuration.biases
         );
@@ -1212,6 +1328,7 @@ fn update_configuration(
             sendreqpdy,
             BiasSendreqpdy,
             handle,
+            chip_firmware_biases,
             previous_biases,
             configuration.biases
         );
@@ -1219,6 +1336,7 @@ fn update_configuration(
             unknown_1,
             BiasUnknown1,
             handle,
+            chip_firmware_biases,
             previous_biases,
             configuration.biases
         );
@@ -1226,6 +1344,7 @@ fn update_configuration(
             unknown_2,
             BiasUnknown2,
             handle,
+            chip_firmware_biases,
             previous_biases,
             configuration.biases
         );
@@ -1348,9 +1467,10 @@ fn update_configuration(
 struct ConfigurationUpdaterContext<IntoError, IntoWarning>
 where
     IntoError: From<Error> + Clone + Send,
-    IntoWarning: From<usb::Overflow> + Clone + Send,
+    IntoWarning: From<ring::Overflow> + Clone + Send,
 {
     handle: std::sync::Arc<rusb::DeviceHandle<rusb::Context>>,
+    chip_firmware_biases: ChipFirmwareBiases,
     flag: flag::Flag<IntoError, IntoWarning>,
     register_mutex: std::sync::Arc<std::sync::Mutex<()>>,
 }

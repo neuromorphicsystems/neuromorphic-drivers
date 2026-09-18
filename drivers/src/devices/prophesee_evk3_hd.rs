@@ -3,9 +3,11 @@ use crate::configuration;
 use crate::device;
 use crate::flag;
 use crate::properties;
+use crate::ring;
 use crate::usb;
 
-use device::Usb;
+use device::Device as _;
+use device::Usb as _;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct Biases {
@@ -26,6 +28,33 @@ pub struct RateLimiter {
     pub reference_period_us: u16,
     pub maximum_events_per_period: u32,
 }
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct BiasesBounds {
+    pub pr: properties::Bounds<u8>,
+    pub fo_p: properties::Bounds<u8>,
+    pub fo_n: properties::Bounds<u8>,
+    pub hpf: properties::Bounds<u8>,
+    pub diff_on: properties::Bounds<u8>,
+    pub diff: properties::Bounds<u8>,
+    pub diff_off: properties::Bounds<u8>,
+    pub refr: properties::Bounds<u8>,
+    pub reqpuy: properties::Bounds<u8>,
+    pub blk: properties::Bounds<u8>,
+}
+
+pub const BIASES_BOUNDS: BiasesBounds = BiasesBounds {
+    pr: properties::Bounds::new(0, 255),
+    fo_p: properties::Bounds::new(0, 255),
+    fo_n: properties::Bounds::new(0, 255),
+    hpf: properties::Bounds::new(0, 255),
+    diff_on: properties::Bounds::new(0, 255),
+    diff: properties::Bounds::new(0, 255),
+    diff_off: properties::Bounds::new(0, 255),
+    refr: properties::Bounds::new(0, 255),
+    reqpuy: properties::Bounds::new(0, 255),
+    blk: properties::Bounds::new(0, 255),
+};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct Configuration {
@@ -58,7 +87,7 @@ impl From<rusb::Error> for Error {
 }
 pub struct Device {
     handle: std::sync::Arc<rusb::DeviceHandle<rusb::Context>>,
-    ring: usb::Ring,
+    ring: usb::TransferManager,
     configuration_updater: configuration::Updater<Configuration>,
     vendor_and_product_id: (u16, u16),
     serial: String,
@@ -66,37 +95,37 @@ pub struct Device {
 
 pub const PROPERTIES: properties::Camera<Configuration> = Device::PROPERTIES;
 pub const DEFAULT_CONFIGURATION: Configuration = Device::PROPERTIES.default_configuration;
-pub const DEFAULT_USB_CONFIGURATION: usb::Configuration = Device::DEFAULT_USB_CONFIGURATION;
+pub const RING_CONFIGURATION: ring::Configuration = Device::RING_CONFIGURATION;
 pub fn open<IntoError, IntoWarning>(
-    serial_or_bus_number_and_address: device::SerialOrBusNumberAndAddress,
+    serial_or_bus_number_and_address: device::Identifier,
     configuration: Configuration,
-    usb_configuration: &usb::Configuration,
+    ring_configuration: &ring::Configuration,
     event_loop: std::sync::Arc<usb::EventLoop>,
     flag: flag::Flag<IntoError, IntoWarning>,
 ) -> Result<Device, Error>
 where
     IntoError: From<Error> + Clone + Send + 'static,
-    IntoWarning: From<usb::Overflow> + Clone + Send + 'static,
+    IntoWarning: From<ring::Overflow> + Clone + Send + 'static,
 {
     Device::open(
         serial_or_bus_number_and_address,
         configuration,
-        usb_configuration,
+        ring_configuration,
         event_loop,
         flag,
     )
 }
 
-impl device::Usb for Device {
+impl device::Device for Device {
     type Adapter = adapters::evt3::Adapter;
+
+    type BiasesBounds = BiasesBounds;
 
     type Configuration = Configuration;
 
     type Error = Error;
 
     type Properties = properties::Camera<Self::Configuration>;
-
-    const VENDOR_AND_PRODUCT_IDS: &'static [(u16, u16)] = &[(0x04B4, 0x00F4), (0x04B4, 0x00F5)];
 
     const PROPERTIES: Self::Properties = Self::Properties {
         name: "Prophesee EVK3 HD",
@@ -122,12 +151,59 @@ impl device::Usb for Device {
         },
     };
 
-    const DEFAULT_USB_CONFIGURATION: usb::Configuration = usb::Configuration {
+    const RING_CONFIGURATION: ring::Configuration = ring::Configuration {
         buffer_length: 1 << 17,
         ring_length: 1 << 12,
-        transfer_queue_length: 1 << 5,
-        allow_dma: false,
+        parallel_submissions: 1 << 5,
     };
+
+    fn default_configuration(&self) -> Self::Configuration {
+        PROPERTIES.default_configuration
+    }
+
+    fn biases_bounds(&self) -> Self::BiasesBounds {
+        BIASES_BOUNDS
+    }
+
+    fn current_configuration(&self) -> Self::Configuration {
+        self.configuration_updater.current_configuration()
+    }
+
+    fn update_configuration(&self, configuration: Self::Configuration) {
+        self.configuration_updater.update(configuration);
+    }
+
+    fn next_with_timeout(&'_ self, timeout: &std::time::Duration) -> Option<ring::ReadBufferView<'_>> {
+        self.ring.next_with_timeout(timeout)
+    }
+
+    fn dropped_packets(&self) -> u64 {
+        self.ring.dropped_packets()
+    }
+
+    fn backlog(&self) -> usize {
+        self.ring.backlog()
+    }
+
+    fn clutch(&self) -> ring::Clutch {
+        self.ring.clutch()
+    }
+
+    fn serial(&self) -> String {
+        self.serial.clone()
+    }
+
+    fn connection(&self) -> crate::devices::Connection {
+        usb::Speed::from(self.handle.device().speed()).into()
+    }
+
+    fn create_adapter(&self) -> Self::Adapter {
+        Self::Adapter::from_dimensions(Self::PROPERTIES.width, Self::PROPERTIES.height)
+    }
+}
+
+impl device::Usb for Device {
+    const VENDOR_AND_PRODUCT_IDS: &'static [(u16, u16)] = &[(0x04B4, 0x00F4), (0x04B4, 0x00F5)];
 
     fn read_serial(handle: &mut rusb::DeviceHandle<rusb::Context>) -> rusb::Result<Option<String>> {
         handle.claim_interface(0)?;
@@ -159,37 +235,31 @@ impl device::Usb for Device {
         )))
     }
 
-    fn default_configuration(&self) -> Self::Configuration {
-        PROPERTIES.default_configuration
-    }
-
-    fn current_configuration(&self) -> Self::Configuration {
-        self.configuration_updater.current_configuration()
-    }
-
-    fn update_configuration(&self, configuration: Self::Configuration) {
-        self.configuration_updater.update(configuration);
-    }
-
     fn open<IntoError, IntoWarning>(
-        serial_or_bus_number_and_address: device::SerialOrBusNumberAndAddress,
+        serial_or_bus_number_and_address: device::Identifier,
         configuration: Self::Configuration,
-        usb_configuration: &usb::Configuration,
+        ring_configuration: &ring::Configuration,
         event_loop: std::sync::Arc<usb::EventLoop>,
         flag: flag::Flag<IntoError, IntoWarning>,
     ) -> Result<Self, Self::Error>
     where
         IntoError: From<Self::Error> + Clone + Send + 'static,
-        IntoWarning: From<crate::usb::Overflow> + Clone + Send + 'static,
+        IntoWarning: From<crate::ring::Overflow> + Clone + Send + 'static,
     {
         let (handle, vendor_and_product_id, serial) = match serial_or_bus_number_and_address {
-            device::SerialOrBusNumberAndAddress::Serial(serial) => {
+            device::Identifier::Serial(serial) => {
                 Self::open_serial(event_loop.context(), serial)?
             }
-            device::SerialOrBusNumberAndAddress::BusNumberAndAddress((bus_number, address)) => {
+            device::Identifier::Location(device::Location::BusNumberAndAddress {
+                bus_number,
+                address,
+            }) => {
                 Self::open_bus_number_and_address(event_loop.context(), bus_number, address)?
             }
-            device::SerialOrBusNumberAndAddress::None => Self::open_any(event_loop.context())?,
+            device::Identifier::Location(device::Location::Address(_)) => {
+                return Err(usb::Error::Address.into())
+            }
+            device::Identifier::None => Self::open_any(event_loop.context())?,
         };
         std::thread::sleep(std::time::Duration::from_millis(150));
         request(
@@ -394,20 +464,20 @@ impl device::Usb for Device {
         let warning_flag = flag.clone();
         Ok(Device {
             handle: handle.clone(),
-            ring: usb::Ring::new(
-                handle.clone(),
-                usb_configuration,
+            ring: usb::TransferManager::new(
+                ring_configuration,
+                usb::TransferType::Bulk {
+                    endpoint: 1 | libusb1_sys::constants::LIBUSB_ENDPOINT_IN,
+                    timeout: std::time::Duration::ZERO, // @DEV this was 100 ms but the EVK4 uses 0, does this matter?
+                },
                 move |usb_error| {
                     error_flag.store_error_if_not_set(Self::Error::from(usb_error));
                 },
                 move |overflow| {
                     warning_flag.store_warning_if_not_set(overflow);
                 },
+                handle.clone(),
                 event_loop,
-                usb::TransferType::Bulk {
-                    endpoint: 1 | libusb1_sys::constants::LIBUSB_ENDPOINT_IN,
-                    timeout: std::time::Duration::ZERO, // @DEV this was 100 ms but the EVK4 uses 0, does this matter?
-                },
             )?,
             configuration_updater: configuration::Updater::new(
                 configuration,
@@ -428,28 +498,8 @@ impl device::Usb for Device {
         })
     }
 
-    fn next_with_timeout(&'_ self, timeout: &std::time::Duration) -> Option<usb::BufferView<'_>> {
-        self.ring.next_with_timeout(timeout)
-    }
-
-    fn backlog(&self) -> usize {
-        self.ring.backlog()
-    }
-
-    fn clutch(&self) -> usb::Clutch {
-        self.ring.clutch()
-    }
-
     fn vendor_and_product_id(&self) -> (u16, u16) {
         self.vendor_and_product_id
-    }
-
-    fn serial(&self) -> String {
-        self.serial.clone()
-    }
-
-    fn chip_firmware_configuration(&self) -> Self::Configuration {
-        Self::PROPERTIES.default_configuration.clone()
     }
 
     fn bus_number(&self) -> u8 {
@@ -458,14 +508,6 @@ impl device::Usb for Device {
 
     fn address(&self) -> u8 {
         self.handle.device().address()
-    }
-
-    fn speed(&self) -> usb::Speed {
-        self.handle.device().speed().into()
-    }
-
-    fn create_adapter(&self) -> Self::Adapter {
-        Self::Adapter::from_dimensions(Self::PROPERTIES.width, Self::PROPERTIES.height)
     }
 }
 
@@ -836,7 +878,7 @@ fn update_configuration(
 struct ConfigurationUpdaterContext<IntoError, IntoWarning>
 where
     IntoError: From<Error> + Clone + Send,
-    IntoWarning: From<crate::usb::Overflow> + Clone + Send,
+    IntoWarning: From<crate::ring::Overflow> + Clone + Send,
 {
     handle: std::sync::Arc<rusb::DeviceHandle<rusb::Context>>,
     flag: flag::Flag<IntoError, IntoWarning>,

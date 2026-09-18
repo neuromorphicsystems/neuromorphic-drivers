@@ -13,6 +13,7 @@ from .devices import inivation_dvxplorer as inivation_dvxplorer
 from .devices import prophesee_evk3_hd as prophesee_evk3_hd
 from .devices import prophesee_evk4 as prophesee_evk4
 from .devices import centuryarks_vga as centuryarks_vga
+from .devices import lucid_triton as lucid_triton
 from .enums import *
 from .unions import *
 
@@ -28,6 +29,8 @@ class GenericDevice(typing.Protocol):
         traceback: typing.Optional[types.TracebackType],
     ) -> bool:
         ...
+
+    def close(self) -> None: ...
 
     def __iter__(self) -> "GenericDevice": ...
 
@@ -45,9 +48,9 @@ class GenericDevice(typing.Protocol):
 
     def serial(self) -> str: ...
 
-    def chip_firmware_configuration(self) -> Configuration: ...
+    def biases_bounds(self) -> BiasesBounds: ...
 
-    def speed(self) -> Speed: ...
+    def connection(self) -> Connection: ...
 
     def update_configuration(self, configuration: Configuration): ...
 
@@ -63,6 +66,8 @@ class GenericDeviceOptional(typing.Protocol):
         traceback: typing.Optional[types.TracebackType],
     ) -> bool:
         ...
+
+    def close(self) -> None: ...
 
     def __iter__(self) -> "GenericDeviceOptional": ...
 
@@ -80,9 +85,9 @@ class GenericDeviceOptional(typing.Protocol):
 
     def serial(self) -> str: ...
 
-    def chip_firmware_configuration(self) -> Configuration: ...
+    def biases_bounds(self) -> BiasesBounds: ...
 
-    def speed(self) -> Speed: ...
+    def connection(self) -> Connection: ...
 
     def update_configuration(self, configuration: Configuration): ...
 
@@ -98,6 +103,8 @@ class GenericDeviceRaw(typing.Protocol):
         traceback: typing.Optional[types.TracebackType],
     ) -> bool:
         ...
+
+    def close(self) -> None: ...
 
     def __iter__(self) -> "GenericDeviceRaw": ...
 
@@ -115,9 +122,9 @@ class GenericDeviceRaw(typing.Protocol):
 
     def serial(self) -> str: ...
 
-    def chip_firmware_configuration(self) -> Configuration: ...
+    def biases_bounds(self) -> BiasesBounds: ...
 
-    def speed(self) -> Speed: ...
+    def connection(self) -> Connection: ...
 
     def update_configuration(self, configuration: Configuration): ...
 
@@ -133,6 +140,8 @@ class GenericDeviceRawOptional(typing.Protocol):
         traceback: typing.Optional[types.TracebackType],
     ) -> bool:
         ...
+
+    def close(self) -> None: ...
 
     def __iter__(self) -> "GenericDeviceRawOptional": ...
 
@@ -150,9 +159,9 @@ class GenericDeviceRawOptional(typing.Protocol):
 
     def serial(self) -> str: ...
 
-    def chip_firmware_configuration(self) -> Configuration: ...
+    def biases_bounds(self) -> BiasesBounds: ...
 
-    def speed(self) -> Speed: ...
+    def connection(self) -> Connection: ...
 
     def update_configuration(self, configuration: Configuration): ...
 
@@ -164,7 +173,8 @@ def open(
     iterator_timeout: typing.Literal[None] = None,
     raw: typing.Literal[False] = False,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> inivation_davis346.InivationDavis346Device:
     ...
@@ -176,7 +186,8 @@ def open(
     iterator_timeout: float,
     raw: typing.Literal[False] = False,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> inivation_davis346.InivationDavis346DeviceOptional:
     ...
@@ -188,7 +199,8 @@ def open(
     iterator_timeout: typing.Literal[None] = None,
     raw: typing.Literal[True] = True,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> inivation_davis346.InivationDavis346DeviceRaw:
     ...
@@ -200,7 +212,8 @@ def open(
     iterator_timeout: float,
     raw: typing.Literal[True] = True,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> inivation_davis346.InivationDavis346DeviceRawOptional:
     ...
@@ -212,7 +225,8 @@ def open(
     iterator_timeout: typing.Literal[None] = None,
     raw: typing.Literal[False] = False,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> inivation_dvxplorer.InivationDvxplorerDevice:
     ...
@@ -224,7 +238,8 @@ def open(
     iterator_timeout: float,
     raw: typing.Literal[False] = False,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> inivation_dvxplorer.InivationDvxplorerDeviceOptional:
     ...
@@ -236,7 +251,8 @@ def open(
     iterator_timeout: typing.Literal[None] = None,
     raw: typing.Literal[True] = True,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> inivation_dvxplorer.InivationDvxplorerDeviceRaw:
     ...
@@ -248,7 +264,8 @@ def open(
     iterator_timeout: float,
     raw: typing.Literal[True] = True,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> inivation_dvxplorer.InivationDvxplorerDeviceRawOptional:
     ...
@@ -260,7 +277,8 @@ def open(
     iterator_timeout: typing.Literal[None] = None,
     raw: typing.Literal[False] = False,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> prophesee_evk3_hd.PropheseeEvk3HdDevice:
     ...
@@ -272,7 +290,8 @@ def open(
     iterator_timeout: float,
     raw: typing.Literal[False] = False,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> prophesee_evk3_hd.PropheseeEvk3HdDeviceOptional:
     ...
@@ -284,7 +303,8 @@ def open(
     iterator_timeout: typing.Literal[None] = None,
     raw: typing.Literal[True] = True,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> prophesee_evk3_hd.PropheseeEvk3HdDeviceRaw:
     ...
@@ -296,7 +316,8 @@ def open(
     iterator_timeout: float,
     raw: typing.Literal[True] = True,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> prophesee_evk3_hd.PropheseeEvk3HdDeviceRawOptional:
     ...
@@ -308,7 +329,8 @@ def open(
     iterator_timeout: typing.Literal[None] = None,
     raw: typing.Literal[False] = False,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> prophesee_evk4.PropheseeEvk4Device:
     ...
@@ -320,7 +342,8 @@ def open(
     iterator_timeout: float,
     raw: typing.Literal[False] = False,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> prophesee_evk4.PropheseeEvk4DeviceOptional:
     ...
@@ -332,7 +355,8 @@ def open(
     iterator_timeout: typing.Literal[None] = None,
     raw: typing.Literal[True] = True,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> prophesee_evk4.PropheseeEvk4DeviceRaw:
     ...
@@ -344,7 +368,8 @@ def open(
     iterator_timeout: float,
     raw: typing.Literal[True] = True,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> prophesee_evk4.PropheseeEvk4DeviceRawOptional:
     ...
@@ -356,7 +381,8 @@ def open(
     iterator_timeout: typing.Literal[None] = None,
     raw: typing.Literal[False] = False,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> centuryarks_vga.CenturyarksVgaDevice:
     ...
@@ -368,7 +394,8 @@ def open(
     iterator_timeout: float,
     raw: typing.Literal[False] = False,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> centuryarks_vga.CenturyarksVgaDeviceOptional:
     ...
@@ -380,7 +407,8 @@ def open(
     iterator_timeout: typing.Literal[None] = None,
     raw: typing.Literal[True] = True,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> centuryarks_vga.CenturyarksVgaDeviceRaw:
     ...
@@ -392,9 +420,62 @@ def open(
     iterator_timeout: float,
     raw: typing.Literal[True] = True,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> centuryarks_vga.CenturyarksVgaDeviceRawOptional:
+    ...
+
+
+@typing.overload
+def open(
+    configuration: lucid_triton.Configuration,
+    iterator_timeout: typing.Literal[None] = None,
+    raw: typing.Literal[False] = False,
+    serial: typing.Optional[str] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> lucid_triton.LucidTritonDevice:
+    ...
+
+
+@typing.overload
+def open(
+    configuration: lucid_triton.Configuration,
+    iterator_timeout: float,
+    raw: typing.Literal[False] = False,
+    serial: typing.Optional[str] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> lucid_triton.LucidTritonDeviceOptional:
+    ...
+
+
+@typing.overload
+def open(
+    configuration: lucid_triton.Configuration,
+    iterator_timeout: typing.Literal[None] = None,
+    raw: typing.Literal[True] = True,
+    serial: typing.Optional[str] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> lucid_triton.LucidTritonDeviceRaw:
+    ...
+
+
+@typing.overload
+def open(
+    configuration: lucid_triton.Configuration,
+    iterator_timeout: float,
+    raw: typing.Literal[True] = True,
+    serial: typing.Optional[str] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> lucid_triton.LucidTritonDeviceRawOptional:
     ...
 
 
@@ -404,7 +485,8 @@ def open(
     iterator_timeout: typing.Literal[None] = None,
     raw: typing.Literal[False] = False,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> GenericDevice:
     ...
@@ -416,7 +498,8 @@ def open(
     iterator_timeout: typing.Optional[float] = None,
     raw: typing.Literal[False] = False,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> GenericDeviceOptional:
     ...
@@ -428,7 +511,8 @@ def open(
     iterator_timeout: typing.Literal[None] = None,
     raw: typing.Literal[True] = True,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> GenericDeviceRaw:
     ...
@@ -440,7 +524,8 @@ def open(
     iterator_timeout: typing.Optional[float] = None,
     raw: typing.Literal[True] = True,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> GenericDeviceRawOptional:
     ...
@@ -451,7 +536,8 @@ def open(
     iterator_timeout: typing.Optional[float] = None,
     raw: bool = False,
     serial: typing.Optional[str] = None,
-    usb_configuration: typing.Optional[UsbConfiguration] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> typing.Any:
     return device.Device.__new__(
@@ -461,6 +547,7 @@ def open(
         None if configuration is None else configuration.type(),
         None if configuration is None else configuration.serialize(),
         serial,
-        None if usb_configuration is None else usb_configuration.serialize(),
+        address,
+        None if ring_configuration is None else ring_configuration.serialize(),
         iterator_timeout,
     )

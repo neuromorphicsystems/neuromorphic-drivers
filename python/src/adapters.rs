@@ -25,13 +25,13 @@ pub struct Frame {
     #[pyo3(get)]
     t: u64,
     #[pyo3(get)]
-    pixels: PyObject,
+    pixels: Py<PyAny>,
 }
 
 #[pymethods]
 impl Frame {
     fn __repr__(&self) -> String {
-        Python::with_gil(|python| -> String {
+        Python::attach(|python| -> String {
             format!(
                 "neuromorphic_drivers.Frame(\n    start_t={},\n    exposure_start_t={},\n    exposure_end_t={},\n    t={},\n    pixels={},\n)",
                 self.start_t,
@@ -50,27 +50,27 @@ impl Frame {
 #[pyclass]
 pub struct Davis346Packet {
     #[pyo3(get)]
-    polarity_events: Option<PyObject>,
+    polarity_events: Option<Py<PyAny>>,
     #[pyo3(get)]
-    imu_events: Option<PyObject>,
+    imu_events: Option<Py<PyAny>>,
     #[pyo3(get)]
-    trigger_events: Option<PyObject>,
+    trigger_events: Option<Py<PyAny>>,
     #[pyo3(get)]
     frames: pyo3::Py<pyo3::types::PyList>,
     #[pyo3(get)]
-    polarity_events_overflow_indices: Option<PyObject>,
+    polarity_events_overflow_indices: Option<Py<PyAny>>,
     #[pyo3(get)]
-    imu_events_overflow_indices: Option<PyObject>,
+    imu_events_overflow_indices: Option<Py<PyAny>>,
     #[pyo3(get)]
-    trigger_events_overflow_indices: Option<PyObject>,
+    trigger_events_overflow_indices: Option<Py<PyAny>>,
     #[pyo3(get)]
-    frames_overflow_indices: Option<PyObject>,
+    frames_overflow_indices: Option<Py<PyAny>>,
 }
 
 #[pymethods]
 impl Davis346Packet {
     fn __repr__(&self) -> String {
-        Python::with_gil(|python| -> String {
+        Python::attach(|python| -> String {
             format!(
                 "neuromorphic_drivers.Davis346Packet(\n    polarity_events={},\n    imu_events={},\n    trigger_events={},\n    frames={},\n    polarity_events_overflow_indices={},\n    imu_events_overflow_indices={},\n    trigger_events_overflow_indices={},\n    frames_overflow_indices={},\n)",
                 self.polarity_events
@@ -152,19 +152,19 @@ impl Davis346Packet {
 #[pyclass]
 pub struct Evt3Packet {
     #[pyo3(get)]
-    polarity_events: Option<PyObject>,
+    polarity_events: Option<Py<PyAny>>,
     #[pyo3(get)]
-    trigger_events: Option<PyObject>,
+    trigger_events: Option<Py<PyAny>>,
     #[pyo3(get)]
-    polarity_events_overflow_indices: Option<PyObject>,
+    polarity_events_overflow_indices: Option<Py<PyAny>>,
     #[pyo3(get)]
-    trigger_events_overflow_indices: Option<PyObject>,
+    trigger_events_overflow_indices: Option<Py<PyAny>>,
 }
 
 #[pymethods]
 impl Evt3Packet {
     fn __repr__(&self) -> String {
-        Python::with_gil(|python| -> String {
+        Python::attach(|python| -> String {
             format!(
                 "neuromorphic_drivers.Evt3Packet(\n    polarity_events={},\n    trigger_events={},\n    polarity_events_overflow_indices={},\n    trigger_events_overflow_indices={},\n)",
                 self.polarity_events
@@ -213,23 +213,23 @@ impl Evt3Packet {
 #[pyclass]
 pub struct DvxplorerPacket {
     #[pyo3(get)]
-    polarity_events: Option<PyObject>,
+    polarity_events: Option<Py<PyAny>>,
     #[pyo3(get)]
-    imu_events: Option<PyObject>,
+    imu_events: Option<Py<PyAny>>,
     #[pyo3(get)]
-    trigger_events: Option<PyObject>,
+    trigger_events: Option<Py<PyAny>>,
     #[pyo3(get)]
-    polarity_events_overflow_indices: Option<PyObject>,
+    polarity_events_overflow_indices: Option<Py<PyAny>>,
     #[pyo3(get)]
-    imu_events_overflow_indices: Option<PyObject>,
+    imu_events_overflow_indices: Option<Py<PyAny>>,
     #[pyo3(get)]
-    trigger_events_overflow_indices: Option<PyObject>,
+    trigger_events_overflow_indices: Option<Py<PyAny>>,
 }
 
 #[pymethods]
 impl DvxplorerPacket {
     fn __repr__(&self) -> String {
-        Python::with_gil(|python| -> String {
+        Python::attach(|python| -> String {
             format!(
                 "neuromorphic_drivers.DvxplorerPacket(\n    polarity_events={},\n    imu_events={},\n    trigger_events={},\n    polarity_events_overflow_indices={},\n    imu_events_overflow_indices={},\n    trigger_events_overflow_indices={},\n)",
                 self.polarity_events
@@ -475,7 +475,7 @@ impl Adapter {
         }
     }
 
-    pub fn take_into_packet(&mut self, python: pyo3::Python) -> pyo3::PyResult<pyo3::PyObject> {
+    pub fn take_into_packet(&mut self, python: pyo3::Python) -> pyo3::PyResult<pyo3::Py<PyAny>> {
         match self {
             Adapter::Davis346 {
                 inner: _,

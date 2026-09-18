@@ -14,19 +14,19 @@ from ... import status
 
 @dataclasses.dataclass
 class Biases:
-    pr: serde.type.uint8 = 0x7C
-    fo: serde.type.uint8 = 0x53
-    hpf: serde.type.uint8 = 0x00
-    diff_on: serde.type.uint8 = 0x66
-    diff: serde.type.uint8 = 0x4D
-    diff_off: serde.type.uint8 = 0x49
-    inv: serde.type.uint8 = 0x5B
-    refr: serde.type.uint8 = 0x14
-    reqpuy: serde.type.uint8 = 0x8C
-    reqpux: serde.type.uint8 = 0x7C
-    sendreqpdy: serde.type.uint8 = 0x94
-    unknown_1: serde.type.uint8 = 0x74
-    unknown_2: serde.type.uint8 = 0x51
+    pr: serde.type.int16 = 0
+    fo: serde.type.int16 = 0
+    hpf: serde.type.int16 = 0
+    diff_on: serde.type.int16 = 0
+    diff: serde.type.int16 = 0
+    diff_off: serde.type.int16 = 0
+    inv: serde.type.int16 = 0
+    refr: serde.type.int16 = 0
+    reqpuy: serde.type.int16 = 0
+    reqpux: serde.type.int16 = 0
+    sendreqpdy: serde.type.int16 = 0
+    unknown_1: serde.type.int16 = 0
+    unknown_2: serde.type.int16 = 0
 
     def serialize(self) -> bytes:
         return serde.bincode.serialize(self, Biases)
@@ -126,15 +126,37 @@ class Configuration:
         return "prophesee_evk4"
 
 
+@dataclasses.dataclass(frozen=True)
+class Bounds:
+    minimum: serde.type.int16 = 0
+    maximum: serde.type.int16 = 0
+
+
+@dataclasses.dataclass(frozen=True)
+class BiasesBounds:
+    pr: Bounds = dataclasses.field(default_factory=Bounds)
+    fo: Bounds = dataclasses.field(default_factory=Bounds)
+    hpf: Bounds = dataclasses.field(default_factory=Bounds)
+    diff_on: Bounds = dataclasses.field(default_factory=Bounds)
+    diff: Bounds = dataclasses.field(default_factory=Bounds)
+    diff_off: Bounds = dataclasses.field(default_factory=Bounds)
+    inv: Bounds = dataclasses.field(default_factory=Bounds)
+    refr: Bounds = dataclasses.field(default_factory=Bounds)
+    reqpuy: Bounds = dataclasses.field(default_factory=Bounds)
+    reqpux: Bounds = dataclasses.field(default_factory=Bounds)
+    sendreqpdy: Bounds = dataclasses.field(default_factory=Bounds)
+    unknown_1: Bounds = dataclasses.field(default_factory=Bounds)
+    unknown_2: Bounds = dataclasses.field(default_factory=Bounds)
+
+
 @dataclasses.dataclass
-class UsbConfiguration:
+class RingConfiguration:
     buffer_length: serde.type.uint64 = 131072
     ring_length: serde.type.uint64 = 4096
-    transfer_queue_length: serde.type.uint64 = 32
-    allow_dma: bool = False
+    parallel_submissions: serde.type.uint64 = 32
 
     def serialize(self) -> bytes:
-        return serde.bincode.serialize(self, UsbConfiguration)
+        return serde.bincode.serialize(self, RingConfiguration)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -154,6 +176,8 @@ class PropheseeEvk4Device(typing.Protocol):
     ) -> bool:
         ...
 
+    def close(self) -> None: ...
+
     def __iter__(self) -> "PropheseeEvk4Device": ...
 
     def __next__(self) -> tuple[status.StatusNonOptional, packet.Evt3Packet]: ...
@@ -170,9 +194,9 @@ class PropheseeEvk4Device(typing.Protocol):
 
     def serial(self) -> str: ...
 
-    def chip_firmware_configuration(self) -> Configuration: ...
+    def biases_bounds(self) -> BiasesBounds: ...
 
-    def speed(self) -> enums.Speed: ...
+    def connection(self) -> enums.Connection: ...
 
     def update_configuration(self, configuration: Configuration): ...
 
@@ -192,6 +216,8 @@ class PropheseeEvk4DeviceOptional(typing.Protocol):
     ) -> bool:
         ...
 
+    def close(self) -> None: ...
+
     def __iter__(self) -> "PropheseeEvk4DeviceOptional": ...
 
     def __next__(self) -> tuple[status.Status, typing.Optional[packet.Evt3Packet]]: ...
@@ -208,9 +234,9 @@ class PropheseeEvk4DeviceOptional(typing.Protocol):
 
     def serial(self) -> str: ...
 
-    def chip_firmware_configuration(self) -> Configuration: ...
+    def biases_bounds(self) -> BiasesBounds: ...
 
-    def speed(self) -> enums.Speed: ...
+    def connection(self) -> enums.Connection: ...
 
     def update_configuration(self, configuration: Configuration): ...
 
@@ -230,6 +256,8 @@ class PropheseeEvk4DeviceRaw(typing.Protocol):
     ) -> bool:
         ...
 
+    def close(self) -> None: ...
+
     def __iter__(self) -> "PropheseeEvk4DeviceRaw": ...
 
     def __next__(self) -> tuple[status.RawStatusNonOptional, bytes]: ...
@@ -246,9 +274,9 @@ class PropheseeEvk4DeviceRaw(typing.Protocol):
 
     def serial(self) -> str: ...
 
-    def chip_firmware_configuration(self) -> Configuration: ...
+    def biases_bounds(self) -> BiasesBounds: ...
 
-    def speed(self) -> enums.Speed: ...
+    def connection(self) -> enums.Connection: ...
 
     def update_configuration(self, configuration: Configuration): ...
 
@@ -268,6 +296,8 @@ class PropheseeEvk4DeviceRawOptional(typing.Protocol):
     ) -> bool:
         ...
 
+    def close(self) -> None: ...
+
     def __iter__(self) -> "PropheseeEvk4DeviceRawOptional": ...
 
     def __next__(self) -> tuple[status.RawStatus, typing.Optional[bytes]]: ...
@@ -284,9 +314,9 @@ class PropheseeEvk4DeviceRawOptional(typing.Protocol):
 
     def serial(self) -> str: ...
 
-    def chip_firmware_configuration(self) -> Configuration: ...
+    def biases_bounds(self) -> BiasesBounds: ...
 
-    def speed(self) -> enums.Speed: ...
+    def connection(self) -> enums.Connection: ...
 
     def update_configuration(self, configuration: Configuration): ...
 

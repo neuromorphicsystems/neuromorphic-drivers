@@ -171,7 +171,7 @@ class Serializer:
                 raise type.SerializationError("Wrong Value for the type", obj, obj_type)
 
             # Content of struct or variant
-            fields = dataclasses.fields(obj_type)
+            fields = dataclasses.fields(typing.cast(typing.Any, obj_type))
             types = typing.get_type_hints(obj_type)
             self.increase_container_depth()
             for field in fields:

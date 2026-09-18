@@ -2,12 +2,17 @@ pub mod adapters;
 pub mod configuration;
 pub mod device;
 pub mod devices;
+pub mod ethernet;
 pub mod flag;
 pub mod properties;
+pub mod ring;
 pub mod usb;
 
 pub use adapters::Adapter;
-pub use device::SerialOrBusNumberAndAddress;
+pub use device::Device as GenericDevice;
+pub use device::Ethernet as EthernetDevice;
+pub use device::Identifier;
+pub use device::Location;
 pub use device::Usb as UsbDevice;
 pub use devices::list_devices;
 pub use devices::open;
@@ -17,15 +22,16 @@ pub use devices::Error;
 pub use devices::Properties;
 pub use devices::Type;
 pub use flag::Flag;
-pub use usb::Configuration as UsbConfiguration;
+pub use ring::Configuration as RingConfiguration;
+pub use ring::Overflow as UsbOverflow;
 pub use usb::EventLoop as UsbEventLoop;
-pub use usb::Overflow as UsbOverflow;
 
+pub use devices::centuryarks_vga;
 pub use devices::inivation_davis346;
 pub use devices::inivation_dvxplorer;
+pub use devices::lucid_triton;
 pub use devices::prophesee_evk3_hd;
 pub use devices::prophesee_evk4;
-pub use devices::centuryarks_vga;
 
 pub use bincode;
 pub use libc;

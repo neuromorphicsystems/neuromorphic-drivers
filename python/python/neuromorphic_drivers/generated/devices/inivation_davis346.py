@@ -101,15 +101,45 @@ class Configuration:
         return "inivation_davis346"
 
 
+@dataclasses.dataclass(frozen=True)
+class Bounds:
+    minimum: serde.type.uint16 = 0
+    maximum: serde.type.uint16 = 0
+
+
+@dataclasses.dataclass(frozen=True)
+class BiasesBounds:
+    localbufbn: Bounds = dataclasses.field(default_factory=Bounds)
+    padfollbn: Bounds = dataclasses.field(default_factory=Bounds)
+    diffbn: Bounds = dataclasses.field(default_factory=Bounds)
+    onbn: Bounds = dataclasses.field(default_factory=Bounds)
+    offbn: Bounds = dataclasses.field(default_factory=Bounds)
+    pixinvbn: Bounds = dataclasses.field(default_factory=Bounds)
+    prbp: Bounds = dataclasses.field(default_factory=Bounds)
+    prsfbp: Bounds = dataclasses.field(default_factory=Bounds)
+    refrbp: Bounds = dataclasses.field(default_factory=Bounds)
+    readoutbufbp: Bounds = dataclasses.field(default_factory=Bounds)
+    apsrosfbn: Bounds = dataclasses.field(default_factory=Bounds)
+    adccompbp: Bounds = dataclasses.field(default_factory=Bounds)
+    colsellowbn: Bounds = dataclasses.field(default_factory=Bounds)
+    dacbufbp: Bounds = dataclasses.field(default_factory=Bounds)
+    lcoltimeoutbn: Bounds = dataclasses.field(default_factory=Bounds)
+    aepdbn: Bounds = dataclasses.field(default_factory=Bounds)
+    aepuxbp: Bounds = dataclasses.field(default_factory=Bounds)
+    aepuybp: Bounds = dataclasses.field(default_factory=Bounds)
+    ifrefrbn: Bounds = dataclasses.field(default_factory=Bounds)
+    ifthrbn: Bounds = dataclasses.field(default_factory=Bounds)
+    biasbuffer: Bounds = dataclasses.field(default_factory=Bounds)
+
+
 @dataclasses.dataclass
-class UsbConfiguration:
+class RingConfiguration:
     buffer_length: serde.type.uint64 = 131072
     ring_length: serde.type.uint64 = 4096
-    transfer_queue_length: serde.type.uint64 = 32
-    allow_dma: bool = False
+    parallel_submissions: serde.type.uint64 = 32
 
     def serialize(self) -> bytes:
-        return serde.bincode.serialize(self, UsbConfiguration)
+        return serde.bincode.serialize(self, RingConfiguration)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -129,6 +159,8 @@ class InivationDavis346Device(typing.Protocol):
     ) -> bool:
         ...
 
+    def close(self) -> None: ...
+
     def __iter__(self) -> "InivationDavis346Device": ...
 
     def __next__(self) -> tuple[status.StatusNonOptional, packet.Davis346Packet]: ...
@@ -145,9 +177,9 @@ class InivationDavis346Device(typing.Protocol):
 
     def serial(self) -> str: ...
 
-    def chip_firmware_configuration(self) -> Configuration: ...
+    def biases_bounds(self) -> BiasesBounds: ...
 
-    def speed(self) -> enums.Speed: ...
+    def connection(self) -> enums.Connection: ...
 
     def update_configuration(self, configuration: Configuration): ...
 
@@ -167,6 +199,8 @@ class InivationDavis346DeviceOptional(typing.Protocol):
     ) -> bool:
         ...
 
+    def close(self) -> None: ...
+
     def __iter__(self) -> "InivationDavis346DeviceOptional": ...
 
     def __next__(self) -> tuple[status.Status, typing.Optional[packet.Davis346Packet]]: ...
@@ -183,9 +217,9 @@ class InivationDavis346DeviceOptional(typing.Protocol):
 
     def serial(self) -> str: ...
 
-    def chip_firmware_configuration(self) -> Configuration: ...
+    def biases_bounds(self) -> BiasesBounds: ...
 
-    def speed(self) -> enums.Speed: ...
+    def connection(self) -> enums.Connection: ...
 
     def update_configuration(self, configuration: Configuration): ...
 
@@ -205,6 +239,8 @@ class InivationDavis346DeviceRaw(typing.Protocol):
     ) -> bool:
         ...
 
+    def close(self) -> None: ...
+
     def __iter__(self) -> "InivationDavis346DeviceRaw": ...
 
     def __next__(self) -> tuple[status.RawStatusNonOptional, bytes]: ...
@@ -221,9 +257,9 @@ class InivationDavis346DeviceRaw(typing.Protocol):
 
     def serial(self) -> str: ...
 
-    def chip_firmware_configuration(self) -> Configuration: ...
+    def biases_bounds(self) -> BiasesBounds: ...
 
-    def speed(self) -> enums.Speed: ...
+    def connection(self) -> enums.Connection: ...
 
     def update_configuration(self, configuration: Configuration): ...
 
@@ -243,6 +279,8 @@ class InivationDavis346DeviceRawOptional(typing.Protocol):
     ) -> bool:
         ...
 
+    def close(self) -> None: ...
+
     def __iter__(self) -> "InivationDavis346DeviceRawOptional": ...
 
     def __next__(self) -> tuple[status.RawStatus, typing.Optional[bytes]]: ...
@@ -259,9 +297,9 @@ class InivationDavis346DeviceRawOptional(typing.Protocol):
 
     def serial(self) -> str: ...
 
-    def chip_firmware_configuration(self) -> Configuration: ...
+    def biases_bounds(self) -> BiasesBounds: ...
 
-    def speed(self) -> enums.Speed: ...
+    def connection(self) -> enums.Connection: ...
 
     def update_configuration(self, configuration: Configuration): ...
 

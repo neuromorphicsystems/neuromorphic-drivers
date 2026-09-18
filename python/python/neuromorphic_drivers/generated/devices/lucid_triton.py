@@ -14,69 +14,51 @@ from ... import status
 
 @dataclasses.dataclass
 class Biases:
-    amp: serde.type.uint8 = 0x04
-    on: serde.type.uint8 = 0x08
-    off: serde.type.uint8 = 0x08
-    sf: serde.type.uint8 = 0x00
-    nrst: bool = False
-    log: bool = False
-    log_a: bool = True
-    log_d: serde.type.uint8 = 0x01
+    fo: serde.type.int16 = 0
+    hpf: serde.type.int16 = 0
+    diff_on: serde.type.int16 = 0
+    diff: serde.type.int16 = 0
+    diff_off: serde.type.int16 = 0
+    refr: serde.type.int16 = 0
 
     def serialize(self) -> bytes:
         return serde.bincode.serialize(self, Biases)
 
 
-class ReadoutFramesPerSecond(enum.Enum):
-    CONSTANT100 = 0
-    CONSTANT200 = 1
-    CONSTANT500 = 2
-    CONSTANT1000 = 3
-    CONSTANT_LOSSY2000 = 4
-    CONSTANT_LOSSY5000 = 5
-    CONSTANT_LOSSY10000 = 6
-    VARIABLE2000 = 7
-    VARIABLE5000 = 8
-    VARIABLE10000 = 9
-    VARIABLE15000 = 10
-
-    def serialize(self) -> bytes:
-        return serde.bincode.serialize(self, ReadoutFramesPerSecond)
-
-
 @dataclasses.dataclass
 class Configuration:
     biases: Biases = dataclasses.field(default_factory=Biases)
-    readout_frames_per_second: ReadoutFramesPerSecond = ReadoutFramesPerSecond.CONSTANT100
+    enable_output: bool = True
 
     def serialize(self) -> bytes:
         return serde.bincode.serialize(self, Configuration)
 
     @staticmethod
     def type() -> str:
-        return "inivation_dvxplorer"
+        return "lucid_triton"
 
 
 @dataclasses.dataclass(frozen=True)
 class Bounds:
-    minimum: serde.type.uint8 = 0x00
-    maximum: serde.type.uint8 = 0x00
+    minimum: serde.type.int16 = 0
+    maximum: serde.type.int16 = 0
 
 
 @dataclasses.dataclass(frozen=True)
 class BiasesBounds:
-    amp: Bounds = dataclasses.field(default_factory=Bounds)
-    on: Bounds = dataclasses.field(default_factory=Bounds)
-    off: Bounds = dataclasses.field(default_factory=Bounds)
-    sf: Bounds = dataclasses.field(default_factory=Bounds)
-    log_d: Bounds = dataclasses.field(default_factory=Bounds)
+    fo: Bounds = dataclasses.field(default_factory=Bounds)
+    hpf: Bounds = dataclasses.field(default_factory=Bounds)
+    diff_on: Bounds = dataclasses.field(default_factory=Bounds)
+    diff: Bounds = dataclasses.field(default_factory=Bounds)
+    diff_off: Bounds = dataclasses.field(default_factory=Bounds)
+    refr: Bounds = dataclasses.field(default_factory=Bounds)
 
 
 @dataclasses.dataclass
 class RingConfiguration:
-    buffer_length: serde.type.uint64 = 131072
-    ring_length: serde.type.uint64 = 4096
-    parallel_submissions: serde.type.uint64 = 32
+    buffer_length: serde.type.uint64 = 1400
+    ring_length: serde.type.uint64 = 131072
+    parallel_submissions: serde.type.uint64 = 1
 
     def serialize(self) -> bytes:
         return serde.bincode.serialize(self, RingConfiguration)
@@ -84,12 +66,12 @@ class RingConfiguration:
 
 @dataclasses.dataclass(frozen=True)
 class Properties:
-    width: serde.type.uint16 = 640
-    height: serde.type.uint16 = 480
+    width: serde.type.uint16 = 1280
+    height: serde.type.uint16 = 720
 
 
-class InivationDvxplorerDevice(typing.Protocol):
-    def __enter__(self) -> "InivationDvxplorerDevice": ...
+class LucidTritonDevice(typing.Protocol):
+    def __enter__(self) -> "LucidTritonDevice": ...
 
     def __exit__(
         self,
@@ -101,9 +83,9 @@ class InivationDvxplorerDevice(typing.Protocol):
 
     def close(self) -> None: ...
 
-    def __iter__(self) -> "InivationDvxplorerDevice": ...
+    def __iter__(self) -> "LucidTritonDevice": ...
 
-    def __next__(self) -> tuple[status.StatusNonOptional, packet.DvxplorerPacket]: ...
+    def __next__(self) -> tuple[status.StatusNonOptional, packet.Evt3Packet]: ...
 
     def backlog(self) -> int: ...
 
@@ -111,7 +93,7 @@ class InivationDvxplorerDevice(typing.Protocol):
 
     def overflow(self) -> bool: ...
 
-    def name(self) -> typing.Literal[enums.Name.INIVATION_DVXPLORER]: ...
+    def name(self) -> typing.Literal[enums.Name.LUCID_TRITON]: ...
 
     def properties(self) -> Properties: ...
 
@@ -123,12 +105,13 @@ class InivationDvxplorerDevice(typing.Protocol):
 
     def update_configuration(self, configuration: Configuration): ...
 
-    def orientation(self) -> orientation.DvxplorerOrientation: ...
+    def address(self) -> str: ...
+
+    def temperature_celsius(self) -> float: ...
 
 
-
-class InivationDvxplorerDeviceOptional(typing.Protocol):
-    def __enter__(self) -> "InivationDvxplorerDeviceOptional": ...
+class LucidTritonDeviceOptional(typing.Protocol):
+    def __enter__(self) -> "LucidTritonDeviceOptional": ...
 
     def __exit__(
         self,
@@ -140,9 +123,9 @@ class InivationDvxplorerDeviceOptional(typing.Protocol):
 
     def close(self) -> None: ...
 
-    def __iter__(self) -> "InivationDvxplorerDeviceOptional": ...
+    def __iter__(self) -> "LucidTritonDeviceOptional": ...
 
-    def __next__(self) -> tuple[status.Status, typing.Optional[packet.DvxplorerPacket]]: ...
+    def __next__(self) -> tuple[status.Status, typing.Optional[packet.Evt3Packet]]: ...
 
     def backlog(self) -> int: ...
 
@@ -150,7 +133,7 @@ class InivationDvxplorerDeviceOptional(typing.Protocol):
 
     def overflow(self) -> bool: ...
 
-    def name(self) -> typing.Literal[enums.Name.INIVATION_DVXPLORER]: ...
+    def name(self) -> typing.Literal[enums.Name.LUCID_TRITON]: ...
 
     def properties(self) -> Properties: ...
 
@@ -162,12 +145,13 @@ class InivationDvxplorerDeviceOptional(typing.Protocol):
 
     def update_configuration(self, configuration: Configuration): ...
 
-    def orientation(self) -> orientation.DvxplorerOrientation: ...
+    def address(self) -> str: ...
+
+    def temperature_celsius(self) -> float: ...
 
 
-
-class InivationDvxplorerDeviceRaw(typing.Protocol):
-    def __enter__(self) -> "InivationDvxplorerDeviceRaw": ...
+class LucidTritonDeviceRaw(typing.Protocol):
+    def __enter__(self) -> "LucidTritonDeviceRaw": ...
 
     def __exit__(
         self,
@@ -179,7 +163,7 @@ class InivationDvxplorerDeviceRaw(typing.Protocol):
 
     def close(self) -> None: ...
 
-    def __iter__(self) -> "InivationDvxplorerDeviceRaw": ...
+    def __iter__(self) -> "LucidTritonDeviceRaw": ...
 
     def __next__(self) -> tuple[status.RawStatusNonOptional, bytes]: ...
 
@@ -189,7 +173,7 @@ class InivationDvxplorerDeviceRaw(typing.Protocol):
 
     def overflow(self) -> bool: ...
 
-    def name(self) -> typing.Literal[enums.Name.INIVATION_DVXPLORER]: ...
+    def name(self) -> typing.Literal[enums.Name.LUCID_TRITON]: ...
 
     def properties(self) -> Properties: ...
 
@@ -201,12 +185,13 @@ class InivationDvxplorerDeviceRaw(typing.Protocol):
 
     def update_configuration(self, configuration: Configuration): ...
 
-    def orientation(self) -> orientation.DvxplorerOrientation: ...
+    def address(self) -> str: ...
+
+    def temperature_celsius(self) -> float: ...
 
 
-
-class InivationDvxplorerDeviceRawOptional(typing.Protocol):
-    def __enter__(self) -> "InivationDvxplorerDeviceRawOptional": ...
+class LucidTritonDeviceRawOptional(typing.Protocol):
+    def __enter__(self) -> "LucidTritonDeviceRawOptional": ...
 
     def __exit__(
         self,
@@ -218,7 +203,7 @@ class InivationDvxplorerDeviceRawOptional(typing.Protocol):
 
     def close(self) -> None: ...
 
-    def __iter__(self) -> "InivationDvxplorerDeviceRawOptional": ...
+    def __iter__(self) -> "LucidTritonDeviceRawOptional": ...
 
     def __next__(self) -> tuple[status.RawStatus, typing.Optional[bytes]]: ...
 
@@ -228,7 +213,7 @@ class InivationDvxplorerDeviceRawOptional(typing.Protocol):
 
     def overflow(self) -> bool: ...
 
-    def name(self) -> typing.Literal[enums.Name.INIVATION_DVXPLORER]: ...
+    def name(self) -> typing.Literal[enums.Name.LUCID_TRITON]: ...
 
     def properties(self) -> Properties: ...
 
@@ -240,5 +225,6 @@ class InivationDvxplorerDeviceRawOptional(typing.Protocol):
 
     def update_configuration(self, configuration: Configuration): ...
 
-    def orientation(self) -> orientation.DvxplorerOrientation: ...
+    def address(self) -> str: ...
 
+    def temperature_celsius(self) -> float: ...
