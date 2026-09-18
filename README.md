@@ -39,15 +39,15 @@ _Neuromorphic drivers_ does not depend on Metavision, libcaer, or dv-processing.
 
 # Supported devices
 
-| Device                             | Resolution | Default configuration                                                                                 | Photo                                                         |
-| ---------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Lucid Triton (GigE Vision)         | 1280 × 720 | [lucid_triton.py](python/python/neuromorphic_drivers/generated/devices/lucid_triton.py)               | <img src="photos/triton.png" alt="triton" width="200"/>       |
-| IDS uEye XCP-E                     | 1280 × 720 | [prophesee_evk4.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk4.py)           | <img src="photos/ueyexcpe.png" alt="ueyexcpe" width="200"/>   |
-| SilkyEvCam HD / SilkyEvCam HD Lite | 1280 × 720 | [prophesee_evk4.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk4.py)           | <img src="photos/silkyev.png" alt="silkyev" width="200"/>     |
-| Prophesee EVK4                     | 1280 × 720 | [prophesee_evk4.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk4.py)           | <img src="photos/evk4.png" alt="evk4" width="200"/>           |
-| Prophesee EVK3 HD                  | 1280 × 720 | [prophesee_evk3_hd.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk3_hd.py)     | <img src="photos/evk3hd.png" alt="evk3hd" width="200"/>       |
-| iniVation DVXplorer                | 640 × 480  | [inivation_dvxplorer.py](python/python/neuromorphic_drivers/generated/devices/inivation_dvxplorer.py) | <img src="photos/dvxplorer.png" alt="dvxplorer" width="200"/> |
-| iniVation Davis 346                | 346 × 260  | [inivation_davis346.py](python/python/neuromorphic_drivers/generated/devices/inivation_davis346.py)   | <img src="photos/davis346.png" alt="davis346" width="200"/>   |
+| Device                                 | Resolution | Default configuration                                                                                 | Photo                                                         |
+| -------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Lucid Triton (GigE Vision)             | 1280 × 720 | [lucid_triton.py](python/python/neuromorphic_drivers/generated/devices/lucid_triton.py)               | <img src="photos/triton.png" alt="triton" width="200"/>       |
+| IDS uEye XCP-E / IDS uEye XLS-E        | 1280 × 720 | [prophesee_evk4.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk4.py)           | <img src="photos/ueyexcpe.png" alt="ueyexcpe" width="200"/>   |
+| Prophesee EVK4 / SilkyEvCam HD/HD Lite | 1280 × 720 | [prophesee_evk4.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk4.py)           | <img src="photos/evk4.png" alt="evk4" width="200"/>           |
+| Prophesee EVK3 HD                      | 1280 × 720 | [prophesee_evk3_hd.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk3_hd.py)     | <img src="photos/evk3hd.png" alt="evk3hd" width="200"/>       |
+| SilkyEvCam VGA                         | 640 × 480  | [centuryarks_vga.py](python/python/neuromorphic_drivers/generated/devices/centuryarks_vga.py)         | <img src="photos/silkyev.png" alt="silkyev" width="200"/>     |
+| iniVation DVXplorer                    | 640 × 480  | [inivation_dvxplorer.py](python/python/neuromorphic_drivers/generated/devices/inivation_dvxplorer.py) | <img src="photos/dvxplorer.png" alt="dvxplorer" width="200"/> |
+| iniVation Davis 346                    | 346 × 260  | [inivation_davis346.py](python/python/neuromorphic_drivers/generated/devices/inivation_davis346.py)   | <img src="photos/davis346.png" alt="davis346" width="200"/>   |
 
 # Supported features
 
@@ -60,9 +60,9 @@ Tick marks indicate supported features, minus signs indicate that the camera doe
 | lucid_triton        | Ethernet   | `polarity_events`                                        | ▢                  | ▢              | ▢            | ▢            | ▢            | ✓¹          | -           | -                 | -             |
 | prophesee_evk4      | USB        | `polarity_events` `trigger_events`                       | ✓                  | ✓              | ✓            | ▢            | ▢            | ✓¹          | ✓³          | -                 | -             |
 | prophesee_evk3_hd   | USB        | `polarity_events` `trigger_events`                       | ✓                  | ▢              | ▢            | ▢            | ▢            | ▢           | ▢           | -                 | -             |
+| centuryarks_vga     | USB        | `polarity_events` `trigger_events`                       | ✓                  | ▢              | ✓            | ▢            | ▢            | ▢           | ▢           | -                 | -             |
 | inivation_dvxplorer | USB        | `polarity_events` `imu_events` `trigger_events`          | ▢                  | ▢              | -            | ▢            | -            | ✓²          | -           | ▢                 | -             |
 | inivation_davis346  | USB        | `polarity_events` `imu_events` `trigger_events` `frames` | ▢                  | ▢              | -            | ▢            | -            | ✓²          | -           | ▢                 | ▢             |
-| centuryarks_vga     | USB        | `polarity_events` `trigger_events`                       | ✓                  | ▢              | ✓            | ▢            | ▢            | ▢           | ▢           | -                 | -             |
 
 The Lucid Triton is a GigE Vision camera; it is discovered and controlled over the network (no udev rule is needed). For reliable streaming the camera should be on the same subnet as the host (static IP). On Linux, raise the kernel socket buffer cap so the requested `SO_RCVBUF` takes effect, e.g. `sudo sysctl -w net.core.rmem_max=33554432`.
 
