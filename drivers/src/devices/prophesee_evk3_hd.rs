@@ -816,7 +816,7 @@ fn update_configuration(
     } {
         for offset in 0..((configuration.x_mask.len() as u32) * 2) {
             let register = TdRoiX {
-                value: if (offset % 2) == 0 {
+                value: if offset.is_multiple_of(2) {
                     (configuration.x_mask[(offset / 2) as usize] & 0xffffffffu64) as u32
                 } else {
                     ((configuration.x_mask[(offset / 2) as usize] & 0xffffffff00000000u64) >> 32)
@@ -828,7 +828,7 @@ fn update_configuration(
         }
         for offset in 0..((configuration.y_mask.len() as u32) * 2 - 1) {
             let register = TdRoiY {
-                value: if (offset % 2) == 0 {
+                value: if offset.is_multiple_of(2) {
                     let [byte2, byte3, _, _, _, _, _, _] = configuration.y_mask
                         [configuration.y_mask.len() - 1 - (offset / 2) as usize]
                         .to_le_bytes();

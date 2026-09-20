@@ -6,7 +6,7 @@ import typing
 import numpy
 
 from .. import enums
-from ... import orientation
+from ... import orientation as orientation_module
 from ... import packet
 from ... import serde
 from ... import status
@@ -122,7 +122,7 @@ class InivationDvxplorerDevice(typing.Protocol):
 
     def update_configuration(self, configuration: Configuration): ...
 
-    def orientation(self) -> orientation.DvxplorerOrientation: ...
+    def orientation(self) -> orientation_module.DvxplorerOrientation: ...
 
 
 class InivationDvxplorerDeviceOptional(typing.Protocol):
@@ -159,7 +159,7 @@ class InivationDvxplorerDeviceOptional(typing.Protocol):
 
     def update_configuration(self, configuration: Configuration): ...
 
-    def orientation(self) -> orientation.DvxplorerOrientation: ...
+    def orientation(self) -> orientation_module.DvxplorerOrientation: ...
 
 
 class InivationDvxplorerDeviceRaw(typing.Protocol):
@@ -196,7 +196,7 @@ class InivationDvxplorerDeviceRaw(typing.Protocol):
 
     def update_configuration(self, configuration: Configuration): ...
 
-    def orientation(self) -> orientation.DvxplorerOrientation: ...
+    def orientation(self) -> orientation_module.DvxplorerOrientation: ...
 
 
 class InivationDvxplorerDeviceRawOptional(typing.Protocol):
@@ -233,4 +233,4 @@ class InivationDvxplorerDeviceRawOptional(typing.Protocol):
 
     def update_configuration(self, configuration: Configuration): ...
 
-    def orientation(self) -> orientation.DvxplorerOrientation: ...
+    def orientation(self) -> orientation_module.DvxplorerOrientation: ...

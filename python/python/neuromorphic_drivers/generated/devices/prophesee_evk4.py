@@ -7,7 +7,7 @@ import numpy
 
 from .. import enums
 from ... import mask
-from ... import orientation
+from ... import orientation as orientation_module
 from ... import packet
 from ... import serde
 from ... import status

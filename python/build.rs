@@ -480,7 +480,7 @@ macro_rules! generate {
                     "\n",
                     "from .. import enums\n",
                     "{}",
-                    "from ... import orientation\n",
+                    "from ... import orientation as orientation_module\n",
                     "from ... import packet\n",
                     "from ... import serde\n",
                     "from ... import status",
@@ -624,7 +624,7 @@ macro_rules! generate {
                                 writer,
                                 concat!(
                                     "\n",
-                                    "    def orientation(self) -> orientation.Davis346Orientation: ...\n",
+                                    "    def orientation(self) -> orientation_module.Davis346Orientation: ...\n",
                                     "\n",
                                     "    def imu_type(self) -> typing.Literal[None, \"InvenSense6050Or6150\", \"InvenSense9250\"]: ...",
                                 )
@@ -634,7 +634,7 @@ macro_rules! generate {
                                 writer,
                                 concat!(
                                     "\n",
-                                    "    def orientation(self) -> orientation.DvxplorerOrientation: ...",
+                                    "    def orientation(self) -> orientation_module.DvxplorerOrientation: ...",
                                 )
                             ).unwrap();
 
