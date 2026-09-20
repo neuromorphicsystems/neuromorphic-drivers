@@ -44,30 +44,31 @@ name = (
     .replace("+00:00", "Z")
     .replace(":", "-")
 )
-outputs = [
-    open(dirname / f"{name}_{PRIMARY_SERIAL}.raw", "wb"),
-    open(dirname / f"{name}_{SECONDARY_SERIAL}.raw", "wb"),
-]
+with (
+    open(dirname / f"{name}_{PRIMARY_SERIAL}.raw", "wb") as primary_output,
+    open(dirname / f"{name}_{SECONDARY_SERIAL}.raw", "wb") as secondary_output,
+):
+    outputs = [primary_output, secondary_output]
 
-backlogs = np.array([0 for _ in devices])
-while True:
-    index = np.argmax(backlogs)
-    status, packet = devices[index].__next__()
-    if status.ring is None:
-        backlogs[:] += 1
-        backlogs[index] = 0
-    else:
-        backlogs[:] += 1
-        backlogs[index] = status.ring.backlog
-        delay = status.delay()
-        if delay is not None:
-            if packet is not None:
-                print(
-                    f"{index}: {round(delay * 1e6)} µs, backlog: {status.ring.backlog}, bytes: {len(packet)}"
-                )
-                outputs[index].write(packet)
-                outputs[index].flush()
-            else:
-                print(
-                    f"{index}: {round(delay * 1e6)} µs, backlog: {status.ring.backlog}"
-                )
+    backlogs = np.array([0 for _ in devices])
+    while True:
+        index = np.argmax(backlogs)
+        status, packet = devices[index].__next__()
+        if status.ring is None:
+            backlogs[:] += 1
+            backlogs[index] = 0
+        else:
+            backlogs[:] += 1
+            backlogs[index] = status.ring.backlog
+            delay = status.delay()
+            if delay is not None:
+                if packet is not None:
+                    print(
+                        f"{index}: {round(delay * 1e6)} µs, backlog: {status.ring.backlog}, bytes: {len(packet)}"
+                    )
+                    outputs[index].write(packet)
+                    outputs[index].flush()
+                else:
+                    print(
+                        f"{index}: {round(delay * 1e6)} µs, backlog: {status.ring.backlog}"
+                    )

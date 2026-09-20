@@ -23,33 +23,28 @@ def install_udev_rules(
                 sys.exit(0)
             sys.stderr.write("udev rules are not compatible with macOS\n")
             sys.exit(1)
-    if not skip_root_check:
-        if os.geteuid() != 0:
-            cwd = pathlib.Path.cwd()
-            executable = pathlib.Path(sys.executable).resolve()
-            try:
-                executable = executable.relative_to(cwd)
-            except ValueError:
-                pass
-            file = pathlib.Path(__file__).resolve()
-            try:
-                file = file.relative_to(cwd)
-            except ValueError:
-                pass
-            sys.stdout.write(
-                f"\033[1mrun the following command to enable non-root access to devices\033[0m\n\nsudo {executable} {file}\n\n"
-            )
-            sys.exit(0)
+    if not skip_root_check and os.geteuid() != 0:
+        cwd = pathlib.Path.cwd()
+        executable = pathlib.Path(sys.executable).resolve()
+        try:
+            executable = executable.relative_to(cwd)
+        except ValueError:
+            pass
+        file = pathlib.Path(__file__).resolve()
+        try:
+            file = file.relative_to(cwd)
+        except ValueError:
+            pass
+        sys.stdout.write(
+            f"\033[1mrun the following command to enable non-root access to devices\033[0m\n\nsudo {executable} {file}\n\n"
+        )
+        sys.exit(0)
     with builtins.open(output, "w") as output_file:
         output_file.write(
-            "".join(
-                (
-                    'SUBSYSTEM=="usb", ATTRS{idVendor}=="152a", ATTRS{idProduct}=="84[0-1]?", MODE="0666"\n',
-                    'SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f[4-5]", MODE="0666"\n',
-                    'SUBSYSTEM=="usb", ATTRS{idVendor}=="31f7", ATTRS{idProduct}=="000[3-4]", MODE="0666"\n',
-                    'SUBSYSTEM=="usb", ATTRS{idVendor}=="1409", ATTRS{idProduct}=="8e00", MODE="0666"\n',
-                )
-            )
+            'SUBSYSTEM=="usb", ATTRS{idVendor}=="152a", ATTRS{idProduct}=="84[0-1]?", MODE="0666"\n'
+            'SUBSYSTEM=="usb", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f[4-5]", MODE="0666"\n'
+            'SUBSYSTEM=="usb", ATTRS{idVendor}=="31f7", ATTRS{idProduct}=="000[3-4]", MODE="0666"\n'
+            'SUBSYSTEM=="usb", ATTRS{idVendor}=="1409", ATTRS{idProduct}=="8e00", MODE="0666"\n'
         )
     subprocess.check_call(["udevadm", "control", "--reload-rules"])
     subprocess.check_call(["udevadm", "trigger"])

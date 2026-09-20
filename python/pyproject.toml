@@ -23,16 +23,23 @@ build-backend = "maturin"
 [tool.maturin]
 python-source = "python"
 
-[tool.black]
-extend-exclude = "python/neuromorphic_drivers/generated"
+[tool.ruff]
+extend-exclude = ["python/neuromorphic_drivers/generated"]
 
-[tool.pyright]
-typeCheckingMode = "basic"
-executionEnvironments = [{root = ".", venv = ".venv"}]
+[tool.ruff.lint]
+ignore = [
+    "TRY002", # allow raise Exception(...) instead of custom exception classes
+    "UP032", # allow "{}".format() instead of f"{}"
+]
 
-[tool.isort]
-profile = "black"
-extend_skip = "python/neuromorphic_drivers/generated"
+[tool.ruff.lint.per-file-ignores]
+"python/neuromorphic_drivers/__init__.py" = ["F403", "F405"]
+
+[tool.ty.src]
+exclude = ["python/neuromorphic_drivers/generated"]
+
+[tool.ty.rules]
+empty-body = "ignore"
 
 [project.scripts]
 neuromorphic-drivers-install-udev-rules = "neuromorphic_drivers:install_udev_rules_program"

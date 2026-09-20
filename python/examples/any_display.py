@@ -2,7 +2,6 @@ import threading
 
 import neuromorphic_drivers as nd
 import numpy as np
-
 import ui
 
 

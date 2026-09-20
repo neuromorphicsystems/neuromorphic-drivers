@@ -1,4 +1,4 @@
-import typing
+from __future__ import annotations
 
 import numpy
 import numpy.typing
@@ -12,14 +12,14 @@ class Frame:
     start_t < exposure_start_t < exposure_end_t < t
     """
 
-    exposure_start_t: typing.Optional[int]
+    exposure_start_t: int | None
     """
     Timestamp of the start of the frame exposure
 
     start_t < exposure_start_t < exposure_end_t < t
     """
 
-    exposure_end_t: typing.Optional[int]
+    exposure_end_t: int | None
     """
     Timestamp of the end of the frame exposure
 
@@ -47,14 +47,14 @@ class Frame:
 
 
 class Davis346Packet:
-    polarity_events: typing.Optional[numpy.ndarray]
+    polarity_events: numpy.ndarray | None
     """
     Polarity events (also known as change detection events and ON/OFF events)
 
     Timestamps are in microseconds, the origin (x = 0 and y = 0) is at the top-left corner
     """
 
-    imu_events: typing.Optional[numpy.ndarray]
+    imu_events: numpy.ndarray | None
     """
     Inertial Measurement Unit events (or samples)
 
@@ -67,7 +67,7 @@ class Davis346Packet:
     The IMU's Z axis is aligned with the camera's optical axis and oriented in the same direction as the camera (sensor-to-lens)
     """
 
-    trigger_events: typing.Optional[numpy.ndarray]
+    trigger_events: numpy.ndarray | None
     """
     External trigger events (rising and falling edges), timestamped with the same clock as the polarity events
 
@@ -79,43 +79,44 @@ class Davis346Packet:
     Grey level frames (also known as Active Pixel Sensor)
     """
 
-    polarity_events_overflow_indices: typing.Optional[numpy.ndarray]
+    polarity_events_overflow_indices: numpy.ndarray | None
     """
     Each entry in this list indicates an overflow (USB packets dropped by the computer because the queue was full)
 
     For each overflow, the array entry is the index (in polarity_events) of the first event after the overflow
     """
 
-    imu_events_overflow_indices: typing.Optional[numpy.ndarray]
+    imu_events_overflow_indices: numpy.ndarray | None
     """
     Each entry in this list indicates an overflow (USB packets dropped by the computer because the queue was full)
 
     For each overflow, the array entry is the index (in imu_events) of the first event after the overflow
     """
 
-    trigger_events_overflow_indices: typing.Optional[numpy.ndarray]
+    trigger_events_overflow_indices: numpy.ndarray | None
     """
     Each entry in this list indicates an overflow (USB packets dropped by the computer because the queue was full)
 
     For each overflow, the array entry is the index (in trigger_events) of the first event after the overflow
     """
 
-    frames_overflow_indices: typing.Optional[numpy.ndarray]
+    frames_overflow_indices: numpy.ndarray | None
     """
     Each entry in this list indicates an overflow (USB packets dropped by the computer because the queue was full)
 
     For each overflow, the array entry is the index (in frames) of the first event after the overflow
     """
 
+
 class DvxplorerPacket:
-    polarity_events: typing.Optional[numpy.ndarray]
+    polarity_events: numpy.ndarray | None
     """
     Polarity events (also known as change detection events and ON/OFF events)
 
     Timestamps are in microseconds, the origin (x = 0 and y = 0) is at the top-left corner
     """
 
-    imu_events: typing.Optional[numpy.ndarray]
+    imu_events: numpy.ndarray | None
     """
     Inertial Measurement Unit events (or samples)
 
@@ -128,26 +129,26 @@ class DvxplorerPacket:
     The IMU's Z axis is aligned with the camera's optical axis and oriented in the same direction as the camera (sensor-to-lens)
     """
 
-    trigger_events: typing.Optional[numpy.ndarray]
+    trigger_events: numpy.ndarray | None
     """
     External trigger events (rising and falling edges), timestamped with the same clock as the polarity events
     """
 
-    polarity_events_overflow_indices: typing.Optional[numpy.ndarray]
+    polarity_events_overflow_indices: numpy.ndarray | None
     """
     Each entry in this list indicates an overflow (USB packets dropped by the computer because the queue was full)
 
     For each overflow, the array entry is the index (in polarity_events) of the first event after the overflow
     """
 
-    imu_events_overflow_indices: typing.Optional[numpy.ndarray]
+    imu_events_overflow_indices: numpy.ndarray | None
     """
     Each entry in this list indicates an overflow (USB packets dropped by the computer because the queue was full)
 
     For each overflow, the array entry is the index (in imu_events) of the first event after the overflow
     """
 
-    trigger_events_overflow_indices: typing.Optional[numpy.ndarray]
+    trigger_events_overflow_indices: numpy.ndarray | None
     """
     Each entry in this list indicates an overflow (USB packets dropped by the computer because the queue was full)
 
@@ -156,26 +157,26 @@ class DvxplorerPacket:
 
 
 class Evt3Packet:
-    polarity_events: typing.Optional[numpy.ndarray]
+    polarity_events: numpy.ndarray | None
     """
     Polarity events (also known as change detection events and ON/OFF events)
 
     Timestamps are in microseconds, the origin (x = 0 and y = 0) is at the top-left corner
     """
 
-    trigger_events: typing.Optional[numpy.ndarray]
+    trigger_events: numpy.ndarray | None
     """
     External trigger events (rising and falling edges), timestamped with the same clock as the polarity events
     """
 
-    polarity_events_overflow_indices: typing.Optional[numpy.ndarray]
+    polarity_events_overflow_indices: numpy.ndarray | None
     """
     Each entry in this list indicates an overflow (USB packets dropped by the computer because the queue was full)
 
     For each overflow, the array entry is the index (in polarity_events) of the first event after the overflow
     """
 
-    trigger_events_overflow_indices: typing.Optional[numpy.ndarray]
+    trigger_events_overflow_indices: numpy.ndarray | None
     """
     Each entry in this list indicates an overflow (USB packets dropped by the computer because the queue was full)
 

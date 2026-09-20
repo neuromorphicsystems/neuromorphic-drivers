@@ -96,8 +96,7 @@ class InivationDvxplorerDevice(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 
@@ -126,7 +125,6 @@ class InivationDvxplorerDevice(typing.Protocol):
     def orientation(self) -> orientation.DvxplorerOrientation: ...
 
 
-
 class InivationDvxplorerDeviceOptional(typing.Protocol):
     def __enter__(self) -> "InivationDvxplorerDeviceOptional": ...
 
@@ -135,8 +133,7 @@ class InivationDvxplorerDeviceOptional(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 
@@ -165,7 +162,6 @@ class InivationDvxplorerDeviceOptional(typing.Protocol):
     def orientation(self) -> orientation.DvxplorerOrientation: ...
 
 
-
 class InivationDvxplorerDeviceRaw(typing.Protocol):
     def __enter__(self) -> "InivationDvxplorerDeviceRaw": ...
 
@@ -174,8 +170,7 @@ class InivationDvxplorerDeviceRaw(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 
@@ -204,7 +199,6 @@ class InivationDvxplorerDeviceRaw(typing.Protocol):
     def orientation(self) -> orientation.DvxplorerOrientation: ...
 
 
-
 class InivationDvxplorerDeviceRawOptional(typing.Protocol):
     def __enter__(self) -> "InivationDvxplorerDeviceRawOptional": ...
 
@@ -213,8 +207,7 @@ class InivationDvxplorerDeviceRawOptional(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 
@@ -241,4 +234,3 @@ class InivationDvxplorerDeviceRawOptional(typing.Protocol):
     def update_configuration(self, configuration: Configuration): ...
 
     def orientation(self) -> orientation.DvxplorerOrientation: ...
-

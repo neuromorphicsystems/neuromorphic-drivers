@@ -32,36 +32,35 @@ with nd.open(configuration=nd.prophesee_evk4.Configuration()) as device:
                 total += len(events)
                 np.add.at(counts, (events["x"], events["y"]), 1)
             if packet.polarity_events["t"][-1] > next_t:
-                match state:
-                    case 0:
-                        print("start counting")
-                        start_t = packet.polarity_events["t"][-1] + 1
-                        next_t += 1000000
-                        total = 0
-                        counts.fill(0)
-                        state = 1
-                    case 1:
-                        duration = packet.polarity_events["t"][-1] - start_t
-                        print(
-                            f"{diff_off=}, {total=}, {duration=}, {total / duration * 1e6} events/s"
-                        )
-                        diff_off_to_counts[diff_off] = counts
-                        diff_off_to_duration[diff_off] = float(duration)
-                        counts = np.zeros(
-                            (device.properties().width, device.properties().height),
-                            dtype=np.uint64,
-                        )
-                        next_t += 1000000
-                        state = 0
-                        diff_off -= 1
-                        device.update_configuration(
-                            nd.prophesee_evk4.Configuration(
-                                biases=nd.prophesee_evk4.Biases(
-                                    diff_off=diff_off,
-                                )
+                if state == 0:
+                    print("start counting")
+                    start_t = packet.polarity_events["t"][-1] + 1
+                    next_t += 1000000
+                    total = 0
+                    counts.fill(0)
+                    state = 1
+                elif state == 1:
+                    duration = packet.polarity_events["t"][-1] - start_t
+                    print(
+                        f"{diff_off=}, {total=}, {duration=}, {total / duration * 1e6} events/s"
+                    )
+                    diff_off_to_counts[diff_off] = counts
+                    diff_off_to_duration[diff_off] = float(duration)
+                    counts = np.zeros(
+                        (device.properties().width, device.properties().height),
+                        dtype=np.uint64,
+                    )
+                    next_t += 1000000
+                    state = 0
+                    diff_off -= 1
+                    device.update_configuration(
+                        nd.prophesee_evk4.Configuration(
+                            biases=nd.prophesee_evk4.Biases(
+                                diff_off=diff_off,
                             )
                         )
-                        print("wait for 1 seconds")
+                    )
+                    print("wait for 1 seconds")
 
 
 for diff_off, counts in diff_off_to_counts.items():
@@ -70,7 +69,7 @@ for diff_off, counts in diff_off_to_counts.items():
     figure.update_layout(
         width=1280,
         height=720,
-        margin=dict(l=0, r=0, b=0, t=0),
+        margin={"l": 0, "r": 0, "b": 0, "t": 0},
         xaxis={"visible": False, "showticklabels": False},
         yaxis={"visible": False, "showticklabels": False},
         showlegend=False,

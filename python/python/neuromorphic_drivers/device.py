@@ -1,6 +1,8 @@
 from . import status
 from .generated import enums, unions
-from .neuromorphic_drivers import Device as ExtensionDevice
+from .neuromorphic_drivers import (  # ty: ignore[unresolved-import]
+    Device as ExtensionDevice,
+)
 
 
 class Device(ExtensionDevice):
@@ -37,7 +39,9 @@ class Device(ExtensionDevice):
                     ring=(
                         None
                         if ring_status is None
-                        else status.RawRingStatus(*(ring_status[0:5] + ring_status[6:7]))
+                        else status.RawRingStatus(
+                            *(ring_status[0:5] + ring_status[6:7])
+                        )
                     ),
                 ),
                 packet,

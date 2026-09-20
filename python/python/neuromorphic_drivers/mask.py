@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pathlib
 import struct
 import typing
@@ -8,9 +10,7 @@ import numpy
 from . import serde
 
 
-def write_mask_as_png(
-    pixels: numpy.ndarray, path: typing.Union[str, bytes, pathlib.Path]
-):
+def write_mask_as_png(pixels: numpy.ndarray, path: str | bytes | pathlib.Path):
     def pack(tag: bytes, data: bytes):
         content = tag + data
         return b"".join(
@@ -61,7 +61,11 @@ def write_mask_as_png(
         )
 
 
-class RowColumnMask:
+XMaskT = typing.TypeVar("XMaskT", bound=tuple[serde.type.uint64, ...])
+YMaskT = typing.TypeVar("YMaskT", bound=tuple[serde.type.uint64, ...])
+
+
+class RowColumnMask(typing.Generic[XMaskT, YMaskT]):
     def __init__(self, width: serde.type.uint16, height: serde.type.uint16, set: bool):
         self.x_unpacked = numpy.full(width, fill_value=set, dtype=bool)
         self.y_unpacked = numpy.full(height, fill_value=set, dtype=bool)
@@ -112,21 +116,21 @@ class RowColumnMask:
         self.clear_x_range(start=x, stop=x + width, step=1)
         self.clear_y_range(start=y, stop=y + height, step=1)
 
-    def x_mask(self) -> tuple[serde.type.uint64, ...]:
+    def x_mask(self) -> XMaskT:
         uint8 = numpy.packbits(self.x_unpacked, bitorder="little")
         if len(uint8) % 8 != 0:
             uint8 = numpy.append(
                 uint8, numpy.zeros(8 - len(uint8) % 8, dtype=numpy.uint8)
             )
-        return tuple(uint8.view(dtype="<u8").tolist())  # type: ignore
+        return typing.cast(XMaskT, tuple(uint8.view(dtype="<u8").tolist()))
 
-    def y_mask(self) -> tuple[serde.type.uint64, ...]:
+    def y_mask(self) -> YMaskT:
         uint8 = numpy.packbits(self.y_unpacked, bitorder="little")
         if len(uint8) % 8 != 0:
             uint8 = numpy.append(
                 uint8, numpy.zeros(8 - len(uint8) % 8, dtype=numpy.uint8)
             )
-        return tuple(uint8.view(dtype="<u8").tolist())  # type: ignore
+        return typing.cast(YMaskT, tuple(uint8.view(dtype="<u8").tolist()))
 
     def pixels(self) -> numpy.ndarray[typing.Any, numpy.dtype[numpy.bool_]]:
         result = numpy.full(
@@ -200,11 +204,11 @@ class PropheseeEvk4PixelMask:
         )
         codes[numpy.logical_not(self.pixel_masks["set"])] = 0
         result = numpy.zeros(21, dtype=numpy.uint64)
-        for index in range(0, 63):
+        for index in range(63):
             result[index // 3] |= numpy.left_shift(
                 codes[index], numpy.uint64((index % 3) * 21)
             )
-        for bit in range(0, 21):
+        for bit in range(21):
             result[bit] |= numpy.left_shift(
                 numpy.bitwise_and(
                     numpy.right_shift(codes[63], numpy.uint64(bit)),
@@ -212,4 +216,4 @@ class PropheseeEvk4PixelMask:
                 ),
                 numpy.uint64(63),
             )
-        return tuple(result.tolist())  # type: ignore
+        return tuple(result.tolist())

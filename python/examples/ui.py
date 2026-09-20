@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import dataclasses
 import sys
 import typing
@@ -106,9 +108,7 @@ for mode in ("L", "RGB", "RGBA", "P"):
         else:
             extra_sampler = ""
             color = f"vec4({r_value}, {g_value}, {b_value}, {a_value})"
-        frame_display_mode_and_dtype_to_fragment_shader[
-            (mode, dtype)
-        ] = f"""
+        frame_display_mode_and_dtype_to_fragment_shader[(mode, dtype)] = f"""
 #version 330 core
 
 in vec2 coordinates;
@@ -1293,7 +1293,7 @@ class EventDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
         self.colormaps_changed = False
         self.clear_area = PySide6.QtCore.QRect()
         self.draw_area = PySide6.QtCore.QRect()
-        self.program: typing.Optional[EventDisplayRenderer.Program] = None
+        self.program: EventDisplayRenderer.Program | None = None
         self.lock = PySide6.QtCore.QMutex()
 
     def push(self, events: numpy.ndarray, current_t: int):
@@ -1439,16 +1439,16 @@ class EventDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
                 return
             self.window.beginExternalCommands()
             self.program.inner.bind()
-            self.program.inner.setUniformValue1f(
-                "current_t",  # type: ignore
+            self.program.inner.setUniformValue1f(  # ty: ignore[no-matching-overload]
+                "current_t",
                 self.current_t,
             )
-            self.program.inner.setUniformValue1i(
-                "style",  # type: ignore
+            self.program.inner.setUniformValue1i(  # ty: ignore[no-matching-overload]
+                "style",
                 self.style,
             )
-            self.program.inner.setUniformValue1f(
-                "tau",  # type: ignore
+            self.program.inner.setUniformValue1f(  # ty: ignore[no-matching-overload]
+                "tau",
                 self.tau,
             )
             self.program.inner.setUniformValue1i(
@@ -1502,8 +1502,8 @@ class EventDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
                     )
                 )
                 self.colormaps_changed = False
-            self.program.inner.setUniformValue1f(
-                "colormap_split",  # type: ignore
+            self.program.inner.setUniformValue1f(  # ty: ignore[no-matching-overload]
+                "colormap_split",
                 self.program.colormap_split,
             )
             self.program.colormap_texture.bind(1)
@@ -1523,15 +1523,14 @@ class EventDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
 
 
 class EventDisplay(PySide6.QtQuick.QQuickItem):
-
-    def __init__(self, parent: typing.Optional[PySide6.QtQuick.QQuickItem] = None):
+    def __init__(self, parent: PySide6.QtQuick.QQuickItem | None = None):
         super().__init__(parent)
-        self._window: typing.Optional[PySide6.QtQuick.QQuickWindow] = None
+        self._window: PySide6.QtQuick.QQuickWindow | None = None
         self._visible: bool = True
-        self._renderer: typing.Optional[EventDisplayRenderer] = None
-        self._clear_area: typing.Optional[PySide6.QtCore.QRectF] = None
-        self._draw_area: typing.Optional[PySide6.QtCore.QRectF] = None
-        self._sensor_size: typing.Optional[PySide6.QtCore.QSize] = None
+        self._renderer: EventDisplayRenderer | None = None
+        self._clear_area: PySide6.QtCore.QRectF | None = None
+        self._draw_area: PySide6.QtCore.QRectF | None = None
+        self._sensor_size: PySide6.QtCore.QSize | None = None
         self._style: EventStyle = "exponential"
         self._tau: float = DEFAULT_TAU
         self._on_colormap = DEFAULT_ON_COLORMAP
@@ -1551,7 +1550,7 @@ class EventDisplay(PySide6.QtQuick.QQuickItem):
     def set_sensor_size(self, sensor_size: PySide6.QtCore.QSize):
         assert sensor_size.width() > 0 and sensor_size.height() > 0
         if self._sensor_size is not None:
-            raise Exception(f"sensor size may only be set once")
+            raise Exception("sensor size may only be set once")
         self._sensor_size = sensor_size
 
     sensor_size = PySide6.QtCore.Property(
@@ -1668,9 +1667,7 @@ class EventDisplay(PySide6.QtQuick.QQuickItem):
             self._window.update()
 
     @PySide6.QtCore.Slot(PySide6.QtQuick.QQuickWindow)
-    def handleWindowChanged(
-        self, window: typing.Optional[PySide6.QtQuick.QQuickWindow]
-    ):
+    def handleWindowChanged(self, window: PySide6.QtQuick.QQuickWindow | None):
         self._window = window
         if window is not None:
             window.beforeSynchronizing.connect(
@@ -1778,7 +1775,7 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
         vertices_buffer: PySide6.QtOpenGL.QOpenGLBuffer
         vertex_array_object: PySide6.QtOpenGL.QOpenGLVertexArrayObject
         frame_texture: PySide6.QtOpenGL.QOpenGLTexture
-        colormap_texture: typing.Optional[PySide6.QtOpenGL.QOpenGLTexture]
+        colormap_texture: PySide6.QtOpenGL.QOpenGLTexture | None
 
         def cleanup(self):
             self.vertices_buffer.destroy()
@@ -1867,7 +1864,7 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
         self.colormap_changed = False
         self.clear_area = PySide6.QtCore.QRect()
         self.draw_area = PySide6.QtCore.QRect()
-        self.program: typing.Optional[FrameDisplayRenderer.Program] = None
+        self.program: FrameDisplayRenderer.Program | None = None
         self.lock = PySide6.QtCore.QMutex()
 
     def push(self, frame: numpy.ndarray):
@@ -1961,10 +1958,10 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
                 depth=self.depth,
             )
             frame_texture.allocateStorage()
-            frame_texture.setData(
+            frame_texture.setData(  # ty: ignore[no-matching-overload]
                 self.pixel_format,
                 self.pixel_type,
-                self.frame,  # type: ignore
+                self.frame,
                 self.transfer_options,
             )
             colormap_texture = frame_colormap_to_texture(self.colormap)
@@ -2029,10 +2026,10 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
                     self.program.inner.uniformLocation("colormap_sampler"), 1
                 )
             self.program.frame_texture.bind(0)
-            self.program.frame_texture.setData(
+            self.program.frame_texture.setData(  # ty: ignore[no-matching-overload]
                 self.pixel_format,
                 self.pixel_type,
-                self.frame,  # type: ignore
+                self.frame,
                 self.transfer_options,
             )
             if self.colormap_changed and self.program.colormap_texture is not None:
@@ -2056,17 +2053,16 @@ class FrameDisplayRenderer(PySide6.QtGui.QOpenGLFunctions):
 
 
 class FrameDisplay(PySide6.QtQuick.QQuickItem):
-
-    def __init__(self, parent: typing.Optional[PySide6.QtQuick.QQuickItem] = None):
+    def __init__(self, parent: PySide6.QtQuick.QQuickItem | None = None):
         super().__init__(parent)
-        self._window: typing.Optional[PySide6.QtQuick.QQuickWindow] = None
+        self._window: PySide6.QtQuick.QQuickWindow | None = None
         self._visible: bool = True
-        self._renderer: typing.Optional[FrameDisplayRenderer] = None
-        self._clear_area: typing.Optional[PySide6.QtCore.QRectF] = None
-        self._draw_area: typing.Optional[PySide6.QtCore.QRectF] = None
-        self._sensor_size: typing.Optional[PySide6.QtCore.QSize] = None
-        self._mode: typing.Optional[FrameMode] = None
-        self._dtype: typing.Optional[FrameDtype] = None
+        self._renderer: FrameDisplayRenderer | None = None
+        self._clear_area: PySide6.QtCore.QRectF | None = None
+        self._draw_area: PySide6.QtCore.QRectF | None = None
+        self._sensor_size: PySide6.QtCore.QSize | None = None
+        self._mode: FrameMode | None = None
+        self._dtype: FrameDtype | None = None
         self._colormap = DEFAULT_FRAME_COLORMAP
         self._padding_color = PySide6.QtGui.QColor(0x19, 0x19, 0x19)
         self._clear_background = True
@@ -2082,7 +2078,7 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
 
     def set_sensor_size(self, sensor_size: PySide6.QtCore.QSize):
         if self._sensor_size is not None:
-            raise Exception(f"sensor size may only be set once")
+            raise Exception("sensor size may only be set once")
         self._sensor_size = sensor_size
 
     sensor_size = PySide6.QtCore.Property(
@@ -2096,7 +2092,7 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
     def set_mode(self, mode: FrameMode):
         assert mode in {"L", "RGB", "RGBA", "P"}
         if self._mode is not None:
-            raise Exception(f"mode may only be set once")
+            raise Exception("mode may only be set once")
         self._mode = mode
 
     mode = PySide6.QtCore.Property(
@@ -2110,7 +2106,7 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
     def set_dtype(self, dtype: FrameDtype):
         assert dtype in {"u1", "u2", "f4"}
         if self._dtype is not None:
-            raise Exception(f"dtype may only be set once")
+            raise Exception("dtype may only be set once")
         self._dtype = dtype
 
     dtype = PySide6.QtCore.Property(
@@ -2176,9 +2172,7 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
             self._window.update()
 
     @PySide6.QtCore.Slot(PySide6.QtQuick.QQuickWindow)
-    def handleWindowChanged(
-        self, window: typing.Optional[PySide6.QtQuick.QQuickWindow]
-    ):
+    def handleWindowChanged(self, window: PySide6.QtQuick.QQuickWindow | None):
         self._window = window
         if window is not None:
             window.beforeSynchronizing.connect(
@@ -2287,23 +2281,23 @@ class App:
     def __init__(
         self,
         qml: str,
-        from_python_defaults: dict[str, typing.Any] = {},
-        to_python: typing.Optional[typing.Callable[[str, typing.Any], None]] = None,
+        from_python_defaults: dict[str, typing.Any] | None = None,
+        to_python: typing.Callable[[str, typing.Any], None] | None = None,
         argv: list[str] = sys.argv,
     ):
-        PySide6.QtQml.qmlRegisterType(
+        PySide6.QtQml.qmlRegisterType(  # ty: ignore[no-matching-overload]
             EventDisplay,
             "NeuromorphicDrivers",
             1,
             0,
-            "EventDisplay",  # type: ignore
+            "EventDisplay",
         )
-        PySide6.QtQml.qmlRegisterType(
+        PySide6.QtQml.qmlRegisterType(  # ty: ignore[no-matching-overload]
             FrameDisplay,
             "NeuromorphicDrivers",
             1,
             0,
-            "FrameDisplay",  # type: ignore
+            "FrameDisplay",
         )
         format = PySide6.QtGui.QSurfaceFormat()
         format.setVersion(3, 3)
@@ -2312,7 +2306,7 @@ class App:
         format.setProfile(PySide6.QtGui.QSurfaceFormat.OpenGLContextProfile.CoreProfile)
         PySide6.QtGui.QSurfaceFormat.setDefaultFormat(format)
         self.from_python = PySide6.QtQml.QQmlPropertyMap()
-        for key, value in from_python_defaults.items():
+        for key, value in (from_python_defaults or {}).items():
             self.from_python.setProperty(key, value)
         self.to_python = PySide6.QtQml.QQmlPropertyMap()
         if to_python is not None:
@@ -2329,28 +2323,28 @@ class App:
             raise Exception("the QML root component must be a Window")
         self.window: PySide6.QtQuick.QQuickWindow = self.engine.rootObjects()[0]  # type: ignore
 
-    def event_display(self, object_name: typing.Optional[str] = None) -> EventDisplay:
+    def event_display(self, object_name: str | None = None) -> EventDisplay:
         if object_name is None:
             child = self.window.findChild(EventDisplay)
         else:
             child = self.window.findChild(EventDisplay, name=object_name)
         if child is None:
             if object_name is None:
-                raise Exception(f"no EventDisplay found in the QML tree")
+                raise Exception("no EventDisplay found in the QML tree")
             else:
                 raise Exception(
                     f'no EventDisplay with name: "{object_name}" found in the QML tree'
                 )
         return child
 
-    def frame_display(self, object_name: typing.Optional[str] = None) -> FrameDisplay:
+    def frame_display(self, object_name: str | None = None) -> FrameDisplay:
         if object_name is None:
             child = self.window.findChild(FrameDisplay)
         else:
             child = self.window.findChild(FrameDisplay, name=object_name)
         if child is None:
             if object_name is None:
-                raise Exception(f"no FrameDisplay found in the QML tree")
+                raise Exception("no FrameDisplay found in the QML tree")
             else:
                 raise Exception(
                     f'no FrameDisplay with name: "{object_name}" found in the QML tree'
@@ -2358,7 +2352,7 @@ class App:
         return child
 
     def line_series(
-        self, object_name: typing.Optional[str] = None
+        self, object_name: str | None = None
     ) -> PySide6.QtGraphs.QLineSeries:
         if object_name is None:
             child = self.window.findChild(PySide6.QtGraphs.QLineSeries)
@@ -2368,9 +2362,7 @@ class App:
             )
         if child is None:
             if object_name is None:
-                raise Exception(
-                    f"no PySide6.QtGraphs.QLineSeries found in the QML tree"
-                )
+                raise Exception("no PySide6.QtGraphs.QLineSeries found in the QML tree")
             else:
                 raise Exception(
                     f'no PySide6.QtGraphs.QLineSeries with name: "{object_name}" found in the QML tree'

@@ -3,7 +3,6 @@ import typing
 
 import neuromorphic_drivers as nd
 import numpy as np
-
 import ui
 
 
@@ -45,7 +44,7 @@ if __name__ == "__main__":
     for index, color in enumerate(ui.DEFAULT_ON_COLORMAP):
         transparent_on_colormap.append(
             '"#{:02X}{:02X}{:02X}{:02X}"'.format(
-                int(round(index / (len(ui.DEFAULT_ON_COLORMAP) - 1) * 255)),
+                round(index / (len(ui.DEFAULT_ON_COLORMAP) - 1) * 255),
                 color.red(),
                 color.green(),
                 color.blue(),
@@ -55,7 +54,7 @@ if __name__ == "__main__":
     for index, color in enumerate(ui.DEFAULT_OFF_COLORMAP):
         transparent_off_colormap.append(
             '"#{:02X}{:02X}{:02X}{:02X}"'.format(
-                int(round(index / (len(ui.DEFAULT_OFF_COLORMAP) - 1) * 255)),
+                round(index / (len(ui.DEFAULT_OFF_COLORMAP) - 1) * 255),
                 color.red(),
                 color.green(),
                 color.blue(),
@@ -118,8 +117,8 @@ if __name__ == "__main__":
                             sensor_size: "{device.properties().width}x{device.properties().height}"
                             style: "exponential"
                             tau: 200000
-                            on_colormap: [{','.join(transparent_on_colormap)}]
-                            off_colormap: [{','.join(transparent_off_colormap)}]
+                            on_colormap: [{",".join(transparent_on_colormap)}]
+                            off_colormap: [{",".join(transparent_off_colormap)}]
                             clear_background: false
                         }}
                     }}
@@ -176,7 +175,7 @@ if __name__ == "__main__":
                                 to: 100000
                                 stepSize: 1
                                 editable: true
-                                value: {int(round(ui.DEFAULT_TAU / 1000))}
+                                value: {round(ui.DEFAULT_TAU / 1000)}
                                 onValueChanged: {{
                                     eventDisplayOverlay.tau = value * 1000
                                     eventDisplayStandalone.tau = value * 1000

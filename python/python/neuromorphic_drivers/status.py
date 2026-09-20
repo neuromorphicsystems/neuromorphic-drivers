@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 import dataclasses
-import typing
 
 
 @dataclasses.dataclass
@@ -12,7 +13,7 @@ class RawRingStatus:
     backlog: int
     raw_packets: int
     clutch_engaged: bool
-    overflow_indices: typing.Optional[list[int]]
+    overflow_indices: list[int] | None
     dropped_packets: int
 
 
@@ -41,13 +42,13 @@ class RawStatus:
     of software latency (status.system_time - status.ring.system_time).
     """
 
-    ring: typing.Optional[RawRingStatus]
+    ring: RawRingStatus | None
     """
     ring is None if no data became available before iterator_timeout
     ring may only be None if iterator_timeout is not None
     """
 
-    def delay(self) -> typing.Optional[float]:
+    def delay(self) -> float | None:
         if self.ring is None:
             return None
         return self.system_time - self.ring.system_time
@@ -80,13 +81,13 @@ class Status:
     of software latency (status.system_time - status.ring.system_time).
     """
 
-    ring: typing.Optional[RingStatus]
+    ring: RingStatus | None
     """
     ring is None if no data became available before iterator_timeout
     ring may only be None if iterator_timeout is not None
     """
 
-    def delay(self) -> typing.Optional[float]:
+    def delay(self) -> float | None:
         if self.ring is None:
             return None
         return self.system_time - self.ring.system_time

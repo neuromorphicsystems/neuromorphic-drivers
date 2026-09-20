@@ -41,10 +41,10 @@ figure = plotly.express.imshow(log_counts, color_continuous_scale="thermal")
 figure.update_layout(
     width=nd.prophesee_evk4.Properties().width,
     height=nd.prophesee_evk4.Properties().height,
-    margin=dict(l=0, r=0, b=0, t=0),
+    margin={"l": 0, "r": 0, "b": 0, "t": 0},
     xaxis={"visible": False, "showticklabels": False},
     yaxis={"visible": False, "showticklabels": False},
     showlegend=False,
 )
 figure.update_coloraxes(showscale=False)
-figure.write_image(dirname / f"evk4_mask_accumulated.png")
+figure.write_image(dirname / "evk4_mask_accumulated.png")

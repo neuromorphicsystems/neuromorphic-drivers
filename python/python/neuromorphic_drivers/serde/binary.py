@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import builtins
 import collections.abc
 import dataclasses
@@ -21,7 +23,7 @@ class Serializer:
     """
 
     output: io.BytesIO
-    container_depth_budget: typing.Optional[int]
+    container_depth_budget: int | None
     primitive_type_serializer: typing.Mapping = dataclasses.field(init=False)
 
     def __post_init__(self):
@@ -119,7 +121,7 @@ class Serializer:
     def serialize_variant_index(self, value: int):
         raise NotImplementedError
 
-    def sort_map_entries(self, offsets: typing.List[int]):
+    def sort_map_entries(self, offsets: list[int]):
         raise NotImplementedError
 
     def serialize_any(self, obj: typing.Any, obj_type):
@@ -127,21 +129,21 @@ class Serializer:
             self.primitive_type_serializer[obj_type](obj)
 
         elif hasattr(obj_type, "__origin__"):  # Generic type
-            types = getattr(obj_type, "__args__")
+            types = obj_type.__args__
 
-            if getattr(obj_type, "__origin__") == collections.abc.Sequence:  # Sequence
+            if obj_type.__origin__ == collections.abc.Sequence:  # Sequence
                 assert len(types) == 1
                 item_type = types[0]
                 self.serialize_len(len(obj))
                 for item in obj:
                     self.serialize_any(item, item_type)
 
-            elif getattr(obj_type, "__origin__") == tuple:  # Tuple
+            elif obj_type.__origin__ == tuple:  # Tuple
                 if len(types) != 1 or types[0] != ():
                     for i in range(len(obj)):
                         self.serialize_any(obj[i], types[i])
 
-            elif getattr(obj_type, "__origin__") == typing.Union:  # Option
+            elif obj_type.__origin__ == typing.Union:  # Option
                 assert len(types) == 2 and types[1] == builtins.type(None)
                 if obj is None:
                     self.output.write(b"\x00")
@@ -149,7 +151,7 @@ class Serializer:
                     self.output.write(b"\x01")
                     self.serialize_any(obj, types[0])
 
-            elif getattr(obj_type, "__origin__") == dict:  # Map
+            elif obj_type.__origin__ == dict:  # Map
                 assert len(types) == 2
                 self.serialize_len(len(obj))
                 offsets = []
@@ -190,7 +192,7 @@ class Deserializer:
     """
 
     input: io.BytesIO
-    container_depth_budget: typing.Optional[int]
+    container_depth_budget: int | None
     primitive_type_deserializer: typing.Mapping = dataclasses.field(init=False)
 
     def __post_init__(self):
@@ -325,7 +327,7 @@ class Deserializer:
         raise NotImplementedError
 
     def check_that_key_slices_are_increasing(
-        self, slice1: typing.Tuple[int, int], slice2: typing.Tuple[int, int]
+        self, slice1: tuple[int, int], slice2: tuple[int, int]
     ) -> None:
         raise NotImplementedError
 
@@ -334,28 +336,28 @@ class Deserializer:
             return self.primitive_type_deserializer[obj_type]()
 
         elif hasattr(obj_type, "__origin__"):  # Generic type
-            types = getattr(obj_type, "__args__")
-            if getattr(obj_type, "__origin__") == collections.abc.Sequence:  # Sequence
+            types = obj_type.__args__
+            if obj_type.__origin__ == collections.abc.Sequence:  # Sequence
                 assert len(types) == 1
                 item_type = types[0]
                 length = self.deserialize_len()
                 result = []
-                for i in range(0, length):
+                for i in range(length):
                     item = self.deserialize_any(item_type)
                     result.append(item)
 
                 return result
 
-            elif getattr(obj_type, "__origin__") == tuple:  # Tuple
+            elif obj_type.__origin__ == tuple:  # Tuple
                 result = []
                 if len(types) == 1 and types[0] == ():
-                    return tuple()
+                    return ()
                 for i in range(len(types)):
                     item = self.deserialize_any(types[i])
                     result.append(item)
                 return tuple(result)
 
-            elif getattr(obj_type, "__origin__") == typing.Union:  # Option
+            elif obj_type.__origin__ == typing.Union:  # Option
                 assert len(types) == 2 and types[1] == builtins.type(None)
                 tag = int.from_bytes(self.read(1), byteorder="little", signed=False)
                 if tag == 0:
@@ -365,12 +367,12 @@ class Deserializer:
                 else:
                     raise type.DeserializationError("Wrong tag for Option value")
 
-            elif getattr(obj_type, "__origin__") == dict:  # Map
+            elif obj_type.__origin__ == dict:  # Map
                 assert len(types) == 2
                 length = self.deserialize_len()
-                result = dict()
+                result = {}
                 previous_key_slice = None
-                for i in range(0, length):
+                for i in range(length):
                     key_start = self.get_buffer_offset()
                     key = self.deserialize_any(types[0])
                     key_end = self.get_buffer_offset()
@@ -402,7 +404,7 @@ class Deserializer:
                     field_value = self.deserialize_any(field_type)
                     values.append(field_value)
                 self.decrease_container_depth()
-                return obj_type(*values)  # type: ignore
+                return obj_type(*values)
 
             # handle variant
             elif hasattr(obj_type, "VARIANTS"):

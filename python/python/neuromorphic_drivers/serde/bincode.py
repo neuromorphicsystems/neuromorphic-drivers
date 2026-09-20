@@ -27,7 +27,7 @@ class BincodeSerializer(binary.Serializer):
     def serialize_variant_index(self, value: int):
         self.output.write(int(value).to_bytes(4, "little", signed=False))
 
-    def sort_map_entries(self, offsets: typing.List[int]):
+    def sort_map_entries(self, offsets: list[int]):
         pass
 
 

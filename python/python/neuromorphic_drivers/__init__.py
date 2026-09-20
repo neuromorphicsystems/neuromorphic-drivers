@@ -1,13 +1,16 @@
+from __future__ import annotations
+
 import dataclasses
 import sys
-import typing
 
 from . import serde as serde
 from .generated.devices_types import *
 from .mask import *
+from .neuromorphic_drivers import (  # ty: ignore[unresolved-import]
+    list_devices as extension_list_devices,
+)
 from .orientation import *
 from .packet import *
-from .neuromorphic_drivers import list_devices as extension_list_devices
 from .udev import *
 
 
@@ -16,8 +19,8 @@ class ListedDevice:
     name: Name
     connection: Connection
     address: str
-    serial: typing.Optional[str]
-    error: typing.Optional[str]
+    serial: str | None
+    error: str | None
 
 
 def list_devices() -> list[ListedDevice]:
@@ -48,9 +51,7 @@ def print_device_list(color: bool = True):
                 "-" if device.error is None else device.error,
             ]
         )
-    widths = [
-        max(len(row[column]) for row in table) for column in range(0, len(table[0]))
-    ]
+    widths = [max(len(row[column]) for row in table) for column in range(len(table[0]))]
     title = lambda string: f"\033[36;1m{string}\033[0m" if color else string
     sys.stdout.write(
         "".join(

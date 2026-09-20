@@ -112,8 +112,7 @@ class CenturyarksVgaDevice(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 
@@ -148,8 +147,7 @@ class CenturyarksVgaDeviceOptional(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 
@@ -184,8 +182,7 @@ class CenturyarksVgaDeviceRaw(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 
@@ -220,8 +217,7 @@ class CenturyarksVgaDeviceRawOptional(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 

@@ -156,8 +156,7 @@ class InivationDavis346Device(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 
@@ -196,8 +195,7 @@ class InivationDavis346DeviceOptional(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 
@@ -236,8 +234,7 @@ class InivationDavis346DeviceRaw(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 
@@ -276,8 +273,7 @@ class InivationDavis346DeviceRawOptional(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 

@@ -7,13 +7,9 @@ import numpy
 class SerializationError(ValueError):
     """Error raised during Serialization"""
 
-    pass
-
 
 class DeserializationError(ValueError):
     """Error raised during Deserialization"""
-
-    pass
 
 
 @dataclasses.dataclass(init=False)

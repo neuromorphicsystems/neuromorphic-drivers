@@ -163,9 +163,11 @@ fn generate_dataclasses<Writer: std::io::Write, Structure>(
     writer: &mut Writer,
     default_structure: &Structure,
     mut parameters: DataclassParameters,
-) where
+) -> std::collections::HashMap<String, String>
+where
     Structure: serde::Serialize + serde::de::Deserialize<'static>,
 {
+    let mut root_field_types = std::collections::HashMap::new();
     let mut samples = reflect::Samples::new();
     let mut tracer =
         reflect::Tracer::new(reflect::TracerConfig::default().record_samples_for_structs(true));
@@ -322,11 +324,17 @@ fn generate_dataclasses<Writer: std::io::Write, Structure>(
                             .unwrap();
                             for (index, field) in fields.iter().enumerate() {
                                 if !parameters.skip_fields.contains(&field.name) {
+                                    let field_type =
+                                        quote_type(&field.value, &parameters.name_to_new_name);
+                                    if node.name == root_name {
+                                        root_field_types
+                                            .insert(field.name.clone(), field_type.clone());
+                                    }
                                     writeln!(
                                         writer,
                                         "    {}: {}{}",
                                         field.name,
-                                        quote_type(&field.value, &parameters.name_to_new_name),
+                                        field_type,
                                         match &field.value {
                                             reflect::Format::TypeName(name) => {
                                                 let node = nodes
@@ -405,6 +413,7 @@ fn generate_dataclasses<Writer: std::io::Write, Structure>(
             }
         }
     }
+    root_field_types
 }
 
 macro_rules! generate {
@@ -470,12 +479,13 @@ macro_rules! generate {
                     "import numpy\n",
                     "\n",
                     "from .. import enums\n",
+                    "{}",
                     "from ... import orientation\n",
                     "from ... import packet\n",
                     "from ... import serde\n",
                     "from ... import status",
-                )).unwrap();
-                generate_dataclasses(
+                ), if stringify!($module) == "prophesee_evk4" { "from ... import mask\n" } else { "" }).unwrap();
+                let configuration_field_types = generate_dataclasses(
                     &mut writer,
                     &neuromorphic_drivers::devices::$module::Device::PROPERTIES.default_configuration,
                     DataclassParameters {
@@ -526,6 +536,28 @@ macro_rules! generate {
                         new_root_name: Some("Properties".into()),
                     },
                 );
+                if stringify!($module) == "prophesee_evk4" {
+                    let dedent = |field_type: &String| {
+                        field_type.replace("\n        ", "\n    ").replace("\n    ]", "\n]")
+                    };
+                    writeln!(
+                        writer,
+                        concat!(
+                            "\n",
+                            "\n",
+                            "XMask = {}\n",
+                            "\n",
+                            "YMask = {}\n",
+                            "\n",
+                            "\n",
+                            "class RowColumnMask(mask.RowColumnMask[XMask, YMask]):\n",
+                            "    def __init__(self, set: bool):\n",
+                            "        super().__init__(width=Properties.width, height=Properties.height, set=set)",
+                        ),
+                        dedent(&configuration_field_types["x_mask"]),
+                        dedent(&configuration_field_types["y_mask"]),
+                    ).unwrap();
+                }
                 for (class_name_suffix, iter_data_left_prefix, iter_data_right) in [
                     ("Device",  "status.", concat!("packet.", stringify!($packet))),
                     ("DeviceRaw",  "status.Raw", "bytes"),
@@ -548,8 +580,7 @@ macro_rules! generate {
                                 "        exception_type: typing.Optional[typing.Type[BaseException]],\n",
                                 "        value: typing.Optional[BaseException],\n",
                                 "        traceback: typing.Optional[types.TracebackType],\n",
-                                "    ) -> bool:\n",
-                                "        ...\n",
+                                "    ) -> bool: ...\n",
                                 "\n",
                                 "    def close(self) -> None: ...\n",
                                 "\n",
@@ -603,7 +634,7 @@ macro_rules! generate {
                                 writer,
                                 concat!(
                                     "\n",
-                                    "    def orientation(self) -> orientation.DvxplorerOrientation: ...\n",
+                                    "    def orientation(self) -> orientation.DvxplorerOrientation: ...",
                                 )
                             ).unwrap();
 
@@ -764,7 +795,7 @@ macro_rules! generate {
                 writer,
                 concat!(
                     "from .enums import *\n",
-                    "from .unions import *\n",
+                    "from .unions import *",
                 ),
             ).unwrap();
             for (class_name, iter_data_left_prefix, iter_data_right) in [
@@ -788,8 +819,7 @@ macro_rules! generate {
                             "        exception_type: typing.Optional[typing.Type[BaseException]],\n",
                             "        value: typing.Optional[BaseException],\n",
                             "        traceback: typing.Optional[types.TracebackType],\n",
-                            "    ) -> bool:\n",
-                            "        ...\n",
+                            "    ) -> bool: ...\n",
                             "\n",
                             "    def close(self) -> None: ...\n",
                             "\n",
@@ -813,7 +843,7 @@ macro_rules! generate {
                             "\n",
                             "    def connection(self) -> Connection: ...\n",
                             "\n",
-                            "    def update_configuration(self, configuration: Configuration): ...\n",
+                            "    def update_configuration(self, configuration: Configuration): ...",
                         ),
                         class_name,
                         class_suffix,
@@ -853,8 +883,7 @@ macro_rules! generate {
                                 "    address: typing.Optional[str] = None,\n",
                                 "    ring_configuration: typing.Optional[RingConfiguration] = None,\n",
                                 "    iterator_maximum_raw_packets: int = 64,\n",
-                                ") -> {}.{}{}:\n",
-                                "    ...",
+                                ") -> {}.{}{}: ...",
                             ),
                             stringify!($module),
                             iterator_timeout,
@@ -889,8 +918,7 @@ macro_rules! generate {
                                 "    address: typing.Optional[str] = None,\n",
                             "    ring_configuration: typing.Optional[RingConfiguration] = None,\n",
                             "    iterator_maximum_raw_packets: int = 64,\n",
-                            ") -> {}{}:\n",
-                            "    ...",
+                            ") -> {}{}: ...",
                         ),
                         iterator_timeout,
                         raw,

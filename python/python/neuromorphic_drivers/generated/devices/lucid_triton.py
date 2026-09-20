@@ -78,8 +78,7 @@ class LucidTritonDevice(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 
@@ -118,8 +117,7 @@ class LucidTritonDeviceOptional(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 
@@ -158,8 +156,7 @@ class LucidTritonDeviceRaw(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 
@@ -198,8 +195,7 @@ class LucidTritonDeviceRawOptional(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 

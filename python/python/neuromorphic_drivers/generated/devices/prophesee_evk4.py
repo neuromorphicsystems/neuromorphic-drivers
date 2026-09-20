@@ -6,6 +6,7 @@ import typing
 import numpy
 
 from .. import enums
+from ... import mask
 from ... import orientation
 from ... import packet
 from ... import serde
@@ -165,6 +166,50 @@ class Properties:
     height: serde.type.uint16 = 720
 
 
+XMask = tuple[
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+]
+
+YMask = tuple[
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+]
+
+
+class RowColumnMask(mask.RowColumnMask[XMask, YMask]):
+    def __init__(self, set: bool):
+        super().__init__(width=Properties.width, height=Properties.height, set=set)
+
+
 class PropheseeEvk4Device(typing.Protocol):
     def __enter__(self) -> "PropheseeEvk4Device": ...
 
@@ -173,8 +218,7 @@ class PropheseeEvk4Device(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 
@@ -213,8 +257,7 @@ class PropheseeEvk4DeviceOptional(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 
@@ -253,8 +296,7 @@ class PropheseeEvk4DeviceRaw(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 
@@ -293,8 +335,7 @@ class PropheseeEvk4DeviceRawOptional(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 

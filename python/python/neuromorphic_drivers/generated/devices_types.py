@@ -18,7 +18,6 @@ from .enums import *
 from .unions import *
 
 
-
 class GenericDevice(typing.Protocol):
     def __enter__(self) -> "GenericDevice": ...
 
@@ -27,8 +26,7 @@ class GenericDevice(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 
@@ -55,7 +53,6 @@ class GenericDevice(typing.Protocol):
     def update_configuration(self, configuration: Configuration): ...
 
 
-
 class GenericDeviceOptional(typing.Protocol):
     def __enter__(self) -> "GenericDeviceOptional": ...
 
@@ -64,8 +61,7 @@ class GenericDeviceOptional(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 
@@ -92,7 +88,6 @@ class GenericDeviceOptional(typing.Protocol):
     def update_configuration(self, configuration: Configuration): ...
 
 
-
 class GenericDeviceRaw(typing.Protocol):
     def __enter__(self) -> "GenericDeviceRaw": ...
 
@@ -101,8 +96,7 @@ class GenericDeviceRaw(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 
@@ -129,7 +123,6 @@ class GenericDeviceRaw(typing.Protocol):
     def update_configuration(self, configuration: Configuration): ...
 
 
-
 class GenericDeviceRawOptional(typing.Protocol):
     def __enter__(self) -> "GenericDeviceRawOptional": ...
 
@@ -138,8 +131,7 @@ class GenericDeviceRawOptional(typing.Protocol):
         exception_type: typing.Optional[typing.Type[BaseException]],
         value: typing.Optional[BaseException],
         traceback: typing.Optional[types.TracebackType],
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def close(self) -> None: ...
 
@@ -166,7 +158,6 @@ class GenericDeviceRawOptional(typing.Protocol):
     def update_configuration(self, configuration: Configuration): ...
 
 
-
 @typing.overload
 def open(
     configuration: inivation_davis346.Configuration,
@@ -176,8 +167,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> inivation_davis346.InivationDavis346Device:
-    ...
+) -> inivation_davis346.InivationDavis346Device: ...
 
 
 @typing.overload
@@ -189,8 +179,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> inivation_davis346.InivationDavis346DeviceOptional:
-    ...
+) -> inivation_davis346.InivationDavis346DeviceOptional: ...
 
 
 @typing.overload
@@ -202,8 +191,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> inivation_davis346.InivationDavis346DeviceRaw:
-    ...
+) -> inivation_davis346.InivationDavis346DeviceRaw: ...
 
 
 @typing.overload
@@ -215,8 +203,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> inivation_davis346.InivationDavis346DeviceRawOptional:
-    ...
+) -> inivation_davis346.InivationDavis346DeviceRawOptional: ...
 
 
 @typing.overload
@@ -228,8 +215,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> inivation_dvxplorer.InivationDvxplorerDevice:
-    ...
+) -> inivation_dvxplorer.InivationDvxplorerDevice: ...
 
 
 @typing.overload
@@ -241,8 +227,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> inivation_dvxplorer.InivationDvxplorerDeviceOptional:
-    ...
+) -> inivation_dvxplorer.InivationDvxplorerDeviceOptional: ...
 
 
 @typing.overload
@@ -254,8 +239,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> inivation_dvxplorer.InivationDvxplorerDeviceRaw:
-    ...
+) -> inivation_dvxplorer.InivationDvxplorerDeviceRaw: ...
 
 
 @typing.overload
@@ -267,8 +251,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> inivation_dvxplorer.InivationDvxplorerDeviceRawOptional:
-    ...
+) -> inivation_dvxplorer.InivationDvxplorerDeviceRawOptional: ...
 
 
 @typing.overload
@@ -280,8 +263,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> prophesee_evk3_hd.PropheseeEvk3HdDevice:
-    ...
+) -> prophesee_evk3_hd.PropheseeEvk3HdDevice: ...
 
 
 @typing.overload
@@ -293,8 +275,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> prophesee_evk3_hd.PropheseeEvk3HdDeviceOptional:
-    ...
+) -> prophesee_evk3_hd.PropheseeEvk3HdDeviceOptional: ...
 
 
 @typing.overload
@@ -306,8 +287,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> prophesee_evk3_hd.PropheseeEvk3HdDeviceRaw:
-    ...
+) -> prophesee_evk3_hd.PropheseeEvk3HdDeviceRaw: ...
 
 
 @typing.overload
@@ -319,8 +299,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> prophesee_evk3_hd.PropheseeEvk3HdDeviceRawOptional:
-    ...
+) -> prophesee_evk3_hd.PropheseeEvk3HdDeviceRawOptional: ...
 
 
 @typing.overload
@@ -332,8 +311,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> prophesee_evk4.PropheseeEvk4Device:
-    ...
+) -> prophesee_evk4.PropheseeEvk4Device: ...
 
 
 @typing.overload
@@ -345,8 +323,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> prophesee_evk4.PropheseeEvk4DeviceOptional:
-    ...
+) -> prophesee_evk4.PropheseeEvk4DeviceOptional: ...
 
 
 @typing.overload
@@ -358,8 +335,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> prophesee_evk4.PropheseeEvk4DeviceRaw:
-    ...
+) -> prophesee_evk4.PropheseeEvk4DeviceRaw: ...
 
 
 @typing.overload
@@ -371,8 +347,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> prophesee_evk4.PropheseeEvk4DeviceRawOptional:
-    ...
+) -> prophesee_evk4.PropheseeEvk4DeviceRawOptional: ...
 
 
 @typing.overload
@@ -384,8 +359,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> centuryarks_vga.CenturyarksVgaDevice:
-    ...
+) -> centuryarks_vga.CenturyarksVgaDevice: ...
 
 
 @typing.overload
@@ -397,8 +371,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> centuryarks_vga.CenturyarksVgaDeviceOptional:
-    ...
+) -> centuryarks_vga.CenturyarksVgaDeviceOptional: ...
 
 
 @typing.overload
@@ -410,8 +383,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> centuryarks_vga.CenturyarksVgaDeviceRaw:
-    ...
+) -> centuryarks_vga.CenturyarksVgaDeviceRaw: ...
 
 
 @typing.overload
@@ -423,8 +395,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> centuryarks_vga.CenturyarksVgaDeviceRawOptional:
-    ...
+) -> centuryarks_vga.CenturyarksVgaDeviceRawOptional: ...
 
 
 @typing.overload
@@ -436,8 +407,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> lucid_triton.LucidTritonDevice:
-    ...
+) -> lucid_triton.LucidTritonDevice: ...
 
 
 @typing.overload
@@ -449,8 +419,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> lucid_triton.LucidTritonDeviceOptional:
-    ...
+) -> lucid_triton.LucidTritonDeviceOptional: ...
 
 
 @typing.overload
@@ -462,8 +431,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> lucid_triton.LucidTritonDeviceRaw:
-    ...
+) -> lucid_triton.LucidTritonDeviceRaw: ...
 
 
 @typing.overload
@@ -475,8 +443,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> lucid_triton.LucidTritonDeviceRawOptional:
-    ...
+) -> lucid_triton.LucidTritonDeviceRawOptional: ...
 
 
 @typing.overload
@@ -488,8 +455,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> GenericDevice:
-    ...
+) -> GenericDevice: ...
 
 
 @typing.overload
@@ -501,8 +467,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> GenericDeviceOptional:
-    ...
+) -> GenericDeviceOptional: ...
 
 
 @typing.overload
@@ -514,8 +479,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> GenericDeviceRaw:
-    ...
+) -> GenericDeviceRaw: ...
 
 
 @typing.overload
@@ -527,8 +491,7 @@ def open(
     address: typing.Optional[str] = None,
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
-) -> GenericDeviceRawOptional:
-    ...
+) -> GenericDeviceRawOptional: ...
 
 
 def open(
