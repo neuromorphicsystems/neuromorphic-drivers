@@ -1547,6 +1547,11 @@ class EventDisplay(PySide6.QtQuick.QQuickItem):
         if hasattr(self, "_renderer") and self._renderer is not None:
             self._renderer.push(events=events, current_t=current_t)
 
+    def get_sensor_size(self) -> PySide6.QtCore.QSize:
+        if self._sensor_size is None:
+            return PySide6.QtCore.QSize()
+        return self._sensor_size
+
     def set_sensor_size(self, sensor_size: PySide6.QtCore.QSize):
         assert sensor_size.width() > 0 and sensor_size.height() > 0
         if self._sensor_size is not None:
@@ -1555,10 +1560,9 @@ class EventDisplay(PySide6.QtQuick.QQuickItem):
 
     sensor_size = PySide6.QtCore.Property(
         PySide6.QtCore.QSize,
-        None,
+        get_sensor_size,
         set_sensor_size,
-        None,
-        "sensor size in pixels",
+        doc="sensor size in pixels",
     )
 
     def get_style(self) -> EventStyle:
@@ -1574,8 +1578,7 @@ class EventDisplay(PySide6.QtQuick.QQuickItem):
         str,
         get_style,
         set_style,
-        None,
-        "decay function",
+        doc="decay function",
     )
 
     def get_tau(self) -> float:
@@ -1591,8 +1594,7 @@ class EventDisplay(PySide6.QtQuick.QQuickItem):
         float,
         get_tau,
         set_tau,
-        None,
-        "decay time constant",
+        doc="decay time constant",
     )
 
     def get_on_colormap(self) -> list[PySide6.QtGui.QColor]:
@@ -1608,8 +1610,7 @@ class EventDisplay(PySide6.QtQuick.QQuickItem):
         list,
         get_on_colormap,
         set_on_colormap,
-        None,
-        "colormap for ON events (polarity 1)",
+        doc="colormap for ON events (polarity 1)",
     )
 
     def get_off_colormap(self) -> list[PySide6.QtGui.QColor]:
@@ -1625,8 +1626,7 @@ class EventDisplay(PySide6.QtQuick.QQuickItem):
         list,
         get_off_colormap,
         set_off_colormap,
-        None,
-        "colormap for OFF events (polarity 0)",
+        doc="colormap for OFF events (polarity 0)",
     )
 
     def get_padding_color(self) -> PySide6.QtGui.QColor:
@@ -1641,8 +1641,7 @@ class EventDisplay(PySide6.QtQuick.QQuickItem):
         PySide6.QtCore.QObject,
         get_padding_color,
         set_padding_color,
-        None,
-        "background color to pad a ratio mismatch between the container and the event display",
+        doc="background color to pad a ratio mismatch between the container and the event display",
     )
 
     def get_clear_background(self) -> bool:
@@ -1657,8 +1656,7 @@ class EventDisplay(PySide6.QtQuick.QQuickItem):
         bool,
         get_clear_background,
         set_clear_background,
-        None,
-        "whether to clear the display's background with padding color",
+        doc="whether to clear the display's background with padding color",
     )
 
     @PySide6.QtCore.Slot()
@@ -2076,6 +2074,11 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
         if hasattr(self, "_renderer") and self._renderer is not None:
             self._renderer.push(frame=frame)
 
+    def get_sensor_size(self) -> PySide6.QtCore.QSize:
+        if self._sensor_size is None:
+            return PySide6.QtCore.QSize()
+        return self._sensor_size
+
     def set_sensor_size(self, sensor_size: PySide6.QtCore.QSize):
         if self._sensor_size is not None:
             raise Exception("sensor size may only be set once")
@@ -2083,11 +2086,13 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
 
     sensor_size = PySide6.QtCore.Property(
         PySide6.QtCore.QSize,
-        None,
+        get_sensor_size,
         set_sensor_size,
-        None,
-        "sensor size in pixels",
+        doc="sensor size in pixels",
     )
+
+    def get_mode(self) -> str:
+        return "" if self._mode is None else self._mode
 
     def set_mode(self, mode: FrameMode):
         assert mode in {"L", "RGB", "RGBA", "P"}
@@ -2097,11 +2102,13 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
 
     mode = PySide6.QtCore.Property(
         str,
-        None,
+        get_mode,
         set_mode,
-        None,
-        "input frame depth",
+        doc="input frame depth",
     )
+
+    def get_dtype(self) -> str:
+        return "" if self._dtype is None else self._dtype
 
     def set_dtype(self, dtype: FrameDtype):
         assert dtype in {"u1", "u2", "f4"}
@@ -2111,10 +2118,9 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
 
     dtype = PySide6.QtCore.Property(
         str,
-        None,
+        get_dtype,
         set_dtype,
-        None,
-        "input frame pixel type",
+        doc="input frame pixel type",
     )
 
     def get_colormap(self) -> list[PySide6.QtGui.QColor]:
@@ -2130,8 +2136,7 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
         list,
         get_colormap,
         set_colormap,
-        None,
-        "colormap for frame values (mode P only)",
+        doc="colormap for frame values (mode P only)",
     )
 
     def get_padding_color(self) -> PySide6.QtGui.QColor:
@@ -2146,8 +2151,7 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
         PySide6.QtGui.QColor,
         get_padding_color,
         set_padding_color,
-        None,
-        "background color to pad a ratio mismatch between the container and the frame display",
+        doc="background color to pad a ratio mismatch between the container and the frame display",
     )
 
     def get_clear_background(self) -> bool:
@@ -2162,8 +2166,7 @@ class FrameDisplay(PySide6.QtQuick.QQuickItem):
         bool,
         get_clear_background,
         set_clear_background,
-        None,
-        "whether to clear the display's background with padding color",
+        doc="whether to clear the display's background with padding color",
     )
 
     @PySide6.QtCore.Slot()
