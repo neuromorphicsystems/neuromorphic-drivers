@@ -418,7 +418,17 @@ where
 
 macro_rules! generate {
     ($(($module:ident, $packet:ident)),+) => {
-        let python_generated_directory = std::path::Path::new("python/neuromorphic_drivers/generated");
+        // The Python package sits at "python/neuromorphic_drivers" in this
+        // repository, but maturin rewrites `python-source` when it generates an
+        // sdist, where the same package sits at "neuromorphic_drivers" relative
+        // to this crate. Look for both so that `pip install` works from a source
+        // distribution as well as from a checkout.
+        let python_package_directory = ["python/neuromorphic_drivers", "neuromorphic_drivers"]
+            .into_iter()
+            .map(std::path::Path::new)
+            .find(|candidate| candidate.is_dir())
+            .expect("could not find the neuromorphic_drivers Python package directory");
+        let python_generated_directory = &python_package_directory.join("generated");
         let _ = std::fs::remove_dir_all(python_generated_directory);
         std::fs::create_dir(python_generated_directory).unwrap();
         let devices_directory = python_generated_directory.join("devices");
