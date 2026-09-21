@@ -1,8 +1,8 @@
-.venv
-tests/*.raw
-*.so
-*.pyd
 __pycache__
-examples/hot_pixels/
+.venv
+*.pyd
+*.so
 examples/*.png
 examples/*.raw
+examples/hot_pixels/
+tests/*.raw
