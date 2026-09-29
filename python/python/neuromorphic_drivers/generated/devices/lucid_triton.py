@@ -26,8 +26,56 @@ class Biases:
 
 
 @dataclasses.dataclass
+class RateLimiter:
+    rate_mev_per_second: typing.Optional[serde.type.float64] = None
+    reference_period_us: typing.Optional[serde.type.uint32] = None
+    reference_event_count: typing.Optional[serde.type.uint32] = None
+
+    def serialize(self) -> bytes:
+        return serde.bincode.serialize(self, RateLimiter)
+
+
+@dataclasses.dataclass
 class Configuration:
     biases: Biases = dataclasses.field(default_factory=Biases)
+    x_mask: tuple[
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+    ] = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    y_mask: tuple[
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+        serde.type.uint64,
+    ] = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    mask_intersection_only: bool = False
+    rate_limiter: typing.Optional[RateLimiter] = None
     enable_output: bool = True
 
     def serialize(self) -> bytes:

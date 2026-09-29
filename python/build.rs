@@ -352,7 +352,10 @@ where
                                             },
                                             _ => match values {
                                                 Some(values) => format!(" = {}", value_to_string(&values[index])),
-                                                None => "".to_owned(),
+                                                None => match &field.value {
+                                                    reflect::Format::Option(_) => " = None".to_owned(),
+                                                    _ => "".to_owned(),
+                                                },
                                             },
                                         },
                                     )
