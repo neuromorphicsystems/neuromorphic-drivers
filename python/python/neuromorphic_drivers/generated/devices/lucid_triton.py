@@ -6,6 +6,7 @@ import typing
 import numpy
 
 from .. import enums
+from ... import mask
 from ... import orientation as orientation_module
 from ... import packet
 from ... import serde
@@ -116,6 +117,50 @@ class RingConfiguration:
 class Properties:
     width: serde.type.uint16 = 1280
     height: serde.type.uint16 = 720
+
+
+XMask = tuple[
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+]
+
+YMask = tuple[
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+    serde.type.uint64,
+]
+
+
+class RowColumnMask(mask.RowColumnMask[XMask, YMask]):
+    def __init__(self, set: bool):
+        super().__init__(width=Properties.width, height=Properties.height, set=set)
 
 
 class LucidTritonDevice(typing.Protocol):
