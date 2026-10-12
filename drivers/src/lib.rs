@@ -30,6 +30,7 @@ pub use devices::centuryarks_vga;
 pub use devices::inivation_davis346;
 pub use devices::inivation_dvxplorer;
 pub use devices::lucid_triton;
+pub use devices::prophesee_evk1_gen4;
 pub use devices::prophesee_evk3_hd;
 pub use devices::prophesee_evk4;
 

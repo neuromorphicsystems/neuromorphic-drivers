@@ -4,6 +4,7 @@ from . import enums
 from .. import serde
 from .devices import inivation_davis346
 from .devices import inivation_dvxplorer
+from .devices import prophesee_evk1_gen4
 from .devices import prophesee_evk3_hd
 from .devices import prophesee_evk4
 from .devices import centuryarks_vga
@@ -13,6 +14,7 @@ from .devices import lucid_triton
 Properties = typing.Union[
     inivation_davis346.Properties,
     inivation_dvxplorer.Properties,
+    prophesee_evk1_gen4.Properties,
     prophesee_evk3_hd.Properties,
     prophesee_evk4.Properties,
     centuryarks_vga.Properties,
@@ -22,6 +24,7 @@ Properties = typing.Union[
 Configuration = typing.Union[
     inivation_davis346.Configuration,
     inivation_dvxplorer.Configuration,
+    prophesee_evk1_gen4.Configuration,
     prophesee_evk3_hd.Configuration,
     prophesee_evk4.Configuration,
     centuryarks_vga.Configuration,
@@ -31,6 +34,7 @@ Configuration = typing.Union[
 BiasesBounds = typing.Union[
     inivation_davis346.BiasesBounds,
     inivation_dvxplorer.BiasesBounds,
+    prophesee_evk1_gen4.BiasesBounds,
     prophesee_evk3_hd.BiasesBounds,
     prophesee_evk4.BiasesBounds,
     centuryarks_vga.BiasesBounds,
@@ -40,6 +44,7 @@ BiasesBounds = typing.Union[
 RingConfiguration = typing.Union[
     inivation_davis346.RingConfiguration,
     inivation_dvxplorer.RingConfiguration,
+    prophesee_evk1_gen4.RingConfiguration,
     prophesee_evk3_hd.RingConfiguration,
     prophesee_evk4.RingConfiguration,
     centuryarks_vga.RingConfiguration,
@@ -52,6 +57,8 @@ def name_to_properties(name: enums.Name) -> Properties:
         return inivation_davis346.Properties()
     if name == enums.Name.INIVATION_DVXPLORER:
         return inivation_dvxplorer.Properties()
+    if name == enums.Name.PROPHESEE_EVK1_GEN4:
+        return prophesee_evk1_gen4.Properties()
     if name == enums.Name.PROPHESEE_EVK3_HD:
         return prophesee_evk3_hd.Properties()
     if name == enums.Name.PROPHESEE_EVK4:
@@ -68,6 +75,8 @@ def deserialize_biases_bounds(name: enums.Name, data: bytes) -> BiasesBounds:
         return serde.bincode.deserialize(data, inivation_davis346.BiasesBounds)[0]
     if name == enums.Name.INIVATION_DVXPLORER:
         return serde.bincode.deserialize(data, inivation_dvxplorer.BiasesBounds)[0]
+    if name == enums.Name.PROPHESEE_EVK1_GEN4:
+        return serde.bincode.deserialize(data, prophesee_evk1_gen4.BiasesBounds)[0]
     if name == enums.Name.PROPHESEE_EVK3_HD:
         return serde.bincode.deserialize(data, prophesee_evk3_hd.BiasesBounds)[0]
     if name == enums.Name.PROPHESEE_EVK4:
@@ -84,6 +93,8 @@ def deserialize_configuration(name: enums.Name, data: bytes) -> Configuration:
         return serde.bincode.deserialize(data, inivation_davis346.Configuration)[0]
     if name == enums.Name.INIVATION_DVXPLORER:
         return serde.bincode.deserialize(data, inivation_dvxplorer.Configuration)[0]
+    if name == enums.Name.PROPHESEE_EVK1_GEN4:
+        return serde.bincode.deserialize(data, prophesee_evk1_gen4.Configuration)[0]
     if name == enums.Name.PROPHESEE_EVK3_HD:
         return serde.bincode.deserialize(data, prophesee_evk3_hd.Configuration)[0]
     if name == enums.Name.PROPHESEE_EVK4:
