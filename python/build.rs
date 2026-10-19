@@ -997,6 +997,7 @@ fn main() {
     generate!(
         (inivation_davis346, Davis346Packet),
         (inivation_dvxplorer, DvxplorerPacket),
+        (prophesee_evk1_gen4, Evt3Packet),
         (prophesee_evk3_hd, Evt3Packet),
         (prophesee_evk4, Evt3Packet),
         (centuryarks_vga, Evt3Packet),

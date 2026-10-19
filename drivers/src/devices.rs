@@ -593,6 +593,7 @@ macro_rules! register {
 register! {
     inivation_davis346: usb,
     inivation_dvxplorer: usb,
+    prophesee_evk1_gen4: usb,
     prophesee_evk3_hd: usb,
     prophesee_evk4: usb,
     centuryarks_vga: usb,

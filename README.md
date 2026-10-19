@@ -44,6 +44,7 @@ _Neuromorphic drivers_ does not depend on Metavision, libcaer, or dv-processing.
 | Lucid Triton (GigE Vision)             | 1280 × 720 | [lucid_triton.py](python/python/neuromorphic_drivers/generated/devices/lucid_triton.py)               | <img src="photos/triton.png" alt="triton" width="200"/>       |
 | IDS uEye XCP-E / IDS uEye XLS-E        | 1280 × 720 | [prophesee_evk4.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk4.py)           | <img src="photos/ueyexcpe.png" alt="ueyexcpe" width="200"/>   |
 | Prophesee EVK4 / SilkyEvCam HD/HD Lite | 1280 × 720 | [prophesee_evk4.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk4.py)           | <img src="photos/evk4.png" alt="evk4" width="200"/>           |
+| Prophesee EVK1 Gen4                    | 1280 × 720 | [prophesee_evk1_gen4.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk1_gen4.py) | <img src="photos/evk1.png" alt="evk3hd" width="200"/>                                                              |
 | Prophesee EVK3 HD                      | 1280 × 720 | [prophesee_evk3_hd.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk3_hd.py)     | <img src="photos/evk3hd.png" alt="evk3hd" width="200"/>       |
 | SilkyEvCam VGA                         | 640 × 480  | [centuryarks_vga.py](python/python/neuromorphic_drivers/generated/devices/centuryarks_vga.py)         | <img src="photos/silkyev.png" alt="silkyev" width="200"/>     |
 | iniVation DVXplorer                    | 640 × 480  | [inivation_dvxplorer.py](python/python/neuromorphic_drivers/generated/devices/inivation_dvxplorer.py) | <img src="photos/dvxplorer.png" alt="dvxplorer" width="200"/> |
@@ -59,6 +60,7 @@ Tick marks indicate supported features, minus signs indicate that the camera doe
 | ------------------- | ---------- | -------------------------------------------------------- | ------------------ | -------------- | ------------ | ------------ | ------------ | ----------- | ----------- | ----------------- | ------------- |
 | lucid_triton        | Ethernet   | `polarity_events`                                        | ▢                  | ▢              | ▢            | ▢            | ▢            | ✓¹          | -           | -                 | -             |
 | prophesee_evk4      | USB        | `polarity_events` `trigger_events`                       | ✓                  | ✓              | ✓            | ▢            | ▢            | ✓¹          | ✓³          | -                 | -             |
+| prophesee_evk1_gen4 | USB        | `polarity_events`                                        | ▢                  | ▢              | ▢            | -            | -            | ▢           | ▢           | ▢                 | -             |
 | prophesee_evk3_hd   | USB        | `polarity_events` `trigger_events`                       | ✓                  | ▢              | ▢            | ▢            | ▢            | ▢           | ▢           | -                 | -             |
 | centuryarks_vga     | USB        | `polarity_events` `trigger_events`                       | ✓                  | ▢              | ✓            | ▢            | ▢            | ▢           | ▢           | -                 | -             |
 | inivation_dvxplorer | USB        | `polarity_events` `imu_events` `trigger_events`          | ▢                  | ▢              | -            | ▢            | -            | ✓²          | -           | ▢                 | -             |
@@ -76,7 +78,7 @@ The Lucid Triton is a GigE Vision camera (ethernet). For reliable streaming the 
 
 -   https://github.com/neuromorphicsystems/kairos
 -   https://github.com/neuromorphicsystems/davis346-recorder
-
+-   https://github.com/EventLAB-Team/eventcv
 # Python
 
 ## Get started

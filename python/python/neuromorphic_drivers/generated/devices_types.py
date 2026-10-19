@@ -10,6 +10,7 @@ from .. import packet
 from .. import status
 from .devices import inivation_davis346 as inivation_davis346
 from .devices import inivation_dvxplorer as inivation_dvxplorer
+from .devices import prophesee_evk1_gen4 as prophesee_evk1_gen4
 from .devices import prophesee_evk3_hd as prophesee_evk3_hd
 from .devices import prophesee_evk4 as prophesee_evk4
 from .devices import centuryarks_vga as centuryarks_vga
@@ -252,6 +253,54 @@ def open(
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> inivation_dvxplorer.InivationDvxplorerDeviceRawOptional: ...
+
+
+@typing.overload
+def open(
+    configuration: prophesee_evk1_gen4.Configuration,
+    iterator_timeout: typing.Literal[None] = None,
+    raw: typing.Literal[False] = False,
+    serial: typing.Optional[str] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> prophesee_evk1_gen4.PropheseeEvk1Gen4Device: ...
+
+
+@typing.overload
+def open(
+    configuration: prophesee_evk1_gen4.Configuration,
+    iterator_timeout: float,
+    raw: typing.Literal[False] = False,
+    serial: typing.Optional[str] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> prophesee_evk1_gen4.PropheseeEvk1Gen4DeviceOptional: ...
+
+
+@typing.overload
+def open(
+    configuration: prophesee_evk1_gen4.Configuration,
+    iterator_timeout: typing.Literal[None] = None,
+    raw: typing.Literal[True] = True,
+    serial: typing.Optional[str] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> prophesee_evk1_gen4.PropheseeEvk1Gen4DeviceRaw: ...
+
+
+@typing.overload
+def open(
+    configuration: prophesee_evk1_gen4.Configuration,
+    iterator_timeout: float,
+    raw: typing.Literal[True] = True,
+    serial: typing.Optional[str] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> prophesee_evk1_gen4.PropheseeEvk1Gen4DeviceRawOptional: ...
 
 
 @typing.overload
