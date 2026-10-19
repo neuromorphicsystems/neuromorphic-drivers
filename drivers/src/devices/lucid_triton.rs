@@ -60,9 +60,31 @@ pub struct BiasesBounds {
     pub refr: properties::Bounds<i16>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct RateLimiter {
+    pub rate_mev_per_second: Option<f64>,
+    pub reference_period_us: Option<u32>,
+    pub reference_event_count: Option<u32>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(i32)]
+enum ErcDropMode {
+    All = 0,
+    Temporal = 1,
+    Horizontal = 2,
+    Vertical = 3,
+    UserDefined = 4,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct Configuration {
     pub biases: Biases,
+    pub x_mask: [u64; 20],
+    pub y_mask: [u64; 12],
+    pub mask_intersection_only: bool,
+    pub rate_limiter: Option<RateLimiter>,
     pub enable_output: bool,
 }
 
@@ -86,6 +108,8 @@ pub enum Error {
     PacketSizeTooSmall(usize, usize),
     #[error("the camera rejected the GVSP packet size {requested} (it reports {actual})")]
     PacketSizeRejected { requested: usize, actual: usize },
+    #[error("invalid Lucid Triton configuration: {0}")]
+    InvalidConfiguration(String),
     #[error(
         "GVSP packets are read one at a time, the number of parallel submissions must be {1} (got {0})"
     )]
@@ -115,6 +139,10 @@ pub const DEFAULT_CONFIGURATION: Configuration = Configuration {
         diff_off: 0,
         refr: 0,
     },
+    x_mask: [0; 20],
+    y_mask: [0; 12],
+    mask_intersection_only: false,
+    rate_limiter: None,
     enable_output: true,
 };
 
@@ -575,6 +603,184 @@ fn update_configuration(
     update_bias!(refr, BiasRefr, gvcp, camera_address, previous_biases, configuration.biases);
     update_bias!(fo, BiasFo, gvcp, camera_address, previous_biases, configuration.biases);
     update_bias!(hpf, BiasHpf, gvcp, camera_address, previous_biases, configuration.biases);
+
+    if previous_configuration.is_none() {
+        // Drop mode is locked while acquisition is running, so configure it before
+        // streaming starts even when the limiter is initially disabled. This makes
+        // it possible to enable and tune the limiter later with update_configuration.
+        ErcDropModeRegister {
+            value: ErcDropMode::Temporal,
+        }
+        .write(gvcp, camera_address)?;
+    }
+    if match previous_configuration {
+        Some(previous_configuration) => {
+            previous_configuration.rate_limiter != configuration.rate_limiter
+        }
+        None => true,
+    } {
+        ErcEnable { value: 0 }.write(gvcp, camera_address)?;
+        if let Some(rate_limiter) = &configuration.rate_limiter {
+            // Arena exposes ErcRateLimit as a converter over ErcReferenceEventCount,
+            // so setting both would assign two values to the same backing register.
+            if rate_limiter.rate_mev_per_second.is_some()
+                && rate_limiter.reference_event_count.is_some()
+            {
+                return Err(Error::InvalidConfiguration(
+                    "the ERC rate limit and reference event count cannot both be set".to_owned(),
+                ));
+            }
+            if let Some(reference_period_us) = rate_limiter.reference_period_us {
+                if reference_period_us == 0 {
+                    return Err(Error::InvalidConfiguration(
+                        "the ERC reference period must be greater than 0 µs".to_owned(),
+                    ));
+                }
+                ErcReferencePeriod {
+                    value: reference_period_us as i32,
+                }
+                .write(gvcp, camera_address)?;
+            }
+            let reference_event_count = match rate_limiter.rate_mev_per_second {
+                Some(rate_mev_per_second) => {
+                    let reference_period_us = match rate_limiter.reference_period_us {
+                        Some(reference_period_us) => reference_period_us,
+                        None => gvcp.read_register(
+                            ErcReferencePeriod { value: 0 }.address(),
+                            camera_address,
+                            ethernet::DEFAULT_TIMEOUT,
+                            ethernet::ATTEMPTS,
+                        )?,
+                    };
+                    Some(reference_event_count_from_rate(
+                        rate_mev_per_second,
+                        reference_period_us,
+                    )?)
+                }
+                None => rate_limiter.reference_event_count,
+            };
+            if let Some(reference_event_count) = reference_event_count {
+                if reference_event_count == 0 {
+                    return Err(Error::InvalidConfiguration(
+                        "the ERC reference event count must be greater than 0".to_owned(),
+                    ));
+                }
+                ErcReferenceEventCount {
+                    value: reference_event_count as i32,
+                }
+                .write(gvcp, camera_address)?;
+            }
+            ErcEnable { value: 1 }.write(gvcp, camera_address)?;
+        }
+    }
+    if match previous_configuration {
+        Some(previous_configuration) => {
+            previous_configuration.x_mask != configuration.x_mask
+                || previous_configuration.y_mask != configuration.y_mask
+                || previous_configuration.mask_intersection_only
+                    != configuration.mask_intersection_only
+        }
+        None => true,
+    } {
+        update_region_of_interest(gvcp, camera_address, configuration)?;
+    }
+    Ok(())
+}
+
+fn reference_event_count_from_rate(
+    rate_mev_per_second: f64,
+    reference_period_us: u32,
+) -> Result<u32, Error> {
+    if !rate_mev_per_second.is_finite() || rate_mev_per_second <= 0.0 {
+        return Err(Error::InvalidConfiguration(
+            "the rate limit must be a finite number greater than 0 MEv/s".to_owned(),
+        ));
+    }
+    let reference_event_count = (rate_mev_per_second * reference_period_us as f64).floor();
+    if reference_event_count < 1.0 || reference_event_count > u32::MAX as f64 {
+        return Err(Error::InvalidConfiguration(format!(
+            "the rate limit {rate_mev_per_second} MEv/s is outside the range supported by the camera's {reference_period_us} µs reference period"
+        )));
+    }
+    Ok(reference_event_count as u32)
+}
+
+fn mask_ranges(mask: &[u64], length: usize, set: bool) -> Vec<(i32, i32)> {
+    let mut result = Vec::new();
+    let mut start = None;
+    for index in 0..=length {
+        let selected =
+            index < length && (((mask[index / 64] >> (index % 64)) & 1 != 0) == set);
+        if selected && start.is_none() {
+            start = Some(index);
+        } else if !selected && start.is_some() {
+            let start = start.take().expect("start is some");
+            result.push((start as i32, (index - start) as i32));
+        }
+    }
+    result
+}
+
+fn update_region_of_interest(
+    gvcp: &mut ethernet::Ethernet,
+    camera_address: std::net::Ipv4Addr,
+    configuration: &Configuration,
+) -> Result<(), Error> {
+    let columns = mask_ranges(
+        &configuration.x_mask,
+        Device::PROPERTIES.width as usize,
+        configuration.mask_intersection_only,
+    );
+    let rows = mask_ranges(
+        &configuration.y_mask,
+        Device::PROPERTIES.height as usize,
+        configuration.mask_intersection_only,
+    );
+    if columns.is_empty() || rows.is_empty() {
+        if !configuration.mask_intersection_only {
+            return Err(Error::InvalidConfiguration(
+                "the ROI masks exclude every pixel".to_owned(),
+            ));
+        }
+        MultipleRoiColumnsEnable { value: 0 }.write(gvcp, camera_address)?;
+        MultipleRoiRowsEnable { value: 0 }.write(gvcp, camera_address)?;
+        MultipleRoiInvertEnable { value: 0 }.write(gvcp, camera_address)?;
+        return Ok(());
+    }
+
+    MultipleRoiColumnsEnable { value: 1 }.write(gvcp, camera_address)?;
+    MultipleRoiColumnsCount {
+        value: columns.len() as i32,
+    }
+    .write(gvcp, camera_address)?;
+    for (index, (offset, size)) in columns.into_iter().enumerate() {
+        MultipleRoiColumnSelector {
+            value: index as i32,
+        }
+        .write(gvcp, camera_address)?;
+        MultipleRoiColumnOffset { value: 0 }.write(gvcp, camera_address)?;
+        MultipleRoiColumnSize { value: size }.write(gvcp, camera_address)?;
+        MultipleRoiColumnOffset { value: offset }.write(gvcp, camera_address)?;
+    }
+
+    MultipleRoiRowsEnable { value: 1 }.write(gvcp, camera_address)?;
+    MultipleRoiRowsCount {
+        value: rows.len() as i32,
+    }
+    .write(gvcp, camera_address)?;
+    for (index, (offset, size)) in rows.into_iter().enumerate() {
+        MultipleRoiRowSelector {
+            value: index as i32,
+        }
+        .write(gvcp, camera_address)?;
+        MultipleRoiRowOffset { value: 0 }.write(gvcp, camera_address)?;
+        MultipleRoiRowSize { value: size }.write(gvcp, camera_address)?;
+        MultipleRoiRowOffset { value: offset }.write(gvcp, camera_address)?;
+    }
+    MultipleRoiInvertEnable {
+        value: configuration.mask_intersection_only as i32,
+    }
+    .write(gvcp, camera_address)?;
     Ok(())
 }
 
@@ -916,6 +1122,32 @@ register! { StreamChannelPacketSize, 0x0000_0D04 }
 register! { StreamChannelDestinationAddress, 0x0000_0D18 }
 register! { AcquisitionStart, 0x1030_0004 }
 register! { AcquisitionStop, 0x1030_0008 }
+// Verified against TRT009S-E MAM2A firmware 1.46.0.0.
+register! { ErcEnable, 0x13F6_0000 }
+register! { ErcReferencePeriod, 0x13F6_0004 }
+register! { ErcReferenceEventCount, 0x13F6_0018 }
+struct ErcDropModeRegister {
+    value: ErcDropMode,
+}
+impl Register for ErcDropModeRegister {
+    fn address(&self) -> u32 {
+        0x13F6_002C
+    }
+    fn value(&self) -> u32 {
+        self.value as u32
+    }
+}
+register! { MultipleRoiRowsEnable, 0x1040_1004 }
+register! { MultipleRoiRowSelector, 0x1040_1008 }
+register! { MultipleRoiRowSize, 0x1040_1010 }
+register! { MultipleRoiRowOffset, 0x1040_1024 }
+register! { MultipleRoiRowsCount, 0x1040_1038 }
+register! { MultipleRoiColumnsEnable, 0x1040_1050 }
+register! { MultipleRoiColumnSelector, 0x1040_1054 }
+register! { MultipleRoiColumnSize, 0x1040_105C }
+register! { MultipleRoiColumnOffset, 0x1040_1070 }
+register! { MultipleRoiColumnsCount, 0x1040_1084 }
+register! { MultipleRoiInvertEnable, 0x1040_108C }
 bias_register! { BiasDiffOn, 0x13F3_0000 }
 bias_register! { BiasDiffOff, 0x13F3_0014 }
 bias_register! { BiasDiff, 0x13F3_0028 }

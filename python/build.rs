@@ -352,7 +352,10 @@ where
                                             },
                                             _ => match values {
                                                 Some(values) => format!(" = {}", value_to_string(&values[index])),
-                                                None => "".to_owned(),
+                                                None => match &field.value {
+                                                    reflect::Format::Option(_) => " = None".to_owned(),
+                                                    _ => "".to_owned(),
+                                                },
                                             },
                                         },
                                     )
@@ -480,6 +483,8 @@ macro_rules! generate {
                 let mut writer = std::io::BufWriter::new(
                     std::fs::File::create(devices_directory.join(format!("{}.py", stringify!($module)))).unwrap(),
                 );
+                let has_row_column_mask =
+                    matches!(stringify!($module), "prophesee_evk4" | "lucid_triton");
                 writeln!(writer, concat!(
                     "import dataclasses\n",
                     "import enum\n",
@@ -494,7 +499,7 @@ macro_rules! generate {
                     "from ... import packet\n",
                     "from ... import serde\n",
                     "from ... import status",
-                ), if stringify!($module) == "prophesee_evk4" { "from ... import mask\n" } else { "" }).unwrap();
+                ), if has_row_column_mask { "from ... import mask\n" } else { "" }).unwrap();
                 let configuration_field_types = generate_dataclasses(
                     &mut writer,
                     &neuromorphic_drivers::devices::$module::Device::PROPERTIES.default_configuration,
@@ -546,7 +551,7 @@ macro_rules! generate {
                         new_root_name: Some("Properties".into()),
                     },
                 );
-                if stringify!($module) == "prophesee_evk4" {
+                if has_row_column_mask {
                     let dedent = |field_type: &String| {
                         field_type.replace("\n        ", "\n    ").replace("\n    ]", "\n]")
                     };
