@@ -84,6 +84,8 @@ pub struct Configuration {
     pub x_mask: [u64; 20],
     pub y_mask: [u64; 12],
     pub mask_intersection_only: bool,
+    /// Timeout per register write when configuring the ROI masks.
+    pub mask_write_timeout: std::time::Duration,
     pub rate_limiter: Option<RateLimiter>,
     pub enable_output: bool,
 }
@@ -142,6 +144,7 @@ pub const DEFAULT_CONFIGURATION: Configuration = Configuration {
     x_mask: [0; 20],
     y_mask: [0; 12],
     mask_intersection_only: false,
+    mask_write_timeout: std::time::Duration::from_millis(25),
     rate_limiter: None,
     enable_output: true,
 };
@@ -726,6 +729,7 @@ fn update_region_of_interest(
     camera_address: std::net::Ipv4Addr,
     configuration: &Configuration,
 ) -> Result<(), Error> {
+    let write_timeout = configuration.mask_write_timeout;
     let columns = mask_ranges(
         &configuration.x_mask,
         Device::PROPERTIES.width as usize,
@@ -742,45 +746,45 @@ fn update_region_of_interest(
                 "the ROI masks exclude every pixel".to_owned(),
             ));
         }
-        MultipleRoiColumnsEnable { value: 0 }.write(gvcp, camera_address)?;
-        MultipleRoiRowsEnable { value: 0 }.write(gvcp, camera_address)?;
-        MultipleRoiInvertEnable { value: 0 }.write(gvcp, camera_address)?;
+        MultipleRoiColumnsEnable { value: 0 }.write_with_timeout(gvcp, camera_address, write_timeout)?;
+        MultipleRoiRowsEnable { value: 0 }.write_with_timeout(gvcp, camera_address, write_timeout)?;
+        MultipleRoiInvertEnable { value: 0 }.write_with_timeout(gvcp, camera_address, write_timeout)?;
         return Ok(());
     }
 
-    MultipleRoiColumnsEnable { value: 1 }.write(gvcp, camera_address)?;
+    MultipleRoiColumnsEnable { value: 1 }.write_with_timeout(gvcp, camera_address, write_timeout)?;
     MultipleRoiColumnsCount {
         value: columns.len() as i32,
     }
-    .write(gvcp, camera_address)?;
+    .write_with_timeout(gvcp, camera_address, write_timeout)?;
     for (index, (offset, size)) in columns.into_iter().enumerate() {
         MultipleRoiColumnSelector {
             value: index as i32,
         }
-        .write(gvcp, camera_address)?;
-        MultipleRoiColumnOffset { value: 0 }.write(gvcp, camera_address)?;
-        MultipleRoiColumnSize { value: size }.write(gvcp, camera_address)?;
-        MultipleRoiColumnOffset { value: offset }.write(gvcp, camera_address)?;
+        .write_with_timeout(gvcp, camera_address, write_timeout)?;
+        MultipleRoiColumnOffset { value: 0 }.write_with_timeout(gvcp, camera_address, write_timeout)?;
+        MultipleRoiColumnSize { value: size }.write_with_timeout(gvcp, camera_address, write_timeout)?;
+        MultipleRoiColumnOffset { value: offset }.write_with_timeout(gvcp, camera_address, write_timeout)?;
     }
 
-    MultipleRoiRowsEnable { value: 1 }.write(gvcp, camera_address)?;
+    MultipleRoiRowsEnable { value: 1 }.write_with_timeout(gvcp, camera_address, write_timeout)?;
     MultipleRoiRowsCount {
         value: rows.len() as i32,
     }
-    .write(gvcp, camera_address)?;
+    .write_with_timeout(gvcp, camera_address, write_timeout)?;
     for (index, (offset, size)) in rows.into_iter().enumerate() {
         MultipleRoiRowSelector {
             value: index as i32,
         }
-        .write(gvcp, camera_address)?;
-        MultipleRoiRowOffset { value: 0 }.write(gvcp, camera_address)?;
-        MultipleRoiRowSize { value: size }.write(gvcp, camera_address)?;
-        MultipleRoiRowOffset { value: offset }.write(gvcp, camera_address)?;
+        .write_with_timeout(gvcp, camera_address, write_timeout)?;
+        MultipleRoiRowOffset { value: 0 }.write_with_timeout(gvcp, camera_address, write_timeout)?;
+        MultipleRoiRowSize { value: size }.write_with_timeout(gvcp, camera_address, write_timeout)?;
+        MultipleRoiRowOffset { value: offset }.write_with_timeout(gvcp, camera_address, write_timeout)?;
     }
     MultipleRoiInvertEnable {
         value: configuration.mask_intersection_only as i32,
     }
-    .write(gvcp, camera_address)?;
+    .write_with_timeout(gvcp, camera_address, write_timeout)?;
     Ok(())
 }
 
