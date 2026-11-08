@@ -31,6 +31,13 @@ env:
   CIBW_ARCHS_WINDOWS: native
 
 jobs:
+  test_filter_configuration:
+    name: Test IMX636 filter configuration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --release -p neuromorphic-drivers --lib filter_tests
   build_wheels:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
