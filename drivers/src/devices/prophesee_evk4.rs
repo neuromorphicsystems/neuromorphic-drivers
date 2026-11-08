@@ -118,6 +118,8 @@ pub struct Device {
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum Error {
+    #[error("filter initialization failed: {0}")]
+    FilterInit(&'static str),
     #[error(transparent)]
     Usb(#[from] usb::Error),
 
@@ -806,6 +808,8 @@ impl device::Usb for Device {
         }
         .write(&handle)?;
 
+        configure_hardware_filters(&handle)?;
+
         // Event Rate Controler (ERC)
         ErcReserved6000 { value: 0x00155400 }.write(&handle)?;
         match &configuration.rate_limiter {
@@ -1254,6 +1258,203 @@ fn request(
     let read = handle.read_bulk(0x82, &mut buffer, timeout)?;
     buffer.truncate(read);
     Ok(buffer)
+}
+
+// IMX636 timing table and filter initialization derived from Prophesee OpenEB.
+// Copyright (c) Prophesee S.A. Licensed under the Apache License, Version 2.0.
+// See LICENSES/Apache-2.0.txt and THIRD_PARTY_NOTICES.md for attribution.
+const STC_PARAMS: [(u32, u32, u32); 100] = [
+    (12, 15, 90),
+    (10, 3, 90),
+    (11, 5, 95),
+    (9, 1, 102),
+    (13, 15, 90),
+    (11, 3, 114),
+    (11, 3, 90),
+    (12, 5, 109),
+    (13, 9, 122),
+    (13, 9, 90),
+    (10, 1, 102),
+    (14, 15, 109),
+    (13, 7, 117),
+    (14, 13, 127),
+    (12, 3, 138),
+    (12, 3, 90),
+    (12, 3, 90),
+    (14, 11, 99),
+    (13, 5, 109),
+    (13, 5, 109),
+    (14, 9, 122),
+    (14, 9, 122),
+    (11, 1, 209),
+    (11, 1, 138),
+    (11, 1, 138),
+    (15, 15, 147),
+    (15, 15, 147),
+    (14, 7, 158),
+    (14, 7, 158),
+    (15, 13, 170),
+    (15, 13, 170),
+    (13, 3, 185),
+    (13, 3, 185),
+    (13, 3, 185),
+    (13, 3, 90),
+    (13, 3, 90),
+    (15, 11, 202),
+    (15, 11, 99),
+    (15, 11, 99),
+    (15, 11, 99),
+    (14, 5, 109),
+    (14, 5, 109),
+    (14, 5, 109),
+    (14, 5, 109),
+    (15, 9, 248),
+    (15, 9, 122),
+    (15, 9, 122),
+    (15, 9, 122),
+    (15, 9, 122),
+    (12, 1, 280),
+    (12, 1, 280),
+    (12, 1, 138),
+    (12, 1, 138),
+    (12, 1, 138),
+    (12, 1, 138),
+    (16, 15, 147),
+    (16, 15, 147),
+    (16, 15, 147),
+    (15, 7, 158),
+    (15, 7, 158),
+    (15, 7, 158),
+    (15, 7, 158),
+    (15, 7, 158),
+    (16, 13, 171),
+    (16, 13, 171),
+    (16, 13, 171),
+    (16, 13, 171),
+    (16, 13, 171),
+    (14, 3, 185),
+    (14, 3, 185),
+    (14, 3, 185),
+    (14, 3, 185),
+    (14, 3, 185),
+    (16, 11, 409),
+    (16, 11, 202),
+    (16, 11, 202),
+    (16, 11, 202),
+    (16, 11, 202),
+    (16, 11, 202),
+    (16, 11, 202),
+    (15, 5, 451),
+    (15, 5, 223),
+    (15, 5, 223),
+    (15, 5, 223),
+    (15, 5, 223),
+    (15, 5, 223),
+    (15, 5, 223),
+    (15, 5, 223),
+    (16, 9, 501),
+    (16, 9, 501),
+    (16, 9, 501),
+    (16, 9, 248),
+    (16, 9, 248),
+    (16, 9, 248),
+    (16, 9, 248),
+    (16, 9, 248),
+    (16, 9, 248),
+    (16, 9, 248),
+    (13, 1, 564),
+    (13, 1, 564),
+];
+
+// Experiment: configure IMX636 hardware blocks during device initialization.
+// Register sequencing follows the OpenEB IMX636 implementation. No event-stream
+// software filtering is performed. An absent environment variable is a no-op.
+fn configure_hardware_filters(handle: &rusb::DeviceHandle<rusb::Context>) -> Result<(), Error> {
+    let spec = match std::env::var("KV260_FILTERS") {
+        Ok(s) => s,
+        Err(_) => return Ok(()),
+    };
+    let parts: Vec<&str> = spec.split(',').collect();
+    if !(parts.len() == 4 || parts.len() == 5) || !matches!(parts[0], "0" | "1") || !matches!(parts[1], "0" | "1") {
+        return Err(Error::FilterInit("Invalid KV260_FILTERS format"));
+    }
+    let afk = parts[0] == "1";
+    let stc = parts[1] == "1";
+    let low: u32 = parts[2].parse().map_err(|_| Error::FilterInit("Invalid AFK low frequency"))?;
+    let high: u32 = parts[3].parse().map_err(|_| Error::FilterInit("Invalid AFK high frequency"))?;
+    let stc_ms: usize = if parts.len() == 5 {
+        parts[4].parse().map_err(|_| Error::FilterInit("Invalid STC threshold"))?
+    } else { 10 };
+    if !(1..=100).contains(&stc_ms) {
+        return Err(Error::FilterInit("STC threshold must be between 1 and 100 ms"));
+    }
+    if !(50 <= low && low <= high && high <= 520) {
+        return Err(Error::FilterInit("AFK frequency range must be within 50-520 Hz"));
+    }
+
+    if afk {
+        // Prophesee first checks the AFK SRAM initialization flag.
+        if AfkInitialization::read(handle)?.value & 4 == 0 {
+            return Err(Error::FilterInit("AFK initialization flag is not ready"));
+        }
+        let invalidation = Invalidation::read(handle)?.value;
+        Invalidation { value: (invalidation & !0xfff) | 1630 }.write(handle)?;
+        AfkPeriod {
+            min_cutoff_period: (1_000_000 / high) >> 7,
+            max_cutoff_period: (1_000_000 / low) >> 7,
+            inverted_duty_cycle: 8,
+        }.write(handle)?;
+        let old_param = ReservedC004::read(handle)?.value;
+        // Band cut, low threshold 4, high threshold 6, preserve unrelated bits.
+        ReservedC004 { value: (old_param & !0x7f) | 4 | (6 << 3) }.write(handle)?;
+        AfkPipelineControl { reserved_0_2: 1, bypass: 0 }.write(handle)?;
+        let period = AfkPeriod::read(handle)?;
+        let param = ReservedC004::read(handle)?.value;
+        if AfkPipelineControl::read(handle)?.bypass != 0 ||
+           period.min_cutoff_period != ((1_000_000 / high) >> 7) ||
+           period.max_cutoff_period != ((1_000_000 / low) >> 7) ||
+           period.inverted_duty_cycle != 8 || (param & 0x7f) != (4 | (6 << 3)) {
+            return Err(Error::FilterInit("AFK pipeline readback failed"));
+        }
+    }
+
+    if stc {
+        // Clear the old SRAM-completion flag and request a fresh initialization.
+        let mut init = BurstPipelineInitialization::read(handle)?;
+        init.clear_flag = 1;
+        init.write(handle)?;
+        init.clear_flag = 0;
+        init.force_sram_initialization = 1;
+        init.write(handle)?;
+        let (prescaler, multiplier, fifo_timeout) = STC_PARAMS[stc_ms - 1];
+        let threshold_us = (stc_ms as u32) * 1000;
+        StcParam { enable: 1, threshold: threshold_us, reserved_20_24: 0, disable_cut_trail: 0 }.write(handle)?;
+        TrailParam { enable: 0, threshold: 0 }.write(handle)?;
+        // Prescaler, multiplier, and timeout are taken from OpenEB's IMX636 table.
+        StcTimestamping { prescaler, multiplier, reserved_9_16: 1,
+                          reset_refractory_period_on_event: 1 }.write(handle)?;
+        let mut invalidation = BurstPipelineInvalidation::read(handle)?;
+        invalidation.dt_fifo_timeout = fifo_timeout;
+        invalidation.write(handle)?;
+        let mut ready = false;
+        for _ in 0..3 {
+            if BurstPipelineInitialization::read(handle)?.clear_flag == 1 { ready = true; break; }
+        }
+        if !ready { return Err(Error::FilterInit("STC initialization flag is not ready")); }
+        BurstPipelineControl { reserved_0_2: 1, bypass: 0 }.write(handle)?;
+        let pipeline = BurstPipelineControl::read(handle)?;
+        let params = StcParam::read(handle)?;
+        let timing = StcTimestamping::read(handle)?;
+        let invalidation = BurstPipelineInvalidation::read(handle)?;
+        if pipeline.bypass != 0 || params.enable != 1 || params.threshold != threshold_us ||
+           params.disable_cut_trail != 0 || timing.prescaler != prescaler || timing.multiplier != multiplier ||
+           invalidation.dt_fifo_timeout != fifo_timeout {
+            return Err(Error::FilterInit("STC register readback failed"));
+        }
+    }
+    eprintln!("KV260_FILTER_READBACK afk={} stc={} band={}-{}Hz stc_us={}",
+              afk, stc, low, high, stc_ms * 1000);
+    Ok(())
 }
 
 fn update_configuration(
