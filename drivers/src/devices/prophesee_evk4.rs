@@ -94,6 +94,17 @@ pub struct RateLimiter {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct AntiFlicker {
+    pub low_frequency_hz: u16,
+    pub high_frequency_hz: u16,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct Stc {
+    pub threshold_ms: u8,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct Configuration {
     pub biases: Biases,
     pub x_mask: [u64; 20],
@@ -104,6 +115,8 @@ pub struct Configuration {
     pub clock: Clock,
     pub rate_limiter: Option<RateLimiter>,
     pub enable_output: bool,
+    pub anti_flicker: Option<AntiFlicker>,
+    pub stc: Option<Stc>,
 }
 
 pub struct Device {
@@ -118,6 +131,8 @@ pub struct Device {
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum Error {
+    #[error("filter initialization failed: {0}")]
+    FilterInit(&'static str),
     #[error(transparent)]
     Usb(#[from] usb::Error),
 
@@ -208,6 +223,8 @@ impl device::Device for Device {
             clock: Clock::Internal,
             rate_limiter: None,
             enable_output: true,
+            anti_flicker: None,
+            stc: None,
         },
     };
 
@@ -315,16 +332,13 @@ impl device::Usb for Device {
         IntoError: From<Self::Error> + Clone + Send + 'static,
         IntoWarning: From<ring::Overflow> + Clone + Send + 'static,
     {
+        validate_filter_configuration(&configuration)?;
         let (handle, vendor_and_product_id, serial) = match serial_or_bus_number_and_address {
-            device::Identifier::Serial(serial) => {
-                Self::open_serial(event_loop.context(), serial)?
-            }
+            device::Identifier::Serial(serial) => Self::open_serial(event_loop.context(), serial)?,
             device::Identifier::Location(device::Location::BusNumberAndAddress {
                 bus_number,
                 address,
-            }) => {
-                Self::open_bus_number_and_address(event_loop.context(), bus_number, address)?
-            }
+            }) => Self::open_bus_number_and_address(event_loop.context(), bus_number, address)?,
             device::Identifier::Location(device::Location::Address(_)) => {
                 return Err(usb::Error::Address.into())
             }
@@ -400,7 +414,7 @@ impl device::Usb for Device {
                 // "UE-39B2XLS" (UTF-16)
                 &[
                     b'U', 0x00, b'E', 0x00, b'-', 0x00, b'3', 0x00, b'9', 0x00, b'B', 0x00, b'2',
-                    0x00, b'X', 0x00, b'L', 0x00, b'S', 0x00
+                    0x00, b'X', 0x00, b'L', 0x00, b'S', 0x00,
                 ],
             ],
             TIMEOUT,
@@ -1136,14 +1150,34 @@ impl Drop for Device {
             restore_bias!(hpf, BiasHpf, &self.handle, self.chip_firmware_biases);
             restore_bias!(diff_on, BiasDiffOn, &self.handle, self.chip_firmware_biases);
             restore_bias!(diff, BiasDiff, &self.handle, self.chip_firmware_biases);
-            restore_bias!(diff_off, BiasDiffOff, &self.handle, self.chip_firmware_biases);
+            restore_bias!(
+                diff_off,
+                BiasDiffOff,
+                &self.handle,
+                self.chip_firmware_biases
+            );
             restore_bias!(inv, BiasInv, &self.handle, self.chip_firmware_biases);
             restore_bias!(refr, BiasRefr, &self.handle, self.chip_firmware_biases);
             restore_bias!(reqpuy, BiasReqpuy, &self.handle, self.chip_firmware_biases);
             restore_bias!(reqpux, BiasReqpux, &self.handle, self.chip_firmware_biases);
-            restore_bias!(sendreqpdy, BiasSendreqpdy, &self.handle, self.chip_firmware_biases);
-            restore_bias!(unknown_1, BiasUnknown1, &self.handle, self.chip_firmware_biases);
-            restore_bias!(unknown_2, BiasUnknown2, &self.handle, self.chip_firmware_biases);
+            restore_bias!(
+                sendreqpdy,
+                BiasSendreqpdy,
+                &self.handle,
+                self.chip_firmware_biases
+            );
+            restore_bias!(
+                unknown_1,
+                BiasUnknown1,
+                &self.handle,
+                self.chip_firmware_biases
+            );
+            restore_bias!(
+                unknown_2,
+                BiasUnknown2,
+                &self.handle,
+                self.chip_firmware_biases
+            );
         }
         let _ = LifoCtrl {
             lifo_en: 0,
@@ -1256,12 +1290,285 @@ fn request(
     Ok(buffer)
 }
 
+// IMX636 timing table and filter initialization derived from Prophesee OpenEB.
+// Copyright (c) Prophesee S.A. Licensed under the Apache License, Version 2.0.
+// See LICENSES/Apache-2.0.txt and THIRD_PARTY_NOTICES.md for attribution.
+const STC_PARAMS: [(u32, u32, u32); 100] = [
+    (12, 15, 90),
+    (10, 3, 90),
+    (11, 5, 95),
+    (9, 1, 102),
+    (13, 15, 90),
+    (11, 3, 114),
+    (11, 3, 90),
+    (12, 5, 109),
+    (13, 9, 122),
+    (13, 9, 90),
+    (10, 1, 102),
+    (14, 15, 109),
+    (13, 7, 117),
+    (14, 13, 127),
+    (12, 3, 138),
+    (12, 3, 90),
+    (12, 3, 90),
+    (14, 11, 99),
+    (13, 5, 109),
+    (13, 5, 109),
+    (14, 9, 122),
+    (14, 9, 122),
+    (11, 1, 209),
+    (11, 1, 138),
+    (11, 1, 138),
+    (15, 15, 147),
+    (15, 15, 147),
+    (14, 7, 158),
+    (14, 7, 158),
+    (15, 13, 170),
+    (15, 13, 170),
+    (13, 3, 185),
+    (13, 3, 185),
+    (13, 3, 185),
+    (13, 3, 90),
+    (13, 3, 90),
+    (15, 11, 202),
+    (15, 11, 99),
+    (15, 11, 99),
+    (15, 11, 99),
+    (14, 5, 109),
+    (14, 5, 109),
+    (14, 5, 109),
+    (14, 5, 109),
+    (15, 9, 248),
+    (15, 9, 122),
+    (15, 9, 122),
+    (15, 9, 122),
+    (15, 9, 122),
+    (12, 1, 280),
+    (12, 1, 280),
+    (12, 1, 138),
+    (12, 1, 138),
+    (12, 1, 138),
+    (12, 1, 138),
+    (16, 15, 147),
+    (16, 15, 147),
+    (16, 15, 147),
+    (15, 7, 158),
+    (15, 7, 158),
+    (15, 7, 158),
+    (15, 7, 158),
+    (15, 7, 158),
+    (16, 13, 171),
+    (16, 13, 171),
+    (16, 13, 171),
+    (16, 13, 171),
+    (16, 13, 171),
+    (14, 3, 185),
+    (14, 3, 185),
+    (14, 3, 185),
+    (14, 3, 185),
+    (14, 3, 185),
+    (16, 11, 409),
+    (16, 11, 202),
+    (16, 11, 202),
+    (16, 11, 202),
+    (16, 11, 202),
+    (16, 11, 202),
+    (16, 11, 202),
+    (15, 5, 451),
+    (15, 5, 223),
+    (15, 5, 223),
+    (15, 5, 223),
+    (15, 5, 223),
+    (15, 5, 223),
+    (15, 5, 223),
+    (15, 5, 223),
+    (16, 9, 501),
+    (16, 9, 501),
+    (16, 9, 501),
+    (16, 9, 248),
+    (16, 9, 248),
+    (16, 9, 248),
+    (16, 9, 248),
+    (16, 9, 248),
+    (16, 9, 248),
+    (16, 9, 248),
+    (13, 1, 564),
+    (13, 1, 564),
+];
+
+fn validate_filter_configuration(configuration: &Configuration) -> Result<(), Error> {
+    if let Some(afk) = &configuration.anti_flicker {
+        if !(50 <= afk.low_frequency_hz
+            && afk.low_frequency_hz <= afk.high_frequency_hz
+            && afk.high_frequency_hz <= 520)
+        {
+            return Err(Error::FilterInit(
+                "AFK frequency range must be within 50-520 Hz",
+            ));
+        }
+    }
+    if let Some(stc) = &configuration.stc {
+        if !(1..=100).contains(&stc.threshold_ms) {
+            return Err(Error::FilterInit(
+                "STC threshold must be between 1 and 100 ms",
+            ));
+        }
+    }
+    Ok(())
+}
+
+// Register sequencing follows OpenEB's IMX636 implementation.
+fn configure_anti_flicker(
+    handle: &rusb::DeviceHandle<rusb::Context>,
+    configuration: Option<&AntiFlicker>,
+) -> Result<(), Error> {
+    AfkPipelineControl {
+        reserved_0_2: 1,
+        bypass: 1,
+    }
+    .write(handle)?;
+    if let Some(configuration) = configuration {
+        let low = u32::from(configuration.low_frequency_hz);
+        let high = u32::from(configuration.high_frequency_hz);
+        // Prophesee first checks the AFK SRAM initialization flag.
+        if AfkInitialization::read(handle)?.value & 4 == 0 {
+            return Err(Error::FilterInit("AFK initialization flag is not ready"));
+        }
+        let invalidation = Invalidation::read(handle)?.value;
+        Invalidation {
+            value: (invalidation & !0xfff) | 1630,
+        }
+        .write(handle)?;
+        AfkPeriod {
+            min_cutoff_period: (1_000_000 / high) >> 7,
+            max_cutoff_period: (1_000_000 / low) >> 7,
+            inverted_duty_cycle: 8,
+        }
+        .write(handle)?;
+        let old_param = ReservedC004::read(handle)?.value;
+        // Band cut, low threshold 4, high threshold 6, preserve unrelated bits.
+        ReservedC004 {
+            value: (old_param & !0x7f) | 4 | (6 << 3),
+        }
+        .write(handle)?;
+        AfkPipelineControl {
+            reserved_0_2: 1,
+            bypass: 0,
+        }
+        .write(handle)?;
+        let period = AfkPeriod::read(handle)?;
+        let param = ReservedC004::read(handle)?.value;
+        if AfkPipelineControl::read(handle)?.bypass != 0
+            || period.min_cutoff_period != ((1_000_000 / high) >> 7)
+            || period.max_cutoff_period != ((1_000_000 / low) >> 7)
+            || period.inverted_duty_cycle != 8
+            || (param & 0x7f) != (4 | (6 << 3))
+        {
+            return Err(Error::FilterInit("AFK pipeline readback failed"));
+        }
+    }
+
+    if AfkPipelineControl::read(handle)?.bypass != u32::from(configuration.is_none()) {
+        return Err(Error::FilterInit("AFK bypass readback failed"));
+    }
+    Ok(())
+}
+
+fn configure_stc(
+    handle: &rusb::DeviceHandle<rusb::Context>,
+    configuration: Option<&Stc>,
+) -> Result<(), Error> {
+    BurstPipelineControl {
+        reserved_0_2: 1,
+        bypass: 1,
+    }
+    .write(handle)?;
+    if let Some(configuration) = configuration {
+        let stc_ms = usize::from(configuration.threshold_ms);
+        // Clear the old SRAM-completion flag and request a fresh initialization.
+        let mut init = BurstPipelineInitialization::read(handle)?;
+        init.clear_flag = 1;
+        init.write(handle)?;
+        init.clear_flag = 0;
+        init.force_sram_initialization = 1;
+        init.write(handle)?;
+        let (prescaler, multiplier, fifo_timeout) = STC_PARAMS[stc_ms - 1];
+        let threshold_us = (stc_ms as u32) * 1000;
+        StcParam {
+            enable: 1,
+            threshold: threshold_us,
+            reserved_20_24: 0,
+            disable_cut_trail: 0,
+        }
+        .write(handle)?;
+        TrailParam {
+            enable: 0,
+            threshold: 0,
+        }
+        .write(handle)?;
+        // Prescaler, multiplier, and timeout are taken from OpenEB's IMX636 table.
+        StcTimestamping {
+            prescaler,
+            multiplier,
+            reserved_9_16: 1,
+            reset_refractory_period_on_event: 1,
+        }
+        .write(handle)?;
+        let mut invalidation = BurstPipelineInvalidation::read(handle)?;
+        invalidation.dt_fifo_timeout = fifo_timeout;
+        invalidation.write(handle)?;
+        let mut ready = false;
+        for _ in 0..3 {
+            if BurstPipelineInitialization::read(handle)?.clear_flag == 1 {
+                ready = true;
+                break;
+            }
+        }
+        if !ready {
+            return Err(Error::FilterInit("STC initialization flag is not ready"));
+        }
+        BurstPipelineControl {
+            reserved_0_2: 1,
+            bypass: 0,
+        }
+        .write(handle)?;
+        let pipeline = BurstPipelineControl::read(handle)?;
+        let params = StcParam::read(handle)?;
+        let timing = StcTimestamping::read(handle)?;
+        let invalidation = BurstPipelineInvalidation::read(handle)?;
+        if pipeline.bypass != 0
+            || params.enable != 1
+            || params.threshold != threshold_us
+            || params.disable_cut_trail != 0
+            || timing.prescaler != prescaler
+            || timing.multiplier != multiplier
+            || invalidation.dt_fifo_timeout != fifo_timeout
+        {
+            return Err(Error::FilterInit("STC register readback failed"));
+        }
+    }
+    if BurstPipelineControl::read(handle)?.bypass != u32::from(configuration.is_none()) {
+        return Err(Error::FilterInit("STC bypass readback failed"));
+    }
+    Ok(())
+}
+
 fn update_configuration(
     handle: &rusb::DeviceHandle<rusb::Context>,
     chip_firmware_biases: &ChipFirmwareBiases,
     previous_configuration: Option<&Configuration>,
     configuration: &Configuration,
 ) -> Result<(), Error> {
+    // Validate all filter parameters before changing any register.
+    validate_filter_configuration(configuration)?;
+    if previous_configuration
+        .is_none_or(|previous| previous.anti_flicker != configuration.anti_flicker)
+    {
+        configure_anti_flicker(handle, configuration.anti_flicker.as_ref())?;
+    }
+    if previous_configuration.is_none_or(|previous| previous.stc != configuration.stc) {
+        configure_stc(handle, configuration.stc.as_ref())?;
+    }
     if match previous_configuration {
         Some(previous_configuration) => {
             previous_configuration.enable_output != configuration.enable_output
@@ -1277,9 +1584,30 @@ fn update_configuration(
     }
     {
         let previous_biases = previous_configuration.map(|configuration| &configuration.biases);
-        update_bias!(pr, BiasPr, handle, chip_firmware_biases, previous_biases, configuration.biases);
-        update_bias!(fo, BiasFo, handle, chip_firmware_biases, previous_biases, configuration.biases);
-        update_bias!(hpf, BiasHpf, handle, chip_firmware_biases, previous_biases, configuration.biases);
+        update_bias!(
+            pr,
+            BiasPr,
+            handle,
+            chip_firmware_biases,
+            previous_biases,
+            configuration.biases
+        );
+        update_bias!(
+            fo,
+            BiasFo,
+            handle,
+            chip_firmware_biases,
+            previous_biases,
+            configuration.biases
+        );
+        update_bias!(
+            hpf,
+            BiasHpf,
+            handle,
+            chip_firmware_biases,
+            previous_biases,
+            configuration.biases
+        );
         update_bias!(
             diff_on,
             BiasDiffOn,
@@ -1304,7 +1632,14 @@ fn update_configuration(
             previous_biases,
             configuration.biases
         );
-        update_bias!(inv, BiasInv, handle, chip_firmware_biases, previous_biases, configuration.biases);
+        update_bias!(
+            inv,
+            BiasInv,
+            handle,
+            chip_firmware_biases,
+            previous_biases,
+            configuration.biases
+        );
         update_bias!(
             refr,
             BiasRefr,
@@ -2042,3 +2377,59 @@ register! { SlvsFrameBlanking, 0xE030, { value: 0..32 } }
 register! { UnknownE120, 0xE120, { value: 0..32 } }
 register! { SlvsPhyLogicCtrl00, 0xE150, { value: 0..32 } }
 register! { Reset, 0x400004, { value: 0..32 } }
+
+#[cfg(test)]
+mod filter_tests {
+    use super::*;
+
+    #[test]
+    fn filter_defaults_preserve_bypass() {
+        let configuration = Device::PROPERTIES.default_configuration;
+        assert!(configuration.anti_flicker.is_none());
+        assert!(configuration.stc.is_none());
+        assert!(validate_filter_configuration(&configuration).is_ok());
+    }
+
+    #[test]
+    fn invalid_frequency_bands_are_rejected() {
+        for (low, high) in [(49, 520), (50, 521), (200, 100), (0, 0)] {
+            let mut configuration = Device::PROPERTIES.default_configuration;
+            configuration.anti_flicker = Some(AntiFlicker {
+                low_frequency_hz: low,
+                high_frequency_hz: high,
+            });
+            assert!(validate_filter_configuration(&configuration).is_err());
+        }
+    }
+
+    #[test]
+    fn stc_limits_are_validated_before_table_lookup() {
+        for threshold_ms in [0, 101, 255] {
+            let mut configuration = Device::PROPERTIES.default_configuration;
+            configuration.stc = Some(Stc { threshold_ms });
+            assert!(validate_filter_configuration(&configuration).is_err());
+        }
+        for threshold_ms in 1..=100 {
+            let mut configuration = Device::PROPERTIES.default_configuration;
+            configuration.stc = Some(Stc { threshold_ms });
+            assert!(validate_filter_configuration(&configuration).is_ok());
+        }
+    }
+
+    #[test]
+    fn filter_settings_round_trip_and_remain_per_device() {
+        let unchanged = Device::PROPERTIES.default_configuration;
+        let mut configured = unchanged.clone();
+        configured.anti_flicker = Some(AntiFlicker {
+            low_frequency_hz: 50,
+            high_frequency_hz: 520,
+        });
+        configured.stc = Some(Stc { threshold_ms: 20 });
+        let bytes = bincode::serialize(&configured).unwrap();
+        let decoded: Configuration = bincode::deserialize(&bytes).unwrap();
+        assert_eq!(configured, decoded);
+        assert!(validate_filter_configuration(&decoded).is_ok());
+        assert!(unchanged.anti_flicker.is_none());
+        assert!(unchanged.stc.is_none());
+    }
+}

@@ -2,6 +2,8 @@
 
 <h1>Neuromorphic Drivers</h1>
 
+> **Kria KV260 fork:** This fork adds experimental on-sensor AFK and adjustable STC support for the IMX636-based IDS UE-39B0XCP. See [Kria hardware filters and viewer](docs/kv260-hardware-filters.md) for build, usage, validation, and limitations. This is an independent driver, not the official IDS HAL plugin.
+
 ![pypi](https://img.shields.io/pypi/v/neuromorphic-drivers)
 ![crates.io](https://img.shields.io/crates/v/neuromorphic-drivers)
 [![Neuromorphic Computing](https://img.shields.io/badge/Collaboration_Network-Open_Neuromorphic-blue)](https://open-neuromorphic.org/neuromorphic-computing/)

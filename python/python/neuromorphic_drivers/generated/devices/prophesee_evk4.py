@@ -14,6 +14,15 @@ from ... import status
 
 
 @dataclasses.dataclass
+class AntiFlicker:
+    low_frequency_hz: serde.type.uint16
+    high_frequency_hz: serde.type.uint16
+
+    def serialize(self) -> bytes:
+        return serde.bincode.serialize(self, AntiFlicker)
+
+
+@dataclasses.dataclass
 class Biases:
     pr: serde.type.int16 = 0
     fo: serde.type.int16 = 0
@@ -49,6 +58,14 @@ class RateLimiter:
 
     def serialize(self) -> bytes:
         return serde.bincode.serialize(self, RateLimiter)
+
+
+@dataclasses.dataclass
+class Stc:
+    threshold_ms: serde.type.uint8
+
+    def serialize(self) -> bytes:
+        return serde.bincode.serialize(self, Stc)
 
 
 @dataclasses.dataclass
@@ -118,6 +135,8 @@ class Configuration:
     clock: Clock = Clock.INTERNAL
     rate_limiter: typing.Optional[RateLimiter] = None
     enable_output: bool = True
+    anti_flicker: typing.Optional[AntiFlicker] = None
+    stc: typing.Optional[Stc] = None
 
     def serialize(self) -> bytes:
         return serde.bincode.serialize(self, Configuration)
