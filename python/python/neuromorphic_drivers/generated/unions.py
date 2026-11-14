@@ -8,6 +8,7 @@ from .devices import prophesee_evk1_gen4
 from .devices import prophesee_evk3_hd
 from .devices import prophesee_evk4
 from .devices import centuryarks_vga
+from .devices import sensing_se1_s4
 from .devices import lucid_triton
 
 
@@ -18,6 +19,7 @@ Properties = typing.Union[
     prophesee_evk3_hd.Properties,
     prophesee_evk4.Properties,
     centuryarks_vga.Properties,
+    sensing_se1_s4.Properties,
     lucid_triton.Properties,
 ]
 
@@ -28,6 +30,7 @@ Configuration = typing.Union[
     prophesee_evk3_hd.Configuration,
     prophesee_evk4.Configuration,
     centuryarks_vga.Configuration,
+    sensing_se1_s4.Configuration,
     lucid_triton.Configuration,
 ]
 
@@ -38,6 +41,7 @@ BiasesBounds = typing.Union[
     prophesee_evk3_hd.BiasesBounds,
     prophesee_evk4.BiasesBounds,
     centuryarks_vga.BiasesBounds,
+    sensing_se1_s4.BiasesBounds,
     lucid_triton.BiasesBounds,
 ]
 
@@ -48,6 +52,7 @@ RingConfiguration = typing.Union[
     prophesee_evk3_hd.RingConfiguration,
     prophesee_evk4.RingConfiguration,
     centuryarks_vga.RingConfiguration,
+    sensing_se1_s4.RingConfiguration,
     lucid_triton.RingConfiguration,
 ]
 
@@ -65,6 +70,8 @@ def name_to_properties(name: enums.Name) -> Properties:
         return prophesee_evk4.Properties()
     if name == enums.Name.CENTURYARKS_VGA:
         return centuryarks_vga.Properties()
+    if name == enums.Name.SENSING_SE1_S4:
+        return sensing_se1_s4.Properties()
     if name == enums.Name.LUCID_TRITON:
         return lucid_triton.Properties()
     raise Exception(f"unknown name {name}")
@@ -83,6 +90,8 @@ def deserialize_biases_bounds(name: enums.Name, data: bytes) -> BiasesBounds:
         return serde.bincode.deserialize(data, prophesee_evk4.BiasesBounds)[0]
     if name == enums.Name.CENTURYARKS_VGA:
         return serde.bincode.deserialize(data, centuryarks_vga.BiasesBounds)[0]
+    if name == enums.Name.SENSING_SE1_S4:
+        return serde.bincode.deserialize(data, sensing_se1_s4.BiasesBounds)[0]
     if name == enums.Name.LUCID_TRITON:
         return serde.bincode.deserialize(data, lucid_triton.BiasesBounds)[0]
     raise Exception(f"unknown name {name}")
@@ -101,6 +110,8 @@ def deserialize_configuration(name: enums.Name, data: bytes) -> Configuration:
         return serde.bincode.deserialize(data, prophesee_evk4.Configuration)[0]
     if name == enums.Name.CENTURYARKS_VGA:
         return serde.bincode.deserialize(data, centuryarks_vga.Configuration)[0]
+    if name == enums.Name.SENSING_SE1_S4:
+        return serde.bincode.deserialize(data, sensing_se1_s4.Configuration)[0]
     if name == enums.Name.LUCID_TRITON:
         return serde.bincode.deserialize(data, lucid_triton.Configuration)[0]
     raise Exception(f"unknown name {name}")

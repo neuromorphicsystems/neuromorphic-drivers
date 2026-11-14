@@ -597,5 +597,6 @@ register! {
     prophesee_evk3_hd: usb,
     prophesee_evk4: usb,
     centuryarks_vga: usb,
+    sensing_se1_s4: usb,
     lucid_triton: ethernet,
 }
