@@ -5,7 +5,7 @@ name: SENSING wheels
 
 on:
   push:
-    branches: [sensing-wheels]
+    branches: [sensing-se1-s4-usb]
     tags: ["sensing-v*"]
   workflow_dispatch:
 
