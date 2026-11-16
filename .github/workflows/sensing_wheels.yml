@@ -36,6 +36,8 @@ jobs:
             3.12
             3.13
             3.14
+            3.15
+          allow-prereleases: true
 
       # Build against the local driver crate instead of the crates.io release,
       # which does not contain the SENSING driver yet.
