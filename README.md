@@ -142,7 +142,7 @@ with nd.open(configuration=configuration) as device:
 
 `nd.open` may open any supported device. However, it only considers matching devices if a configuration is specified. Passing the wrong configuration type to `update_configuration` raises an error.
 
-The `prophesee_evk4` configuration also supports optional on-sensor anti-flicker and STC cut-trail filters for IMX636 cameras. Both default to bypass and can be updated while streaming; see [the live update example](python/examples/evk4_update_hardware_filters.py). The added fields change binary configuration serialization: rebuild the Python extension and generated bindings together, even if the package versions match.
+For IMX636 on-sensor STC cut-trail and anti-flicker configuration, see [the live update example](python/examples/evk4_update_hardware_filters.py).
 
 ## Rate limiter
 

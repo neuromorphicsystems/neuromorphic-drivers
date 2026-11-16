@@ -1,4 +1,8 @@
-"""Exercise live AFK/STC updates on one camera without reopening it."""
+"""Update IMX636 hardware AFK/STC while streaming.
+
+AFK: 50-520 Hz; STC cut-trail: 1-100 ms. None bypasses either filter.
+Rebuild the Python extension and generated bindings together before running.
+"""
 
 import time
 
@@ -23,6 +27,7 @@ if __name__ == "__main__":
         stage = 0
         count = 0
         start = time.monotonic()
+        # Keep reading packets to receive asynchronous configuration errors.
         for _status, packet in camera:
             if packet is not None and packet.polarity_events is not None:
                 count += len(packet.polarity_events)
