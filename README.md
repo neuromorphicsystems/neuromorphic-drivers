@@ -57,7 +57,7 @@ The features listed below are device features – they are implemented in the ca
 | Interface           | Connection | Stream data types                                        | Region of interest | External sync. | Rate limiter | Noise filter | Anti-flicker | Temperature | Illuminance | IMU sampling rate | Auto-exposure |
 | ------------------- | ---------- | -------------------------------------------------------- | ------------------ | -------------- | ------------ | ------------ | ------------ | ----------- | ----------- | ----------------- | ------------- |
 | lucid_triton        | Ethernet   | `polarity_events`                                        | ✓                  | ▢              | ✓            | ▢            | ▢            | ✓¹          | -           | -                 | -             |
-| prophesee_evk4      | USB        | `polarity_events` `trigger_events`                       | ✓                  | ✓              | ✓            | ▢            | ▢            | ✓¹          | ✓³          | -                 | -             |
+| prophesee_evk4      | USB        | `polarity_events` `trigger_events`                       | ✓                  | ✓              | ✓            | ✓⁴           | ✓⁴           | ✓¹          | ✓³          | -                 | -             |
 | prophesee_evk1_gen4 | USB        | `polarity_events`                                        | ▢                  | ▢              | ▢            | -            | -            | ▢           | ▢           | -                 | -             |
 | prophesee_evk3_hd   | USB        | `polarity_events` `trigger_events`                       | ✓                  | ▢              | ▢            | ▢            | ▢            | ▢           | ▢           | -                 | -             |
 | centuryarks_vga     | USB        | `polarity_events` `trigger_events`                       | ✓                  | ▢              | ✓            | ▢            | ▢            | ▢           | ▢           | -                 | -             |
@@ -71,6 +71,8 @@ The Lucid Triton is a GigE Vision camera (ethernet). For reliable streaming the 
 ²Temperature is included in IMU packets
 
 ³Illuminance can be sampled at arbitrary times by calling a function
+
+⁴IMX636 STC cut-trail and anti-flicker support. Hardware validation is limited to one IDS UE-39B0XCP; other camera models and sensor revisions remain unverified.
 
 # Projects that use Neuromorphic drivers
 
@@ -139,6 +141,8 @@ with nd.open(configuration=configuration) as device:
 ```
 
 `nd.open` may open any supported device. However, it only considers matching devices if a configuration is specified. Passing the wrong configuration type to `update_configuration` raises an error.
+
+For IMX636 on-sensor STC cut-trail and anti-flicker configuration, see [the live update example](python/examples/evk4_update_hardware_filters.py).
 
 ## Rate limiter
 
