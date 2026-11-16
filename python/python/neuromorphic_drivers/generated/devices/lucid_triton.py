@@ -27,6 +27,15 @@ class Biases:
 
 
 @dataclasses.dataclass
+class Duration:
+    secs: serde.type.uint64 = 0
+    nanos: serde.type.uint32 = 25000000
+
+    def serialize(self) -> bytes:
+        return serde.bincode.serialize(self, Duration)
+
+
+@dataclasses.dataclass
 class RateLimiter:
     rate_mev_per_second: typing.Optional[serde.type.float64] = None
     reference_period_us: typing.Optional[serde.type.uint32] = None
@@ -76,6 +85,7 @@ class Configuration:
         serde.type.uint64,
     ] = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
     mask_intersection_only: bool = False
+    mask_write_timeout: Duration = dataclasses.field(default_factory=Duration)
     rate_limiter: typing.Optional[RateLimiter] = None
     enable_output: bool = True
 
