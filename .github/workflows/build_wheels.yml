@@ -12,7 +12,7 @@ concurrency:
     cancel-in-progress: true
 
 env:
-  CIBW_SKIP: cp315-* cp315t-* *i686 *win32 cp39-win_arm64 cp310-win_arm64
+  CIBW_SKIP: "*i686 *win32 cp39-win_arm64 cp310-win_arm64"
 
   # cibuildhweel macOS configuration
   CIBW_ARCHS_MACOS: native
@@ -49,10 +49,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: astral-sh/setup-uv@v10.1.0
         with:
-          version: 0.12.17
+          version: 0.13.8
       - run: echo "MACOSX_DEPLOYMENT_TARGET=$(sw_vers -productVersion | cut -d '.' -f 1-2)" >> $GITHUB_ENV
         if: startsWith(matrix.os, 'macos')
-      - run: uvx cibuildwheel==4.2.1 python
+      - run: uvx cibuildwheel==4.3.5 python
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}
@@ -64,7 +64,7 @@ jobs:
     strategy:
       matrix:
         numpy: ["==1.26.4", ">=2"]
-        python: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.14t"]
+        python: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.14t", "3.15", "3.15t"]
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest, windows-11-arm]
         exclude:
           # this configuration yields 'Windows fatal exception: access violation'
@@ -72,11 +72,15 @@ jobs:
           - numpy: ==1.26.4
             os: windows-latest
             python: "3.13"
-          # numpy 1.26.4 has no wheels for Python 3.14 and does not build from source on it
+          # numpy 1.26.4 has no wheels for Python 3.14 and later and does not build from source on them
           - numpy: ==1.26.4
             python: "3.14"
           - numpy: ==1.26.4
             python: "3.14t"
+          - numpy: ==1.26.4
+            python: "3.15"
+          - numpy: ==1.26.4
+            python: "3.15t"
           # numpy has no Windows ARM64 wheels before 2.3.0 and none at all for Python 3.9 and 3.10
           - numpy: ==1.26.4
             os: windows-11-arm
@@ -88,7 +92,7 @@ jobs:
     - uses: actions/checkout@v4
     - uses: astral-sh/setup-uv@v10.1.0
       with:
-        version: 0.12.17
+        version: 0.13.8
         python-version: ${{ matrix.os == 'windows-11-arm' && format('cpython-{0}-windows-aarch64-none', matrix.python) || matrix.python }}
         activate-environment: true
     - uses: actions/download-artifact@v4
@@ -108,7 +112,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v10.1.0
         with:
-          version: 0.12.17
+          version: 0.13.8
       - run: uvx --from build==1.6.1 pyproject-build --sdist python
       - uses: actions/upload-artifact@v4
         with:
@@ -120,7 +124,7 @@ jobs:
     needs: [build_sdist]
     strategy:
       matrix:
-        python: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.14t"]
+        python: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.14t", "3.15", "3.15t"]
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest, windows-11-arm]
         exclude:
           # numpy has no Windows ARM64 wheels for Python 3.9 and 3.10
@@ -134,7 +138,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: astral-sh/setup-uv@v10.1.0
         with:
-          version: 0.12.17
+          version: 0.13.8
           python-version: ${{ matrix.os == 'windows-11-arm' && format('cpython-{0}-windows-aarch64-none', matrix.python) || matrix.python }}
           activate-environment: true
       - uses: actions/download-artifact@v4

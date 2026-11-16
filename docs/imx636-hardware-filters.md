@@ -34,7 +34,7 @@ Filter parameters are validated before the configuration update writes registers
 
 ## Build the matching Python package
 
-The added fields change binary configuration serialization. **Rebuild the extension and regenerate the Python bindings together. Do not mix a published 0.18.2 extension with the generated configuration classes from this change, or vice versa.**
+The added fields change binary configuration serialization. **Rebuild the extension and regenerate the Python bindings together. Do not mix an unmodified published extension with the generated configuration classes from this change, or vice versa, even if the package versions match.**
 
 Use the [development build workflow](../README.md#contribute). The Python Cargo manifest uses the local `../drivers` crate for both normal and build dependencies, so the extension and generated classes use the same configuration schema. `python/build.rs` generates the Python classes; do not edit generated files manually.
 
