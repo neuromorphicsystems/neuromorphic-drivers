@@ -44,7 +44,7 @@ _Neuromorphic drivers_ does not depend on Metavision, libcaer, or dv-processing.
 | Lucid Triton (GigE Vision)             | 1280 × 720 | [lucid_triton.py](python/python/neuromorphic_drivers/generated/devices/lucid_triton.py)               | <img src="photos/triton.png" alt="triton" width="200"/>       |
 | IDS uEye XCP-E / IDS uEye XLS-E        | 1280 × 720 | [prophesee_evk4.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk4.py)           | <img src="photos/ueyexcpe.png" alt="ueyexcpe" width="200"/>   |
 | Prophesee EVK4 / SilkyEvCam HD/HD Lite | 1280 × 720 | [prophesee_evk4.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk4.py)           | <img src="photos/evk4.png" alt="evk4" width="200"/>           |
-| Prophesee EVK1 Gen4                    | 1280 × 720 | [prophesee_evk1_gen4.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk1_gen4.py) | <img src="photos/evk1.png" alt="evk3hd" width="200"/>                                                              |
+| Prophesee EVK1 Gen4                    | 1280 × 720 | [prophesee_evk1_gen4.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk1_gen4.py) | <img src="photos/evk1.png" alt="evk1" width="200"/>           |
 | Prophesee EVK3 HD                      | 1280 × 720 | [prophesee_evk3_hd.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk3_hd.py)     | <img src="photos/evk3hd.png" alt="evk3hd" width="200"/>       |
 | SilkyEvCam VGA                         | 640 × 480  | [centuryarks_vga.py](python/python/neuromorphic_drivers/generated/devices/centuryarks_vga.py)         | <img src="photos/silkyev.png" alt="silkyev" width="200"/>     |
 | iniVation DVXplorer                    | 640 × 480  | [inivation_dvxplorer.py](python/python/neuromorphic_drivers/generated/devices/inivation_dvxplorer.py) | <img src="photos/dvxplorer.png" alt="dvxplorer" width="200"/> |
@@ -54,19 +54,17 @@ _Neuromorphic drivers_ does not depend on Metavision, libcaer, or dv-processing.
 
 The features listed below are device features – they are implemented in the cameras, not the software. Tick marks indicate supported features, minus signs indicate non-existent features, and empty boxes indicate features that exist in the camera but are not yet supported by neuromorphic-drivers.
 
-Tick marks indicate supported features, minus signs indicate that the camera does not provide
-
 | Interface           | Connection | Stream data types                                        | Region of interest | External sync. | Rate limiter | Noise filter | Anti-flicker | Temperature | Illuminance | IMU sampling rate | Auto-exposure |
 | ------------------- | ---------- | -------------------------------------------------------- | ------------------ | -------------- | ------------ | ------------ | ------------ | ----------- | ----------- | ----------------- | ------------- |
-| lucid_triton        | Ethernet   | `polarity_events`                                        | ▢                  | ▢              | ▢            | ▢            | ▢            | ✓¹          | -           | -                 | -             |
+| lucid_triton        | Ethernet   | `polarity_events`                                        | ✓                  | ▢              | ✓            | ▢            | ▢            | ✓¹          | -           | -                 | -             |
 | prophesee_evk4      | USB        | `polarity_events` `trigger_events`                       | ✓                  | ✓              | ✓            | ▢            | ▢            | ✓¹          | ✓³          | -                 | -             |
-| prophesee_evk1_gen4 | USB        | `polarity_events`                                        | ▢                  | ▢              | ▢            | -            | -            | ▢           | ▢           | ▢                 | -             |
+| prophesee_evk1_gen4 | USB        | `polarity_events`                                        | ▢                  | ▢              | ▢            | -            | -            | ▢           | ▢           | -                 | -             |
 | prophesee_evk3_hd   | USB        | `polarity_events` `trigger_events`                       | ✓                  | ▢              | ▢            | ▢            | ▢            | ▢           | ▢           | -                 | -             |
 | centuryarks_vga     | USB        | `polarity_events` `trigger_events`                       | ✓                  | ▢              | ✓            | ▢            | ▢            | ▢           | ▢           | -                 | -             |
 | inivation_dvxplorer | USB        | `polarity_events` `imu_events` `trigger_events`          | ▢                  | ▢              | -            | ▢            | -            | ✓²          | -           | ▢                 | -             |
 | inivation_davis346  | USB        | `polarity_events` `imu_events` `trigger_events` `frames` | ▢                  | ▢              | -            | ▢            | -            | ✓²          | -           | ▢                 | ▢             |
 
-The Lucid Triton is a GigE Vision camera (ethernet). For reliable streaming the camera should be on the same subnet as the host. On Linux, raising the size of the kernel socket buffer can improves performance, for instance `sudo sysctl -w net.core.rmem_max=67108864`.
+The Lucid Triton is a GigE Vision camera (ethernet). For reliable streaming the camera should be on the same subnet as the host. On Linux, raising the size of the kernel socket buffer can improve performance, for instance `sudo sysctl -w net.core.rmem_max=67108864`.
 
 ¹Temperature can be sampled at arbitrary times by calling a function
 
@@ -79,6 +77,7 @@ The Lucid Triton is a GigE Vision camera (ethernet). For reliable streaming the 
 -   https://github.com/neuromorphicsystems/kairos
 -   https://github.com/neuromorphicsystems/davis346-recorder
 -   https://github.com/EventLAB-Team/eventcv
+
 # Python
 
 ## Get started
@@ -87,7 +86,7 @@ The Lucid Triton is a GigE Vision camera (ethernet). For reliable streaming the 
 pip install neuromorphic_drivers
 ```
 
-Wheels are available for Python 3.9 to 3.14 on Linux (x86-64 and ARM64), macOS (Intel and Apple Silicon), and Windows x64. The free-threaded build of Python 3.14 (_3.14t_) is supported: the extension declares `Py_MOD_GIL_NOT_USED`, hence importing it does not re-enable the GIL. A given device may only be iterated by one thread at a time, other threads raise `RuntimeError` until the current iteration completes.
+Wheels are available for Python 3.9 to 3.15 on Linux (x86-64 and ARM64), macOS (Intel and Apple Silicon), and Windows (x64, and ARM64 for Python 3.11 and later). The free-threaded builds of Python 3.14 and 3.15 (_3.14t_ and _3.15t_) are supported: the extension declares `Py_MOD_GIL_NOT_USED`, hence importing it does not re-enable the GIL. A given device may only be iterated by one thread at a time, other threads raise `RuntimeError` until the current iteration completes.
 
 On Linux, run the following comman after installing the package to install UDEV rules.
 
