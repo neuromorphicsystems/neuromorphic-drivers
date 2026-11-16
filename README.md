@@ -2,8 +2,6 @@
 
 <h1>Neuromorphic Drivers</h1>
 
-> **Kria KV260 fork:** This fork adds experimental on-sensor AFK and adjustable STC support for the IMX636-based IDS UE-39B0XCP. See [Kria hardware filters and viewer](docs/kv260-hardware-filters.md) for build, usage, validation, and limitations. This is an independent driver, not the official IDS HAL plugin.
-
 ![pypi](https://img.shields.io/pypi/v/neuromorphic-drivers)
 ![crates.io](https://img.shields.io/crates/v/neuromorphic-drivers)
 [![Neuromorphic Computing](https://img.shields.io/badge/Collaboration_Network-Open_Neuromorphic-blue)](https://open-neuromorphic.org/neuromorphic-computing/)
@@ -61,7 +59,7 @@ Tick marks indicate supported features, minus signs indicate that the camera doe
 | Interface           | Connection | Stream data types                                        | Region of interest | External sync. | Rate limiter | Noise filter | Anti-flicker | Temperature | Illuminance | IMU sampling rate | Auto-exposure |
 | ------------------- | ---------- | -------------------------------------------------------- | ------------------ | -------------- | ------------ | ------------ | ------------ | ----------- | ----------- | ----------------- | ------------- |
 | lucid_triton        | Ethernet   | `polarity_events`                                        | ▢                  | ▢              | ▢            | ▢            | ▢            | ✓¹          | -           | -                 | -             |
-| prophesee_evk4      | USB        | `polarity_events` `trigger_events`                       | ✓                  | ✓              | ✓            | ▢            | ▢            | ✓¹          | ✓³          | -                 | -             |
+| prophesee_evk4      | USB        | `polarity_events` `trigger_events`                       | ✓                  | ✓              | ✓            | ✓⁴           | ✓⁴           | ✓¹          | ✓³          | -                 | -             |
 | prophesee_evk1_gen4 | USB        | `polarity_events`                                        | ▢                  | ▢              | ▢            | -            | -            | ▢           | ▢           | ▢                 | -             |
 | prophesee_evk3_hd   | USB        | `polarity_events` `trigger_events`                       | ✓                  | ▢              | ▢            | ▢            | ▢            | ▢           | ▢           | -                 | -             |
 | centuryarks_vga     | USB        | `polarity_events` `trigger_events`                       | ✓                  | ▢              | ✓            | ▢            | ▢            | ▢           | ▢           | -                 | -             |
@@ -75,6 +73,8 @@ The Lucid Triton is a GigE Vision camera (ethernet). For reliable streaming the 
 ²Temperature is included in IMU packets
 
 ³Illuminance can be sampled at arbitrary times by calling a function
+
+⁴IMX636 STC cut-trail and anti-flicker support. Hardware validation is limited to one IDS UE-39B0XCP; see [IMX636 hardware filters](docs/imx636-hardware-filters.md) for configuration and limitations.
 
 # Projects that use Neuromorphic drivers
 
@@ -142,6 +142,8 @@ with nd.open(configuration=configuration) as device:
 ```
 
 `nd.open` may open any supported device. However, it only considers matching devices if a configuration is specified. Passing the wrong configuration type to `update_configuration` raises an error.
+
+The `prophesee_evk4` configuration also supports optional on-sensor anti-flicker and STC cut-trail filters for IMX636 cameras. Both default to bypass and can be updated while streaming. See [IMX636 hardware filters](docs/imx636-hardware-filters.md) and [the live update example](python/examples/evk4_update_hardware_filters.py).
 
 ## Rate limiter
 
