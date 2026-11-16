@@ -72,7 +72,7 @@ The Lucid Triton is a GigE Vision camera (ethernet). For reliable streaming the 
 
 ³Illuminance can be sampled at arbitrary times by calling a function
 
-⁴IMX636 STC cut-trail and anti-flicker support. Hardware validation is limited to one IDS UE-39B0XCP; see [IMX636 hardware filters](docs/imx636-hardware-filters.md) for configuration and limitations.
+⁴IMX636 STC cut-trail and anti-flicker support. Hardware validation is limited to one IDS UE-39B0XCP; other camera models and sensor revisions remain unverified.
 
 # Projects that use Neuromorphic drivers
 
@@ -142,7 +142,7 @@ with nd.open(configuration=configuration) as device:
 
 `nd.open` may open any supported device. However, it only considers matching devices if a configuration is specified. Passing the wrong configuration type to `update_configuration` raises an error.
 
-The `prophesee_evk4` configuration also supports optional on-sensor anti-flicker and STC cut-trail filters for IMX636 cameras. Both default to bypass and can be updated while streaming. See [IMX636 hardware filters](docs/imx636-hardware-filters.md) and [the live update example](python/examples/evk4_update_hardware_filters.py).
+The `prophesee_evk4` configuration also supports optional on-sensor anti-flicker and STC cut-trail filters for IMX636 cameras. Both default to bypass and can be updated while streaming; see [the live update example](python/examples/evk4_update_hardware_filters.py). The added fields change binary configuration serialization: rebuild the Python extension and generated bindings together, even if the package versions match.
 
 ## Rate limiter
 
