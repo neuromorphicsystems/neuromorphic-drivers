@@ -33,6 +33,7 @@ pub use devices::lucid_triton;
 pub use devices::prophesee_evk1_gen4;
 pub use devices::prophesee_evk3_hd;
 pub use devices::prophesee_evk4;
+pub use devices::sensing_se1_s4;
 
 pub use bincode;
 pub use libc;

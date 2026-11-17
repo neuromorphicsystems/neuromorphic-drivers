@@ -14,6 +14,7 @@ from .devices import prophesee_evk1_gen4 as prophesee_evk1_gen4
 from .devices import prophesee_evk3_hd as prophesee_evk3_hd
 from .devices import prophesee_evk4 as prophesee_evk4
 from .devices import centuryarks_vga as centuryarks_vga
+from .devices import sensing_se1_s4 as sensing_se1_s4
 from .devices import lucid_triton as lucid_triton
 from .enums import *
 from .unions import *
@@ -445,6 +446,54 @@ def open(
     ring_configuration: typing.Optional[RingConfiguration] = None,
     iterator_maximum_raw_packets: int = 64,
 ) -> centuryarks_vga.CenturyarksVgaDeviceRawOptional: ...
+
+
+@typing.overload
+def open(
+    configuration: sensing_se1_s4.Configuration,
+    iterator_timeout: typing.Literal[None] = None,
+    raw: typing.Literal[False] = False,
+    serial: typing.Optional[str] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> sensing_se1_s4.SensingSe1S4Device: ...
+
+
+@typing.overload
+def open(
+    configuration: sensing_se1_s4.Configuration,
+    iterator_timeout: float,
+    raw: typing.Literal[False] = False,
+    serial: typing.Optional[str] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> sensing_se1_s4.SensingSe1S4DeviceOptional: ...
+
+
+@typing.overload
+def open(
+    configuration: sensing_se1_s4.Configuration,
+    iterator_timeout: typing.Literal[None] = None,
+    raw: typing.Literal[True] = True,
+    serial: typing.Optional[str] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> sensing_se1_s4.SensingSe1S4DeviceRaw: ...
+
+
+@typing.overload
+def open(
+    configuration: sensing_se1_s4.Configuration,
+    iterator_timeout: float,
+    raw: typing.Literal[True] = True,
+    serial: typing.Optional[str] = None,
+    address: typing.Optional[str] = None,
+    ring_configuration: typing.Optional[RingConfiguration] = None,
+    iterator_maximum_raw_packets: int = 64,
+) -> sensing_se1_s4.SensingSe1S4DeviceRawOptional: ...
 
 
 @typing.overload

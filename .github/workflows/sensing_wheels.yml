@@ -1,0 +1,85 @@
+# Builds installable wheels of neuromorphic_drivers (including the SENSING SE1-S4-USB driver)
+# for Linux, macOS and Windows. The wheels are uploaded as workflow artifacts and, for tags
+# starting with "sensing-v", attached to a GitHub release.
+name: SENSING wheels
+
+on:
+  push:
+    branches: [sensing-se1-s4-usb]
+    tags: ["sensing-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  wheels:
+    name: Wheels ${{ matrix.os }} (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: x86_64 }
+          - { os: ubuntu-24.04-arm, target: aarch64 }
+          - { os: windows-latest, target: x64 }
+          - { os: macos-latest, target: aarch64 }
+          - { os: macos-15-intel, target: x86_64 }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: |
+            3.10
+            3.11
+            3.12
+            3.13
+            3.14
+            3.15
+          allow-prereleases: true
+
+      # Build against the local driver crate instead of the crates.io release,
+      # which does not contain the SENSING driver yet.
+      - name: Use local drivers crate
+        shell: bash
+        run: |
+          sed -i.bak 's|^neuromorphic-drivers = "[^"]*"|neuromorphic-drivers = {path = "../drivers"}|' python/Cargo.toml
+          grep -n "neuromorphic-drivers" python/Cargo.toml
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: python
+          target: ${{ matrix.target }}
+          manylinux: "2_28"
+          before-script-linux: |
+            (dnf install -y clang || yum install -y clang || true)
+          args: --release --out dist --find-interpreter
+
+      - name: Smoke test
+        shell: bash
+        run: |
+          python -m pip install numpy
+          python -m pip install --no-index --find-links python/dist neuromorphic_drivers
+          python -c "import neuromorphic_drivers as nd; print(nd.Name.SENSING_SE1_S4, nd.sensing_se1_s4.Properties())"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}-${{ matrix.target }}
+          path: python/dist/*.whl
+
+  release:
+    name: Attach wheels to release
+    needs: wheels
+    if: startsWith(github.ref, 'refs/tags/sensing-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: wheels-*
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.whl

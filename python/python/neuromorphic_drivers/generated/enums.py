@@ -18,4 +18,5 @@ class Name(enum.Enum):
     PROPHESEE_EVK3_HD = "Prophesee EVK3 HD"
     PROPHESEE_EVK4 = "Prophesee EVK4"
     CENTURYARKS_VGA = "CenturyArks VGA"
+    SENSING_SE1_S4 = "SENSING SE1-S4-USB"
     LUCID_TRITON = "Lucid Triton"

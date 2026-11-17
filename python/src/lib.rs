@@ -474,6 +474,11 @@ impl Device {
                 .temperature_celsius()
                 .map(|temperature| temperature.0)
                 .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(format!("{error}"))),
+            neuromorphic_drivers_rs::Device::SensingSe1S4(device) =>
+                device
+                .temperature_celsius()
+                .map(|temperature| temperature.0)
+                .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(format!("{error}"))),
             neuromorphic_drivers_rs::Device::LucidTriton(device) =>
                 device
                 .temperature_celsius()
@@ -511,6 +516,9 @@ impl Device {
                 "illuminance called after __exit__",
             ))? {
             neuromorphic_drivers_rs::Device::PropheseeEvk4(device) => device
+                .illuminance()
+                .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(format!("{error}"))),
+            neuromorphic_drivers_rs::Device::SensingSe1S4(device) => device
                 .illuminance()
                 .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(format!("{error}"))),
             device => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
