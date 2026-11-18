@@ -5,8 +5,9 @@ name: SENSING wheels
 
 on:
   push:
-    branches: [sensing-se1-s4-usb]
+    branches: [main]
     tags: ["sensing-v*"]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -63,6 +64,15 @@ jobs:
           python -m pip install numpy
           python -m pip install --no-index --find-links python/dist neuromorphic_drivers
           python -c "import neuromorphic_drivers as nd; print(nd.Name.SENSING_SE1_S4, nd.sensing_se1_s4.Properties())"
+          neuromorphic-drivers-install-windows-driver --list
+
+      - name: Smoke test Windows driver installer
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          python -c "import pathlib, tempfile, neuromorphic_drivers.windows_driver as w; d = pathlib.Path(tempfile.mkdtemp()); print(w._download_installer(d))"
+          # No camera on the runner: the command must report it and exit with code 1
+          if neuromorphic-drivers-install-windows-driver; then exit 1; fi
 
       - uses: actions/upload-artifact@v4
         with:
