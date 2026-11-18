@@ -96,6 +96,14 @@ On Linux, run the following comman after installing the package to install UDEV 
 neuromorphic-drivers-install-udev-rules
 ```
 
+On Windows, USB cameras need the WinUSB driver. Connect the camera and run the following command (it shows an administrator prompt and does the same as [Zadig](https://zadig.akeo.ie)). This is only required once per computer and camera model.
+
+```sh
+neuromorphic-drivers-install-windows-driver
+```
+
+`neuromorphic-drivers-install-windows-driver --list` shows connected cameras and their current driver. Cameras that already use another driver (for instance the vendor's driver) are skipped unless `--force` is used, since replacing the driver may break the vendor's software. The driver is installed with [winusb_installer.exe](https://github.com/Sensing-Dev/WinUSB-installer-generator) (LGPL-3.0, based on libwdi), which is downloaded on demand and verified with a SHA-256 checksum.
+
 The following script reads data from a connected device.
 
 ```py

@@ -7,7 +7,7 @@ authors = [
     {name = "International Centre for Neuromorphic Systems"},
     {name = "Alexandre Marcireau"},
 ]
-version = "0.19.1"
+version = "0.19.2"
 requires-python = ">=3.9"
 dependencies = ["numpy>=1.26"]
 
@@ -43,4 +43,5 @@ empty-body = "ignore"
 
 [project.scripts]
 neuromorphic-drivers-install-udev-rules = "neuromorphic_drivers:install_udev_rules_program"
+neuromorphic-drivers-install-windows-driver = "neuromorphic_drivers.windows_driver:install_windows_driver_program"
 ndls = "neuromorphic_drivers:print_device_list"
