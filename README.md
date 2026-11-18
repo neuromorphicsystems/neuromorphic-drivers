@@ -46,6 +46,7 @@ _Neuromorphic drivers_ does not depend on Metavision, libcaer, or dv-processing.
 | Prophesee EVK4 / SilkyEvCam HD/HD Lite | 1280 × 720 | [prophesee_evk4.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk4.py)           | <img src="photos/evk4.png" alt="evk4" width="200"/>           |
 | Prophesee EVK1 Gen4                    | 1280 × 720 | [prophesee_evk1_gen4.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk1_gen4.py) | <img src="photos/evk1.png" alt="evk1" width="200"/>           |
 | Prophesee EVK3 HD                      | 1280 × 720 | [prophesee_evk3_hd.py](python/python/neuromorphic_drivers/generated/devices/prophesee_evk3_hd.py)     | <img src="photos/evk3hd.png" alt="evk3hd" width="200"/>       |
+| SENSING SE1-S4-USB                     | 1280 × 720 | [sensing_se1_s4.py](python/python/neuromorphic_drivers/generated/devices/sensing_se1_s4.py)           |                                                               |
 | SilkyEvCam VGA                         | 640 × 480  | [centuryarks_vga.py](python/python/neuromorphic_drivers/generated/devices/centuryarks_vga.py)         | <img src="photos/silkyev.png" alt="silkyev" width="200"/>     |
 | iniVation DVXplorer                    | 640 × 480  | [inivation_dvxplorer.py](python/python/neuromorphic_drivers/generated/devices/inivation_dvxplorer.py) | <img src="photos/dvxplorer.png" alt="dvxplorer" width="200"/> |
 | iniVation Davis 346                    | 346 × 260  | [inivation_davis346.py](python/python/neuromorphic_drivers/generated/devices/inivation_davis346.py)   | <img src="photos/davis346.png" alt="davis346" width="200"/>   |
@@ -60,6 +61,7 @@ The features listed below are device features – they are implemented in the ca
 | prophesee_evk4      | USB        | `polarity_events` `trigger_events`                       | ✓                  | ✓              | ✓            | ▢            | ▢            | ✓¹          | ✓³          | -                 | -             |
 | prophesee_evk1_gen4 | USB        | `polarity_events`                                        | ▢                  | ▢              | ▢            | -            | -            | ▢           | ▢           | -                 | -             |
 | prophesee_evk3_hd   | USB        | `polarity_events` `trigger_events`                       | ✓                  | ▢              | ▢            | ▢            | ▢            | ▢           | ▢           | -                 | -             |
+| sensing_se1_s4      | USB        | `polarity_events` `trigger_events`                       | ✓                  | ✓              | ✓            | ▢            | ▢            | ✓¹          | ✓³          | -                 | -             |
 | centuryarks_vga     | USB        | `polarity_events` `trigger_events`                       | ✓                  | ▢              | ✓            | ▢            | ▢            | ▢           | ▢           | -                 | -             |
 | inivation_dvxplorer | USB        | `polarity_events` `imu_events` `trigger_events`          | ▢                  | ▢              | -            | ▢            | -            | ✓²          | -           | ▢                 | -             |
 | inivation_davis346  | USB        | `polarity_events` `imu_events` `trigger_events` `frames` | ▢                  | ▢              | -            | ▢            | -            | ✓²          | -           | ▢                 | ▢             |
@@ -93,6 +95,14 @@ On Linux, run the following comman after installing the package to install UDEV 
 ```sh
 neuromorphic-drivers-install-udev-rules
 ```
+
+On Windows, USB cameras need the WinUSB driver. Connect the camera and run the following command (it shows an administrator prompt and does the same as [Zadig](https://zadig.akeo.ie)). This is only required once per computer and camera model.
+
+```sh
+neuromorphic-drivers-install-windows-driver
+```
+
+`neuromorphic-drivers-install-windows-driver --list` shows connected cameras and their current driver. Cameras that already use another driver (for instance the vendor's driver) are skipped unless `--force` is used, since replacing the driver may break the vendor's software. The driver is installed with [winusb_installer.exe](https://github.com/Sensing-Dev/WinUSB-installer-generator) (LGPL-3.0, based on libwdi), which is downloaded on demand and verified with a SHA-256 checksum.
 
 The following script reads data from a connected device.
 

@@ -484,7 +484,7 @@ macro_rules! generate {
                     std::fs::File::create(devices_directory.join(format!("{}.py", stringify!($module)))).unwrap(),
                 );
                 let has_row_column_mask =
-                    matches!(stringify!($module), "prophesee_evk4" | "lucid_triton");
+                    matches!(stringify!($module), "prophesee_evk4" | "sensing_se1_s4" | "lucid_triton");
                 writeln!(writer, concat!(
                     "import dataclasses\n",
                     "import enum\n",
@@ -663,7 +663,7 @@ macro_rules! generate {
                                     "    def temperature_celsius(self) -> float: ...",
                                 )
                             ).unwrap();
-                        } else if stringify!($module) == "prophesee_evk4" {
+                        } else if matches!(stringify!($module), "prophesee_evk4" | "sensing_se1_s4") {
                             writeln!(
                                 writer,
                                 concat!(
@@ -1006,6 +1006,7 @@ fn main() {
         (prophesee_evk3_hd, Evt3Packet),
         (prophesee_evk4, Evt3Packet),
         (centuryarks_vga, Evt3Packet),
+        (sensing_se1_s4, Evt3Packet),
         (lucid_triton, Evt3Packet)
     );
 }
